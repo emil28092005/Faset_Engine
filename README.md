@@ -1,34 +1,40 @@
 # Faset Engine
 
-Faset — проект независимого движка для десктопных 2D- и 3D-игр под **Linux и Windows**. В центре — удобный собственный редактор, его управление через MCP, работа с Blender и развитие современных графических технологий.
+Faset is an independent engine project for desktop **2D and 3D games on Linux and Windows**. Its priorities are a custom editor that is comfortable to use by hand and through MCP, integration with Blender, and a path toward advanced graphics.
 
-**Текущий статус: базовая архитектура согласована; реализация движка ещё не начата.** Здесь находятся принятые решения, план, исследования других движков и работающая браузерная карта документации. Наличие технологии в плане не означает, что она реализована или измерена.
+**Current status: the core architecture is agreed; engine implementation has not started.** This repository contains the architecture decisions, development plan, source studies, and a working browser-based documentation map. A technology appearing in the plan does not mean it has been implemented or benchmarked.
 
-## Начать здесь
+## Start here
 
-- [PLAN.md](PLAN.md) — этапы до MVP, критерии готовности и развитие после него.
-- [Архитектура](docs/ARCHITECTURE.md) — принятые решения и границы подсистем.
-- [Документация](docs/README.md) — навигация и правила актуализации.
-- [Исследования](docs/studies/README.md) — Unreal Engine, Godot, Unity, Blender, ECS, графика, импорт и сборка.
-- [Зависимости и независимость](docs/DEPENDENCIES.md) — библиотеки, инструменты и происхождение материалов.
+- [Development plan](PLAN.md) — milestones through MVP, acceptance criteria, and development beyond MVP.
+- [Architecture](docs/ARCHITECTURE.md) — accepted decisions and subsystem boundaries.
+- [Documentation](docs/README.md) — navigation and maintenance rules.
+- [Source studies](docs/studies/README.md) — Unreal Engine, Godot, Unity, Blender, ECS, graphics, asset import, and builds.
+- [Dependencies and independence](docs/DEPENDENCIES.md) — libraries, tools, and source provenance.
 
-## Принятый фундамент
+## Language
 
-- **C++** для ядра и первой версии gameplay. **Lua** добавляется после C++ отдельным модулем и необязателен для конкретной игры.
-- Объекты, компоненты и вложенные сцены для авторинга; **EnTT** для runtime ECS. JSON, устойчивые ID и подготовленные бинарные данные для экспорта.
-- Собственные **Vulkan 1.3** backend, Render Graph и renderer; **Slang** для SPIR-V и совместимого HLSL-кода. RT не требуется базовому режиму.
-- **SDL3** за платформенным интерфейсом Faset; **Box2D** и **Box3D** для физики.
-- Собственный retained-mode UI редактора: C++-поведение, декларативная компоновка, отдельные стили, основная тёмная тема. **Dear ImGui** — для отладки.
-- **CMake + Ninja + Clang**; Windows использует clang-cl, Windows SDK и библиотеки MSVC. Первые сборки проверяются на целевой ОС.
-- Отдельный **Player**, статически связанный с gameplay. Рабочий цикл C++ — остановка, инкрементальная сборка, повторный запуск.
-- **MCP только в редакторе:** авторинг, ресурсы, импорт, сборка, экспорт, Play/Stop и диагностика редактора. В Player и экспортируемой игре MCP отсутствует.
-- Обычный **Blender без изменения исходников**, glTF/GLB-импорт и дополнительный плагин для экспорта и устойчивых ID.
+English is the primary language of the engine: editor UI, built-in commands, diagnostics, public API identifiers, and CLI/MCP tool descriptions. Project content and user-entered text support Unicode; the engine's interface language does not dictate the language of a game.
 
-MVP заканчивается двумя небольшими 2D/3D-проектами, которые можно создать, сохранить, запустить и экспортировать под обе ОС. GPU-driven rendering, HZB, расширенные тени, temporal reconstruction и динамическая GI развиваются после базового результата.
+This README is in English. The current planning documents, studies, and research map are primarily in Russian. Editor localization is a later milestone.
 
-## Открыть карту исследований
+## Accepted foundation
 
-Нужен Node.js с npm. Из корня репозитория:
+- **C++** for the core and the first gameplay implementation. **Lua** will follow as a separate module and will be optional for individual games.
+- Objects, components, and nested scene templates for authoring; **EnTT** for the runtime ECS. JSON authoring data, stable IDs, and cooked binary assets for export.
+- A custom **Vulkan 1.3** backend, RenderGraph, and renderer. The backend calls Vulkan directly; gameplay uses Faset APIs. **Slang** compiles shaders, including compatible HLSL, to SPIR-V. The baseline renderer does not require ray tracing.
+- **SDL3** behind Faset's platform API; **Box2D** and **Box3D** for physics.
+- A custom retained-mode editor UI with C++ behavior, declarative layout, separate styles, and a dark theme by default. **Dear ImGui** is reserved for debugging tools.
+- **CMake + Ninja + Clang**; Windows uses clang-cl, the Windows SDK, and MSVC runtime libraries. Initial builds are tested on their target OS.
+- A separate **Player** process, statically linked with gameplay. The C++ iteration cycle is stop, incrementally rebuild, and restart.
+- **Editor-only MCP:** authoring, assets, import, builds, export, Play/Stop, and editor diagnostics. MCP is absent from the Player and exported games.
+- Standard, **unmodified Blender**, glTF/GLB import, and an optional add-on for convenient export and stable IDs.
+
+MVP is complete when two small games, one 2D and one 3D, can be created, saved, played, and exported for both operating systems. GPU-driven rendering, HZB, advanced shadows, temporal reconstruction, and dynamic global illumination follow the baseline.
+
+## Run the research map
+
+Requires Node.js and npm. From the repository root:
 
 ```sh
 cd docs/studies/map
@@ -38,10 +44,10 @@ npm run build
 npm start
 ```
 
-Карта доступна на [localhost:4178](http://localhost:4178). Это просмотрщик документации, а не веб-редактор Faset. Подробности — в [README карты](docs/studies/map/README.md).
+Open [localhost:4178](http://localhost:4178). The map is a documentation viewer, not a web version of the Faset editor. See the [map README](docs/studies/map/README.md) for details.
 
-## Публичное содержимое
+## Repository contents
 
-Документация, исследования, манифест источников и код карты хранятся в Git. Сторонние движки, установленные зависимости, результаты сборки и кэши в репозиторий не включены. Ссылки на изученный код закреплены на research commits; Unreal может требовать доступа Epic.
+Documentation, studies, the source manifest, and the map's code are tracked in Git. Third-party engine source trees, installed dependencies, build outputs, and caches are excluded. Source links are pinned to the commits examined during research; Unreal Engine links may require access through Epic.
 
-Состав публикации и статус лицензии собственного содержимого описаны в [публикационных заметках](docs/PUBLICATION.md). У сторонних проектов сохраняются их собственные условия.
+See the [publication notes](docs/PUBLICATION.md) for publication scope and licensing status. A license for Faset's own content has not yet been selected. Third-party projects retain their own license terms.
