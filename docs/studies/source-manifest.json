@@ -1,0 +1,136 @@
+{
+  "date": "2026-09-17",
+  "purpose": "Исследование для нового движка, не реализация",
+  "targets": [
+    "Linux",
+    "Windows"
+  ],
+  "game_types": [
+    "2D",
+    "3D"
+  ],
+  "requirements": [
+    "manual editor",
+    "editor-only MCP; no runtime-world API or Player MCP",
+    "unmodified Blender integration with optional add-on",
+    "standalone game compilation/cooking/packaging"
+  ],
+  "method": "Selected implementation bodies plus primary official documentation; no engine builds, user study or GPU benchmark.",
+  "repositories": [
+    {
+      "name": "Unreal Engine",
+      "path": "../UnrealEngine",
+      "version": "5.8.2",
+      "commit": "16d75d84714512edfb744e1fd0a59e9c74d57873",
+      "acquisition": "existing local checkout",
+      "source_worktree_clean": true,
+      "repository": "https://github.com/EpicGames/UnrealEngine",
+      "path_usage": "Optional sibling checkout for local source viewing; not included in Faset repository",
+      "access": "Epic account/repository authorization required"
+    },
+    {
+      "name": "Godot",
+      "path": "../godot",
+      "version": "4.8.0 dev",
+      "commit": "9c776068d6ed23acd0c78bfe534272d1d2a3a619",
+      "acquisition": "shallow depth 1, complete source checkout",
+      "source_worktree_clean": true,
+      "repository": "https://github.com/godotengine/godot",
+      "path_usage": "Optional sibling checkout for local source viewing; not included in Faset repository",
+      "access": "Public upstream; original project license applies"
+    },
+    {
+      "name": "UnityCsReference",
+      "path": "../UnityCsReference",
+      "version": "6000.7.0a6",
+      "commit": "6b50e5544f6efcca1f44dbace3d1778b465ac6d0",
+      "acquisition": "shallow depth 1, C# reference source only",
+      "source_worktree_clean": true,
+      "repository": "https://github.com/Unity-Technologies/UnityCsReference",
+      "path_usage": "Optional sibling checkout for local source viewing; not included in Faset repository",
+      "access": "Public upstream; original project license applies"
+    },
+    {
+      "name": "Blender",
+      "path": "../blender-source",
+      "version": "5.3.0 alpha",
+      "commit": "28d47268bddcb9dc69143f0e2d9410969da16311",
+      "acquisition": "shallow depth 1, partial clone, sparse source checkout",
+      "source_worktree_clean": true,
+      "sparse_directories": [
+        "scripts/modules/bpy",
+        "source/blender/asset_system",
+        "source/blender/blenkernel",
+        "source/blender/blenloader",
+        "source/blender/editors/interface",
+        "source/blender/editors/undo",
+        "source/blender/makesrna",
+        "source/blender/windowmanager"
+      ],
+      "repository": "https://github.com/blender/blender",
+      "path_usage": "Optional sibling checkout for local source viewing; not included in Faset repository",
+      "access": "Public upstream; original project license applies"
+    }
+  ],
+  "supplemental_source_snapshots": [
+    {
+      "name": "Blender glTF exporter",
+      "repository": "https://github.com/blender/blender",
+      "commit": "28d47268bddcb9dc69143f0e2d9410969da16311",
+      "acquisition": "Selected files read remotely at the same commit as the sparse checkout; not added to the local checkout",
+      "files": [
+        "scripts/addons_core/io_scene_gltf2/blender/com/extras.py",
+        "scripts/addons_core/io_scene_gltf2/blender/exp/nodes.py",
+        "scripts/addons_core/io_scene_gltf2/blender/exp/export.py",
+        "scripts/addons_core/io_scene_gltf2/blender/exp/animation/action.py",
+        "scripts/addons_core/io_scene_gltf2/blender/exp/material/materials.py"
+      ],
+      "study": "docs/studies/17-asset-pipeline-and-blender-roundtrip.md"
+    },
+    {
+      "name": "Box2D",
+      "repository": "https://github.com/erincatto/box2d",
+      "commit": "77619f4f7baebe5117a2e3ddc3ac8c404e82d243",
+      "acquisition": "Selected remote source files; research pin, not a selected Faset dependency version",
+      "files": [
+        "src/hull.c",
+        "include/box2d/collision.h"
+      ],
+      "study": "docs/studies/17-asset-pipeline-and-blender-roundtrip.md"
+    },
+    {
+      "name": "Box3D",
+      "repository": "https://github.com/erincatto/box3d",
+      "commit": "f555ee42084e0b43cbffa863f40bff8117c08896",
+      "acquisition": "Selected remote source files and collision documentation; research pin, not a selected Faset dependency version",
+      "files": [
+        "src/shape.c",
+        "src/mesh.c",
+        "include/box3d/collision.h",
+        "docs/collision.md"
+      ],
+      "study": "docs/studies/17-asset-pipeline-and-blender-roundtrip.md"
+    },
+    {
+      "name": "Godot documentation",
+      "repository": "https://github.com/godotengine/godot-docs",
+      "commit": "e1129cb5c3f27e0e3a12e816ae405ab5ce032e3f",
+      "acquisition": "Selected current development documentation pages read remotely",
+      "files": [
+        "tutorials/scripting/cpp/gdextension_cpp_example.rst",
+        "engine_details/engine_api/gdextension/what_is_gdextension.rst",
+        "tutorials/scripting/cpp/about_godot_cpp.rst"
+      ],
+      "study": "docs/studies/16-native-gameplay-and-metadata.md"
+    }
+  ],
+  "supplemental_note": "Studies 15–18 deepen the earlier static research. Remote links in these reports pin selected source files where possible; official evolving documentation is identified by URL and research date. No engine builds, importer runs, UX user tests or GPU benchmarks were performed.",
+  "path_base": "project_root",
+  "path_note": "Repository paths are relative to the Faset_Engine project root; external source checkouts are not part of this repository.",
+  "architecture_updated_at": "2026-09-18",
+  "architecture": "docs/ARCHITECTURE.md",
+  "implementation_plan": "PLAN.md",
+  "implementation_status": "Architecture selected; engine not implemented. The documentation map is an existing separate web tool.",
+  "source_worktree_note": "source_worktree_clean records the research-time observation, not a guarantee about a reader's checkout.",
+  "public_link_note": "Source citations use upstream blob URLs pinned to research commits; Unreal links require appropriate Epic access. No external engine code is bundled."
+}

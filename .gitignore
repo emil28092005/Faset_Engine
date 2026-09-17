@@ -1,0 +1,21 @@
+# Installed dependencies and generated output of the research map
+/docs/studies/map/node_modules/
+/docs/studies/map/dist/
+
+# Generated local code indexes
+**/graphify-out/
+
+# Local caches and logs
+__pycache__/
+*.py[cod]
+.DS_Store
+*.log
+
+# Future local build outputs and per-user configuration
+/build/
+/exports/
+/.cache/
+CMakeUserPresets.json
+.env
+.env.*
+!.env.example

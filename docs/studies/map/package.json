@@ -1,0 +1,20 @@
+{
+  "name": "faset-engine-research-map",
+  "version": "1.0.0",
+  "description": "Portable local viewer for Faset Engine architecture, roadmap and source studies",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server.mjs",
+    "test": "node --test map.test.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "private": true
+}
