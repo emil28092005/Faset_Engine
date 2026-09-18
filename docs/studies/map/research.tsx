@@ -101,7 +101,7 @@ export default function EngineResearch() {
       <Stack gap={5}><Text size="small" tone="tertiary">FASET ENGINE · РЕШЕНИЯ 18.09.2026</Text><H1>Архитектура, MVP и развитие графики</H1><Text tone="secondary">Linux + Windows · 2D / 3D · C++ Editor · Blender</Text></Stack>
       <Row gap={8} wrap><Button onClick={() => open("README.md")}>О проекте</Button><Button onClick={() => open("PLAN.md")}>План до / после MVP</Button><Button onClick={() => open("docs/ARCHITECTURE.md")}>Архитектура</Button></Row>
     </Row>
-    <Card><CardBody><Text><strong>Архитектура принята; реализация движка запланирована.</strong> Эта карта — работающий просмотрщик исследования, не редактор Faset. GPU-бенчмарки и сборки движка ещё не выполнены. MCP предусмотрен строго в Editor; Player не содержит MCP и не предоставляет ему runtime worlds или игровые сессии.</Text></CardBody></Card>
+    <Card><CardBody><Text><strong>Архитектура принята; идёт приёмка реализации MVP.</strong> Эта карта — работающий просмотрщик исследования, не редактор Faset. Результаты сборок, проверок и измерений опубликованы в docs/IMPLEMENTATION.md и docs/validation; исследовательские графические направления не считаются готовыми функциями. MCP предусмотрен строго в Editor; Player не содержит MCP и не предоставляет ему runtime worlds или игровые сессии.</Text></CardBody></Card>
     <Row gap={7} wrap>{["Решение", "Графика", "ECS и данные", "MCP и Blender", "Стек и экспорт", "Прототипы", "Источники"].map(name => <span key={name}><Pill active={tab === name} onClick={() => setTab(name)}>{name}</Pill></span>)}</Row>
     <Divider/>
 
@@ -192,7 +192,7 @@ export default function EngineResearch() {
       ]}/>
       <Text>UI, CLI и MCP редактора запускают один BuildRequest. Компиляторы работают в дочерних процессах; staging публикуется после проверки. Планируемый контракт отмены сохраняет последнюю успешную сборку; cache корректность и повторяемость требуют тестов, а не только hash-ключей.</Text>
       <Text>Windows и Linux сборки проверяются в своих окружениях. Player не включает Editor/MCP, shader compiler или editor plugins. Драйвер всё равно создаёт GPU pipelines; shader hot reload требует собственной проверки bindings/layout и безопасной замены ресурсов.</Text>
-      <Text size="small" tone="secondary">Версии toolchain/dependencies и проверенная GPU/driver matrix ещё не закреплены. C#/.NET и Rust + wgpu остаются историей сравнения вариантов, не параллельными реализациями Faset.</Text>
+      <Text size="small" tone="secondary">Версии закреплены в dependencies.lock.json и документации toolchain; фактически проверенные GPU/driver окружения указаны в docs/validation. C#/.NET и Rust + wgpu остаются историей сравнения вариантов, не параллельными реализациями Faset.</Text>
       <Row gap={8} wrap><Button onClick={() => open(root + reports[7].path)}>Исследование сборки и вариантов стека</Button><Button onClick={() => open(root + reports[11].path)}>Build service, cache и delivery</Button></Row>
     </Stack>}
 

@@ -206,3 +206,25 @@ The final build-service review also reproduced a publication defect: an invalid
 custom-field default can pass the build stage's shallow schema check before the
 Editor rejects it. Full schema validation before publishing `last_build.json` is the
 next bounded correction; checkpoint 4 does not claim this gate is already complete.
+
+
+## Acceptance corrections after checkpoint 4
+
+Gameplay schema publication now uses the same complete metadata validation as the
+Editor, before either the Player generation or `last_build.json` is published.
+A native fixture drives the real BuildService with valid custom schema v2 and twelve
+invalid manifests, checking that the previous binary, schema, manifest and pointer
+remain unchanged. The focused authoring/process/schema/Session/MCP suite passed 5/5.
+An authoring-disabled Player configuration still builds without editor services.
+
+Windows native checks passed for checkpoint 4 (`45bc352`) and `afd773f`, including
+the previous long-path regression. The full graphics runner also passed its Vulkan
+1.3 device probe after registering the pinned software ICD on the disposable elevated
+runner. Full Windows graphics and export acceptance is still in progress; a successful
+probe alone does not close that gate.
+
+The final audit identified additional bounded work: source/dependency freshness in
+the Assets panel, scrolling keyboard focus into view, delivery of explicit gameplay
+schema migrations, GPU pass labels, and wiring optional ImGui diagnostics. These
+remain under implementation and verification; the research map now links current
+implementation evidence instead of claiming the engine has not been started.
