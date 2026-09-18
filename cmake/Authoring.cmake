@@ -1,0 +1,8 @@
+add_library(faset_authoring STATIC src/authoring/schema.cpp src/authoring/service.cpp src/authoring/templates.cpp)
+target_include_directories(faset_authoring PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(faset_authoring PUBLIC faset_core)
+if(BUILD_TESTING)
+  add_executable(faset_authoring_tests tests/authoring_tests.cpp)
+  target_link_libraries(faset_authoring_tests PRIVATE faset_authoring)
+  add_test(NAME authoring COMMAND faset_authoring_tests)
+endif()

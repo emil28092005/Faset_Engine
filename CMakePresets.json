@@ -1,0 +1,23 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 25, "patch": 0},
+  "configurePresets": [
+    {"name": "linux-debug", "displayName": "Linux Clang Debug", "generator": "Ninja", "binaryDir": "${sourceDir}/build/linux-debug", "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux"}, "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_C_COMPILER": "clang", "CMAKE_CXX_COMPILER": "clang++", "BUILD_TESTING": "ON"}},
+    {"name": "linux-release", "inherits": "linux-debug", "binaryDir": "${sourceDir}/build/linux-release", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}},
+    {"name": "linux-sanitize", "inherits": "linux-debug", "binaryDir": "${sourceDir}/build/linux-sanitize", "cacheVariables": {"FASET_SANITIZERS": "ON", "FASET_BUILD_RENDERER": "OFF"}},
+    {"name": "windows-debug", "displayName": "Windows clang-cl Debug (Developer shell)", "generator": "Ninja", "binaryDir": "${sourceDir}/build/windows-debug", "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"}, "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_C_COMPILER": "clang-cl", "CMAKE_CXX_COMPILER": "clang-cl", "BUILD_TESTING": "ON"}},
+    {"name": "windows-release", "inherits": "windows-debug", "binaryDir": "${sourceDir}/build/windows-release", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}}
+  ],
+  "buildPresets": [
+    {"name": "linux-debug", "configurePreset": "linux-debug"},
+    {"name": "linux-release", "configurePreset": "linux-release"},
+    {"name": "linux-sanitize", "configurePreset": "linux-sanitize"},
+    {"name": "windows-debug", "configurePreset": "windows-debug"},
+    {"name": "windows-release", "configurePreset": "windows-release"}
+  ],
+  "testPresets": [
+    {"name": "linux-debug", "configurePreset": "linux-debug", "output": {"outputOnFailure": true}},
+    {"name": "linux-sanitize", "configurePreset": "linux-sanitize", "output": {"outputOnFailure": true}},
+    {"name": "windows-debug", "configurePreset": "windows-debug", "output": {"outputOnFailure": true}}
+  ]
+}

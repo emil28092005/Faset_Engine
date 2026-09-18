@@ -1,0 +1,5 @@
+* text=auto
+# Preserve upstream notice text, including its original whitespace.
+licenses/*.txt -whitespace
+*.png binary
+*.ttf binary

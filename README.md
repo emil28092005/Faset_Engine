@@ -2,10 +2,11 @@
 
 Faset is an independent engine project for desktop **2D and 3D games on Linux and Windows**. Its priorities are a custom editor that is comfortable to use by hand and through MCP, integration with Blender, and a path toward advanced graphics.
 
-**Current status: the core architecture is agreed; engine implementation has not started.** This repository contains the architecture decisions, development plan, source studies, and a working browser-based documentation map. A technology appearing in the plan does not mean it has been implemented or benchmarked.
+**Current status: MVP implementation is in progress.** Native core, authoring, physics runtime, asset import, and renderer subsystems are being integrated and tested. The complete editor and game export workflow are not yet ready. See the [implementation checkpoints](docs/IMPLEMENTATION.md) for observed results; a technology appearing in the plan does not mean it is complete or benchmarked.
 
 ## Start here
 
+- [User manual](docs/manual/index.md) — learn C++ gameplay and follow working examples; maintained alongside implementation.
 - [Development plan](PLAN.md) — milestones through MVP, acceptance criteria, and development beyond MVP.
 - [Architecture](docs/ARCHITECTURE.md) — accepted decisions and subsystem boundaries.
 - [Documentation](docs/README.md) — navigation and maintenance rules.

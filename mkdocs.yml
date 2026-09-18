@@ -1,0 +1,35 @@
+site_name: Faset Engine Manual
+site_description: Learn C++ gameplay, build scenes, and export games with Faset Engine.
+repo_url: https://github.com/emil28092005/Faset_Engine
+repo_name: Faset_Engine
+docs_dir: docs/manual
+site_dir: build/manual
+theme:
+  name: material
+  language: en
+  palette:
+    scheme: slate
+    primary: black
+    accent: deep purple
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+nav:
+  - Start here: index.md
+  - Build from source: getting-started/build.md
+  - C++ gameplay:
+      - How gameplay works: scripting/index.md
+      - Frame and physics updates: scripting/lifecycle.md
+  - Contributing to this manual: contributing.md

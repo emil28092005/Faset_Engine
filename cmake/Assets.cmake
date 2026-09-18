@@ -1,0 +1,15 @@
+add_library(faset_assets
+    ${PROJECT_SOURCE_DIR}/src/assets/asset_pipeline.cpp
+    ${PROJECT_SOURCE_DIR}/src/assets/cgltf.cpp)
+target_compile_features(faset_assets PUBLIC cxx_std_20)
+target_include_directories(faset_assets PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(faset_assets PUBLIC faset_core nlohmann_json::nlohmann_json PRIVATE faset_cgltf)
+if(BUILD_TESTING)
+    add_executable(faset_assets_tests ${PROJECT_SOURCE_DIR}/tests/assets_pipeline.cpp)
+    target_link_libraries(faset_assets_tests PRIVATE faset_assets)
+    add_test(NAME assets_pipeline COMMAND faset_assets_tests)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME assets_blender_bundle COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/assets_bundle_test.py)
+    endif()
+endif()
