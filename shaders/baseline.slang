@@ -34,8 +34,13 @@ VertexOutput vertexMain(VertexInput v) {
 float4 shadowMain(VertexInput v) : SV_Position { return mul(frame.lightViewProjection, float4(v.world,1)); }
 [shader("fragment")]
 float4 fragmentMain(VertexOutput v) : SV_Target {
-    float4 base = v.color * colorMap.Sample(colorSampler, v.uv);
-    if (dot(v.normal,v.normal) < 0.01) return base;
+    float4 sampled = colorMap.Sample(colorSampler, v.uv);
+    if (dot(v.normal,v.normal) < 1e-12) {
+        // UI/sprite tint is in display space; sRGB textures were decoded by Vulkan.
+        if (v.material.x > 0.5) sampled.rgb = lerp(sampled.rgb * 12.92, 1.055 * pow(max(sampled.rgb,0),float3(1.0/2.4)) - 0.055, step(0.0031308, sampled.rgb));
+        return v.color * sampled;
+    }
+    float4 base = v.color * sampled;
     const float pi = 3.14159265;
     float3 n=normalize(v.normal), l=normalize(-frame.lightDirection.xyz), view=normalize(frame.eye.xyz-v.world), h=normalize(l+view);
     float nl=max(dot(n,l),0.0), nv=max(dot(n,view),0.001), nh=max(dot(n,h),0.0), vh=max(dot(view,h),0.0);

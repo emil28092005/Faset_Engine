@@ -1,0 +1,8 @@
+add_library(faset_editor_commands STATIC src/editor/commands.cpp src/editor/mcp.cpp)
+target_link_libraries(faset_editor_commands PUBLIC faset_authoring)
+target_include_directories(faset_editor_commands PUBLIC include)
+if(BUILD_TESTING)
+  add_executable(faset_mcp_tests tests/mcp_tests.cpp)
+  target_link_libraries(faset_mcp_tests PRIVATE faset_editor_commands)
+  add_test(NAME editor_mcp COMMAND faset_mcp_tests)
+endif()

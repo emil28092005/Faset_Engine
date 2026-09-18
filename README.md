@@ -2,7 +2,7 @@
 
 Faset is an independent engine project for desktop **2D and 3D games on Linux and Windows**. Its priorities are a custom editor that is comfortable to use by hand and through MCP, integration with Blender, and a path toward advanced graphics.
 
-**Current status: MVP implementation is in progress.** Native core, authoring, physics runtime, asset import, and renderer subsystems are being integrated and tested. The complete editor and game export workflow are not yet ready. See the [implementation checkpoints](docs/IMPLEMENTATION.md) for observed results; a technology appearing in the plan does not mean it is complete or benchmarked.
+**Current status: MVP implementation is in progress.** The native Editor, shared GUI/MCP authoring, C++ gameplay builds, Vulkan Player, and standalone export are integrated and under acceptance testing. Linux GPU workflows work; complete cross-platform acceptance and the two finished example games remain in progress. See the [implementation checkpoints](docs/IMPLEMENTATION.md) for observed results; a technology appearing in the plan does not mean it is complete or benchmarked.
 
 ## Start here
 

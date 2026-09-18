@@ -1,9 +1,13 @@
+add_library(faset_asset_data STATIC ${PROJECT_SOURCE_DIR}/src/assets/asset_data.cpp)
+target_compile_features(faset_asset_data PUBLIC cxx_std_20)
+target_include_directories(faset_asset_data PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(faset_asset_data PUBLIC faset_core nlohmann_json::nlohmann_json)
 add_library(faset_assets
     ${PROJECT_SOURCE_DIR}/src/assets/asset_pipeline.cpp
     ${PROJECT_SOURCE_DIR}/src/assets/cgltf.cpp)
 target_compile_features(faset_assets PUBLIC cxx_std_20)
 target_include_directories(faset_assets PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(faset_assets PUBLIC faset_core nlohmann_json::nlohmann_json PRIVATE faset_cgltf)
+target_link_libraries(faset_assets PUBLIC faset_asset_data PRIVATE faset_cgltf faset_stb)
 if(BUILD_TESTING)
     add_executable(faset_assets_tests ${PROJECT_SOURCE_DIR}/tests/assets_pipeline.cpp)
     target_link_libraries(faset_assets_tests PRIVATE faset_assets)

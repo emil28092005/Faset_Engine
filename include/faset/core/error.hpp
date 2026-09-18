@@ -5,16 +5,23 @@
 
 namespace faset {
 class Error : public std::runtime_error {
-public:
+  public:
     Error(std::string code, std::string message, Json details = Json::object())
-        : std::runtime_error(std::move(message)), code_(std::move(code)), details_(std::move(details)) {}
-    const std::string& code() const noexcept { return code_; }
-    Json json() const { return {{"code", code_}, {"message", what()}, {"details", details_}}; }
-private:
+        : std::runtime_error(std::move(message)), code_(std::move(code)),
+          details_(std::move(details)) {}
+    const std::string& code() const noexcept {
+        return code_;
+    }
+    Json json() const {
+        return {{"code", code_}, {"message", what()}, {"details", details_}};
+    }
+
+  private:
     std::string code_;
     Json details_;
 };
 inline void require(bool condition, const std::string& code, const std::string& message) {
-    if (!condition) throw Error(code, message);
+    if (!condition)
+        throw Error(code, message);
 }
-}
+} // namespace faset

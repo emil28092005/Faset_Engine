@@ -1,4 +1,4 @@
-add_library(faset_authoring STATIC src/authoring/schema.cpp src/authoring/service.cpp src/authoring/templates.cpp)
+add_library(faset_authoring STATIC src/authoring/schema.cpp src/authoring/service.cpp src/authoring/templates.cpp src/authoring/transforms.cpp)
 target_include_directories(faset_authoring PUBLIC "${PROJECT_SOURCE_DIR}/include")
 target_link_libraries(faset_authoring PUBLIC faset_core)
 if(BUILD_TESTING)

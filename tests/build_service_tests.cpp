@@ -1,0 +1,289 @@
+#include <bit>
+#include <chrono>
+#include <cstdlib>
+#include <faset/assets/asset_pipeline.hpp>
+#include <faset/core/hash.hpp>
+#include <faset/core/io.hpp>
+#include <faset/core/process.hpp>
+#include <faset/editor/build_service.hpp>
+#include <iostream>
+#include <thread>
+#ifndef _WIN32
+#include <csignal>
+#endif
+using namespace faset;
+namespace fs = std::filesystem;
+void require(bool value, const char* message) {
+    if (!value)
+        throw std::runtime_error(message);
+}
+std::string collect(Process& process) {
+    std::string text;
+    while (true) {
+        auto poll = process.poll();
+        text += poll.output;
+        if (!poll.running) {
+            require(poll.exit_code == 0, "Child process failed");
+            return text;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+}
+Json scene(int dimension) {
+    return {{"format", "faset.scene"},   {"version", 1},           {"id", "scene-test"},
+            {"name", "Build test"},      {"dimension", dimension}, {"entities", Json::array()},
+            {"instances", Json::array()}};
+}
+int integration(const fs::path& root) {
+    fs::create_directories(root);
+    editor::BuildConfig config;
+    config.project_root = root / "project";
+    config.engine_root = FASET_ENGINE_SOURCE;
+    config.build_directory = root / "native-build";
+    config.cache_root = root / "project" / ".faset" / "cache";
+    editor::BuildService service(config);
+    service.scaffold("Export integration", 3);
+    // This dedicated integration fixture is reset before testing incremental user edits.
+    atomic_write(config.project_root / "Scripts" / "Gameplay.cpp",
+                 read_text(config.engine_root / "tools" / "project_templates" / "Gameplay.cpp"));
+    auto wait = [&](const std::string& id) {
+        std::string stage;
+        while (true) {
+            auto job = service.job(id);
+            if (job.stage != stage) {
+                stage = job.stage;
+                std::cout << job.stage << std::endl;
+            }
+            if (job.finished()) {
+                if (job.state != "succeeded") {
+                    std::cerr << job.error << '\n' << job.log;
+                    throw std::runtime_error("Integration job failed");
+                }
+                return job;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    };
+    const auto assets = config.project_root / "Assets";
+    std::string binary;
+    for (float value : {-1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 2.f, 0.f}) {
+        auto bits = std::bit_cast<std::uint32_t>(value);
+        for (int i = 0; i < 4; ++i)
+            binary.push_back(static_cast<char>(bits >> (8 * i)));
+    }
+    atomic_write(assets / "triangle.bin", binary);
+    Json gltf = {
+        {"asset", {{"version", "2.0"}}},
+        {"scene", 0},
+        {"scenes", Json::array({{{"nodes", {0}}}})},
+        {"nodes", Json::array({{{"mesh", 0}, {"extras", {{"faset_id", "triangle-node"}}}}})},
+        {"buffers", Json::array({{{"uri", "triangle.bin"}, {"byteLength", 36}}})},
+        {"bufferViews", Json::array({{{"buffer", 0}, {"byteLength", 36}}})},
+        {"accessors", Json::array({{{"bufferView", 0},
+                                    {"componentType", 5126},
+                                    {"count", 3},
+                                    {"type", "VEC3"},
+                                    {"min", {-1, 0, 0}},
+                                    {"max", {1, 2, 0}}}})},
+        {"meshes",
+         Json::array({{{"primitives", Json::array({{{"attributes", {{"POSITION", 0}}}}})}}})}};
+    atomic_write_json(assets / "triangle.gltf", gltf);
+    assets::AssetPipeline importer(config.cache_root);
+    auto imported = importer.import_asset({assets / "triangle.gltf"});
+    require(imported.ok(), "Integration asset import");
+    for (int dimension : {2, 3}) {
+        auto document = scene(dimension);
+        auto component = [](std::string type, Json fields) {
+            return Json{
+                {"id", type}, {"type", type}, {"version", 1}, {"fields", std::move(fields)}};
+        };
+        Json components = Json::array(
+            {component("faset.transform",
+                       {{"position", {0, 0, 0}}, {"rotation", {0, 0, 0}}, {"scale", {1, 1, 1}}})});
+        if (dimension == 2)
+            components.push_back(
+                component("faset.sprite", {{"size", {2, 2}}, {"color", {.2, .7, .9, 1}}}));
+        else
+            components.push_back(component(
+                "faset.mesh", {{"asset", imported.asset_id + "#" +
+                                             importer.load_asset(imported.asset_id).nodes.at(0).id},
+                               {"color", {.3, .8, .5, 1}}}));
+        document["entities"].push_back({{"id", "object"},
+                                        {"name", "Object"},
+                                        {"parent", nullptr},
+                                        {"components", components}});
+        auto result =
+            wait(service.start_export(document, root / ("export-" + std::to_string(dimension))));
+        const auto directory = fs::path(result.result.at("directory").get<std::string>());
+        require(result.result.at("configuration") == "Release",
+                "Exports default to the Release profile");
+        require(fs::path(result.result.at("build_directory").get<std::string>()) ==
+                    config.build_directory / "Release",
+                "Export has a separate CMake directory");
+        require(read_json(directory / "manifest.json").at("configuration") == "Release",
+                "Export manifest records the actual profile");
+        Process player({{result.result.at("executable").get<std::string>(), "--headless",
+                         "--frames", "3", "--capture", (directory / "verification.ppm").string()},
+                        directory,
+                        {}});
+        std::cout << collect(player);
+        require(fs::file_size(directory / "verification.ppm") > 1000,
+                "Exported game rendered a frame");
+        atomic_write_json(root / ("result-" + std::to_string(dimension) + ".json"), result.result);
+    }
+    auto source = read_text(config.project_root / "Scripts" / "Gameplay.cpp");
+    auto position = source.find("Character");
+    require(position != std::string::npos, "Template schema fixture");
+    source.replace(position, 9, "Custom Character");
+    atomic_write(config.project_root / "Scripts" / "Gameplay.cpp", source);
+    auto release_cache = read_text(config.build_directory / "Release" / "CMakeCache.txt");
+    auto rebuilt = wait(service.start_build());
+    require(rebuilt.result.at("configuration") == "Debug", "Development builds remain Debug");
+    require(fs::path(rebuilt.result.at("build_directory").get<std::string>()) ==
+                config.build_directory / "Debug",
+            "Development CMake directory is isolated");
+    require(read_text(config.build_directory / "Release" / "CMakeCache.txt") == release_cache,
+            "Development build preserves the Release cache");
+    auto schema = read_json(rebuilt.result.at("schema").get<std::string>());
+    bool updated{};
+    for (const auto& type : schema.at("types"))
+        if (type.value("name", "") == "Custom Character")
+            updated = true;
+    require(updated, "Incremental C++ build produced new schema");
+    auto last = read_text(config.cache_root / "last_build.json");
+    atomic_write(config.project_root / "Scripts" / "Gameplay.cpp",
+                 source + "\n#error intentional_build_failure\n");
+    auto failed = service.wait(service.start_build());
+    require(failed.state == "failed", "Invalid user C++ must fail build");
+    require(read_text(config.cache_root / "last_build.json") == last,
+            "Failed compile preserved last good build");
+    atomic_write(config.project_root / "Scripts" / "Gameplay.cpp", source);
+    std::cout << "Real 2D/3D exports, imported mesh packaging, native launches, incremental C++ "
+                 "schema and failed-build recovery passed\n";
+    return 0;
+}
+int main(int argc, char** argv) {
+    if (argc > 1 && std::string(argv[1]) == "--child") {
+        Json args = Json::array();
+        for (int i = 2; i < argc; ++i)
+            args.push_back(argv[i]);
+        std::cout << Json{{"args", args},
+                          {"cwd", fs::current_path().string()},
+                          {"env", std::getenv("FASET_PROCESS_TEST")
+                                      ? std::getenv("FASET_PROCESS_TEST")
+                                      : ""}}
+                         .dump()
+                  << std::endl;
+        std::cerr << "stderr-sentinel\n";
+        std::cout << std::string(100000, 'x') << std::endl;
+        return 0;
+    }
+    if (argc > 1 && std::string(argv[1]) == "--sleep") {
+#ifndef _WIN32
+        std::signal(SIGTERM, SIG_IGN);
+#endif
+        std::cout << "ready\n" << std::flush;
+        std::this_thread::sleep_for(std::chrono::seconds(30));
+        return 0;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--integration") {
+        try {
+            return integration(fs::absolute(argv[2]));
+        } catch (const std::exception& error) {
+            std::cerr << error.what() << '\n';
+            return 1;
+        }
+    }
+    fs::path temporary = fs::temp_directory_path() / ("Faset build test " + new_id());
+    try {
+        fs::create_directories(temporary);
+        auto executable = fs::absolute(argv[0]);
+        Process child({{executable.string(), "--child", "space argument", "quote\"backslash\\",
+                        "$(touch not-executed); & |", ""},
+                       temporary,
+                       {{"FASET_PROCESS_TEST", "value with spaces"}}});
+        auto text = collect(child);
+        auto result = Json::parse(text.substr(0, text.find('\n')));
+        require(result["args"] == Json::array({"space argument", "quote\"backslash\\",
+                                               "$(touch not-executed); & |", ""}),
+                "Arguments must remain literal");
+        require(result["env"] == "value with spaces", "Child environment override");
+        require(fs::equivalent(result["cwd"].get<std::string>(), temporary),
+                "Child working directory");
+        require(text.find("stderr-sentinel") != std::string::npos && text.size() > 100000,
+                "Combined pipe output drained fully");
+        require(!fs::exists(temporary / "not-executed"), "No shell execution");
+        Process sleeper({{executable.string(), "--sleep"}, temporary, {}});
+        bool ready{};
+        while (!ready) {
+            auto p = sleeper.poll();
+            ready = p.output.find("ready") != std::string::npos;
+            require(p.running, "Sleeper exited early");
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        auto start = std::chrono::steady_clock::now();
+        sleeper.cancel();
+        require(!sleeper.poll().running, "Cancellation must reap the process");
+        require(std::chrono::steady_clock::now() - start < std::chrono::seconds(3),
+                "Cancellation must finish promptly");
+        editor::BuildConfig config;
+        config.project_root = temporary / "project";
+        config.engine_root = FASET_ENGINE_SOURCE;
+        editor::BuildService service(config);
+        service.scaffold("Test project", 2);
+        atomic_write(config.project_root / "Scripts" / "Gameplay.cpp", "// User code\n");
+        service.scaffold("Another name", 3);
+        require(read_text(config.project_root / "Scripts" / "Gameplay.cpp") == "// User code\n",
+                "Scaffold preserves existing source");
+        auto id = service.start_cook(scene(2));
+        auto cooked = service.wait(id);
+        require(cooked.state == "succeeded", "Cook job succeeds");
+        auto bytes = read_text(cooked.result.at("scene").get<std::string>());
+        require(bytes.substr(0, 8) == "FASETSCN" && bytes.size() > 20, "Cooked envelope magic");
+        std::uint32_t version{};
+        std::uint64_t size{};
+        for (unsigned i = 0; i < 4; ++i)
+            version |= std::uint32_t(static_cast<unsigned char>(bytes[8 + i])) << (8 * i);
+        for (unsigned i = 0; i < 8; ++i)
+            size |= std::uint64_t(static_cast<unsigned char>(bytes[12 + i])) << (8 * i);
+        require(version == 1 && size == bytes.size() - 20, "Cooked envelope version and size");
+        require(Json::from_cbor(bytes.begin() + 20, bytes.end()) == scene(2),
+                "Cooked scene preserves all values");
+        auto previous = read_text(service.config().cache_root / "last_cook.json");
+        auto broken = scene(3);
+        broken["version"] = 999;
+        auto bad = service.wait(service.start_cook(broken));
+        require(bad.state == "failed", "Unsupported scene version rejected");
+        require(read_text(service.config().cache_root / "last_cook.json") == previous,
+                "Failed cook preserves last good generation");
+        broken = scene(3);
+        broken["entities"].push_back(
+            {{"id", "entity"},
+             {"components",
+              Json::array({{{"type", "faset.mesh"}, {"fields", {{"asset", "missing-asset"}}}}})}});
+        auto missing = service.wait(service.start_cook(broken));
+        require(missing.state == "failed", "Missing asset blocks publication");
+        require(read_text(service.config().cache_root / "last_cook.json") == previous,
+                "Missing asset preserves last good generation");
+        broken = scene(3);
+        broken["entities"].push_back({{"id", "entity"},
+                                      {"components", Json::array({{{"type", "faset.unknown"},
+                                                                   {"version", 1},
+                                                                   {"fields", Json::object()}}})}});
+        auto unknown = service.wait(service.start_cook(broken));
+        require(unknown.state == "failed" &&
+                    unknown.error.find("unresolved component") != std::string::npos,
+                "Unknown component type blocks cooking");
+        require(read_text(service.config().cache_root / "last_cook.json") == previous,
+                "Unknown schema preserves last good generation");
+        std::cout << "Literal process arguments, pipes, cancellation, scaffold and atomic cook "
+                     "contracts passed\n";
+        fs::remove_all(temporary);
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        std::error_code ignored;
+        fs::remove_all(temporary, ignored);
+        return 1;
+    }
+}

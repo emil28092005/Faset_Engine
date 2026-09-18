@@ -10,3 +10,12 @@ Faset source dependencies are pinned in `dependencies.lock.json`. These notices 
 - **cgltf** (MIT): [360db1a95480](https://github.com/jkuhlmann/cgltf/tree/360db1a95480fe102ae9c69b27c5d101167ff5ba), notice in `cgltf.txt`.
 - **stb** (MIT OR Unlicense): [2c980bb59875](https://github.com/nothings/stb/tree/2c980bb59875b0d32144a71867fbdebb2f77cd20), notice in `stb.txt`.
 - **nlohmann/json** (MIT): pinned in the dependency lock, notice in `json.txt`.
+
+- **FreeType** (FreeType License): pinned 2.13.3, notice in `freetype.txt`. Portions of this software are copyright © The FreeType Project (www.freetype.org). All rights reserved.
+- **HarfBuzz** (MIT-style): pinned 10.4.0, copyright and permissions in `harfbuzz.txt`.
+- **Noto Sans** (SIL Open Font License 1.1): editor font only; see `../assets/fonts/OFL.txt` and `../assets/fonts/NOTICE.md`.
+
+The default Editor build uses the pinned FreeType/HarfBuzz archives. An explicit
+`FASET_USE_SYSTEM_TEXT_LIBRARIES=ON` uses installed versions; distributors must retain
+the notices appropriate to those installations. These font libraries and the editor
+font are not linked into or required by exported games.

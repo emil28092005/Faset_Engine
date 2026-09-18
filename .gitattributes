@@ -3,3 +3,5 @@
 licenses/*.txt -whitespace
 *.png binary
 *.ttf binary
+
+assets/fonts/OFL.txt -whitespace

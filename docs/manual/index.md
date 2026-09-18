@@ -7,7 +7,7 @@ and how those functions interact with scenes, physics, and the editor.
 !!! warning "Development status"
     MVP implementation is in progress. A planned feature is not a working feature.
     Individual guides state their prerequisites and validation status. The current
-    foundation can be built and tested; a complete editor and game export are not yet available.
+    Editor, gameplay tutorials and Linux export can be built and tested. Final Windows graphics/export acceptance and complete sample games are still in progress.
 
 Start with [how C++ gameplay works](scripting/index.md), then read
 [frame and physics updates](scripting/lifecycle.md). See

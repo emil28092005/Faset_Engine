@@ -1,14 +1,14 @@
 # Build from source
 
-!!! warning "Foundation checkpoint"
-    These instructions initially cover the build foundation. The integrated editor,
-    sample projects, and packaging steps are being added and verified during MVP implementation.
+!!! note "Implementation checkpoint"
+    Linux Editor, Player and export integration are tested. Final Windows graphics/export
+    acceptance is tracked separately in the implementation report.
 
 ## Linux prerequisites
 
 The selected toolchain is C++20, CMake 3.25 or later, Ninja, and Clang.
 Graphical builds need Vulkan 1.3 headers/loader and a compatible driver.
-SDL3 is built from a pinned source archive.
+SDL3, FreeType and HarfBuzz are built from pinned source archives.
 
 On Ubuntu, install the native build tools before configuring:
 
@@ -16,7 +16,7 @@ On Ubuntu, install the native build tools before configuring:
 sudo apt install clang ninja-build cmake python3 python3-venv pkg-config \
   libvulkan-dev vulkan-validationlayers libx11-dev libxext-dev libxrandr-dev \
   libxcursor-dev libxi-dev libxfixes-dev libxkbcommon-dev libwayland-dev \
-  libfreetype-dev libharfbuzz-dev xvfb
+  xvfb
 ```
 
 `xvfb` is used for automated window tests. A normal desktop session does not need it.
@@ -29,6 +29,16 @@ cmake --preset linux-debug
 cmake --build --preset linux-debug --parallel
 ctest --preset linux-debug
 ```
+
+Create a project and open the native Editor:
+
+```sh
+build/linux-debug/faset_editor --project "$PWD/MyGame" --new MyGame --dimension 3
+```
+
+Use **Build C++** after changing `MyGame/Scripts/Gameplay.cpp`, then **Play**.
+The Player runs separately. Stop it before changing and rebuilding C++ gameplay.
+See [MCP and CLI](../editor/mcp.md) for headless authoring and automation.
 
 For an optimized build use `linux-release`. The `linux-sanitize` preset enables
 AddressSanitizer and UndefinedBehaviorSanitizer for tests without the graphics backend.

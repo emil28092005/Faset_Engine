@@ -64,6 +64,22 @@
       "url": "https://codeload.github.com/nothings/stb/tar.gz/2c980bb59875b0d32144a71867fbdebb2f77cd20",
       "sha256": "9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515",
       "license": "MIT OR Unlicense"
+    },
+    "freetype": {
+      "repository": "https://github.com/freetype/freetype",
+      "version": "2.13.3",
+      "commit": "42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+      "url": "https://codeload.github.com/freetype/freetype/tar.gz/42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+      "sha256": "68ce87bb59ea209eb7350f41a94a27519ce16b37011b475a1e62d4abee154b66",
+      "license": "FTL"
+    },
+    "harfbuzz": {
+      "repository": "https://github.com/harfbuzz/harfbuzz",
+      "version": "10.4.0",
+      "commit": "3ef8709829a5884517ad91a97b32b9435b2f20d1",
+      "url": "https://codeload.github.com/harfbuzz/harfbuzz/tar.gz/3ef8709829a5884517ad91a97b32b9435b2f20d1",
+      "sha256": "61757682efefaa93a6eab7d988d139827e8f35071327cd93e23dc7fd77e0162b",
+      "license": "MIT"
     }
   }
 }

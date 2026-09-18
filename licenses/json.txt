@@ -1,3 +1,9 @@
+nlohmann/json v3.12.0
+SPDX-FileCopyrightText: 2013 - 2025 Niels Lohmann <https://nlohmann.me>
+SPDX-License-Identifier: MIT
+
+The following license text is reproduced from upstream LICENSES/MIT.txt.
+
 MIT License
 
 Copyright (c) <year> <copyright holders>

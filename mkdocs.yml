@@ -22,6 +22,9 @@ plugins:
   - search
 markdown_extensions:
   - admonition
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight:
@@ -31,5 +34,12 @@ nav:
   - Build from source: getting-started/build.md
   - C++ gameplay:
       - How gameplay works: scripting/index.md
+      - Write your first behavior: scripting/first-behavior.md
       - Frame and physics updates: scripting/lifecycle.md
+      - Physics and grounded movement: scripting/physics.md
+      - Runtime API: scripting/api.md
+      - Compiled examples: scripting/examples.md
+  - Editor automation:
+      - MCP and command line: editor/mcp.md
+      - Native extensions: editor/extensions.md
   - Contributing to this manual: contributing.md

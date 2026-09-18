@@ -4,10 +4,10 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <vector>
-#include <nlohmann/json.hpp>
 
 namespace faset::runtime {
 
@@ -26,7 +26,9 @@ struct EntityHandle {
     std::uint64_t session{};
     std::uint32_t slot{};
     std::uint64_t generation{};
-    explicit operator bool() const noexcept { return session != 0; }
+    explicit operator bool() const noexcept {
+        return session != 0;
+    }
     bool operator==(const EntityHandle&) const = default;
 };
 
@@ -37,8 +39,17 @@ struct InputState {
     bool interactPressed{};
 };
 
-struct Sprite { Vec4 color{1, 1, 1, 1}; Vec2 size{1, 1}; std::string texture; int layer{}; };
-struct Mesh { std::string asset; Vec4 color{1, 1, 1, 1}; std::string primitive{"cube"}; };
+struct Sprite {
+    Vec4 color{1, 1, 1, 1};
+    Vec2 size{1, 1};
+    std::string texture;
+    int layer{};
+};
+struct Mesh {
+    std::string asset;
+    Vec4 color{1, 1, 1, 1};
+    std::string primitive{"cube"};
+};
 struct RenderEntity {
     std::string id;
     std::string name;
@@ -86,7 +97,7 @@ struct CollisionEvent {
 // Single-owner sequential runtime. Gameplay callbacks run on the caller's thread.
 // No Editor, MCP, renderer or platform service is linked by this API.
 class Runtime {
-public:
+  public:
     explicit Runtime(RuntimeConfig config = {});
     ~Runtime();
     Runtime(const Runtime&) = delete;
@@ -111,6 +122,9 @@ public:
     // Configuration copy. Live poses and velocities have their own typed accessors.
     nlohmann::json fields(EntityHandle handle, const std::string& componentType) const;
     Vec3 velocity(EntityHandle handle) const;
+    // Support from the last completed physics step. Checks actual contact normals
+    // against opposite gravity (Y-up if gravity is zero), not vertical speed.
+    bool grounded(EntityHandle handle) const;
     InputState input() const noexcept;
     // Valid until the next fixed tick or scene replacement. No native solver pointers.
     const std::vector<CollisionEvent>& collisions() const noexcept;
@@ -135,7 +149,7 @@ public:
     std::uint64_t session() const noexcept;
     const std::vector<std::string>& diagnostics() const noexcept;
 
-private:
+  private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

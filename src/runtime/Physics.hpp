@@ -14,9 +14,13 @@ struct BodySettings {
     std::uint64_t categoryBits{1};
     std::uint64_t maskBits{~std::uint64_t{0}};
 };
-struct Contact { std::uint32_t first; std::uint32_t second; bool began; };
+struct Contact {
+    std::uint32_t first;
+    std::uint32_t second;
+    bool began;
+};
 class Physics {
-public:
+  public:
     Physics(int dimension, Vec3 gravity, int substeps);
     ~Physics();
     void add(std::uint32_t id, const Transform&, const BodySettings&);
@@ -25,12 +29,14 @@ public:
     bool dynamic(std::uint32_t id) const;
     Transform transform(std::uint32_t id, Transform previous) const;
     Vec3 velocity(std::uint32_t id) const;
+    bool grounded(std::uint32_t id) const;
     void teleport(std::uint32_t id, const Transform&);
     void setVelocity(std::uint32_t id, Vec3);
     void impulse(std::uint32_t id, Vec3);
     std::vector<Contact> step(float delta);
-private:
+
+  private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
-}
+} // namespace faset::runtime::detail
