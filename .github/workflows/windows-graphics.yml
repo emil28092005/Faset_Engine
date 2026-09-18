@@ -50,9 +50,16 @@ jobs:
             .cache/windows-graphics/sdk
             .cache/windows-graphics/driver
       - name: Probe Vulkan loader and SwiftShader before compiling the engine
+        # Hosted Windows jobs are elevated, so Khronos correctly ignores driver
+        # environment overrides. Register the software ICD only on this disposable VM.
+        # https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderDriverInterface.md#driver-discovery-on-windows
         env:
           VK_LOADER_DEBUG: all
-        run: python tools/ci/probe_windows_vulkan.py
+        run: |
+          $driverKey = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
+          New-Item -Path $driverKey -Force | Out-Null
+          New-ItemProperty -Path $driverKey -Name $env:VK_DRIVER_FILES -PropertyType DWord -Value 0 -Force | Out-Null
+          python tools/ci/probe_windows_vulkan.py
       - name: Fetch checksum-verified Slang compiler
         run: python tools/fetch_slang.py
       - name: Configure full editor and Player
