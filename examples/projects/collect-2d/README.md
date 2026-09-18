@@ -41,7 +41,7 @@ The Player window title and console identify the controls and objective; the gam
 
 `project.faset.json` chooses `Scenes/main.scene.json`. The scene stores object/component IDs, transforms, physics settings, and entity references in the collector component. `Scripts/Gameplay.cpp` owns the round's transient C++ state and registers its editable schema. `speed` and `jump_speed` use metres per second.
 
-Change JSON and restart Play to see new level data. Change C++ or its schema, then stop, build, and restart; C++ hot reload is not implemented. Runtime pickup progress does not rewrite the authoring scene or create Undo entries.
+Edit the scene through the Inspector and restart Play to see new level data. Change C++ or its schema, then stop, build, and restart; C++ hot reload is not implemented. Runtime pickup progress does not rewrite the authoring scene or create Undo entries.
 
 ## Verify
 

@@ -1,0 +1,18 @@
+{
+  "arguments": [
+    "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\faset-playable-exports-8qma4esl\\Faset Café 世界\\collect-3d\\faset_player.exe",
+    "--headless",
+    "--frames",
+    "120",
+    "--capture",
+    "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\faset-playable-exports-8qma4esl\\Faset Café 世界\\collect-3d\\verification.ppm",
+    "--profile",
+    "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\faset-playable-exports-8qma4esl\\Faset Café 世界\\collect-3d\\profile.json"
+  ],
+  "cwd": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\faset-playable-exports-8qma4esl\\empty-working-directory",
+  "seconds": 2.312999999999988,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "New round: collect the three gold cubes, then reach the green exit. E resets.\n{\"device\":\"SwiftShader Device (LLVM 10.0.0)\",\"dimension\":3,\"frames\":120,\"ticks\":120,\"validation_errors\":0}\n",
+  "stderr": "[Faset] Vulkan validation layer/debug-utils unavailable; validation disabled.\nwarning: material material-bb63b094febbf90bb7049c9bcf7587bc has features beyond the initial base-color/PBR renderer\n"
+}

@@ -2,7 +2,7 @@
 
 Faset is an independent engine project for desktop **2D and 3D games on Linux and Windows**. Its priorities are a custom editor that is comfortable to use by hand and through MCP, integration with Blender, and a path toward advanced graphics.
 
-**Current status: MVP acceptance is in progress.** The native Editor, shared GUI/MCP authoring, C++ gameplay builds, Vulkan Player, standalone export and two playable sample games are integrated. Linux GPU workflows are tested; complete Windows graphics/export acceptance and final validation remain in progress. See the [implementation checkpoints](docs/IMPLEMENTATION.md) for observed results; a technology appearing in the plan does not mean it is complete or benchmarked.
+**Current status: the C++ MVP is implemented and accepted for the recorded Linux and Windows test profiles.** It includes the native Editor, shared GUI/MCP authoring, gameplay builds, Vulkan Player, Blender import and standalone export. Both playable games passed Release export and relocated execution on both operating systems. Windows graphics acceptance used software Vulkan; physical Windows GPUs, system IME and mixed-monitor transitions need additional coverage. See the [acceptance dossier](docs/validation/mvp-acceptance.md) for exact revisions, checks and limits, and the [implementation checkpoints](docs/IMPLEMENTATION.md) for the development record.
 
 ## Start here
 
@@ -18,7 +18,8 @@ After following the manual's build setup, run `build/linux-debug/faset_editor`
 (or `build/windows-debug/faset_editor.exe`) to open the project launcher. The
 [`collect-2d`](examples/projects/collect-2d) and
 [`collect-3d`](examples/projects/collect-3d) projects include playable C++ examples;
-the 3D example includes an original Blender asset and import instructions.
+the 3D example includes an original Blender asset and import instructions. Import its
+`Assets/exit-arch/manifest.json` once before Play, including after clearing its cache.
 
 ## Language
 
@@ -38,7 +39,7 @@ This README is in English. The current planning documents, studies, and research
 - **Editor-only MCP:** authoring, assets, import, builds, export, Play/Stop, and editor diagnostics. MCP is absent from the Player and exported games.
 - Standard, **unmodified Blender**, glTF/GLB import, and an optional add-on for convenient export and stable IDs.
 
-MVP is complete when two small games, one 2D and one 3D, can be created, saved, played, and exported for both operating systems. GPU-driven rendering, HZB, advanced shadows, temporal reconstruction, and dynamic global illumination follow the baseline.
+The MVP provides two small games, one 2D and one 3D, with scene editing, C++ behavior, physics, Play and standalone export. Lua, GPU-driven rendering, HZB, advanced shadows, temporal reconstruction and dynamic global illumination follow this baseline.
 
 ## Run the research map
 

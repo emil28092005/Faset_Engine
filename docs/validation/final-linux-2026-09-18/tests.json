@@ -1,0 +1,318 @@
+{
+  "recorded_date": "2026-09-18",
+  "profiles": "Ubuntu 26.04 x86-64; Clang 21.1.8; NVIDIA RTX 2080 Ti 595.84; see docs/TOOLCHAINS.md",
+  "checks": [
+    {
+      "source_commit": "4cb82556de31268d2bde73948dd1ff1b6c02f162",
+      "description": "Full Debug with optional ImGui diagnostics",
+      "raw_log_sha256": "4f44fa2bc6b9cc560f89d0000b63cf87e200da237b432de87c5b64f299dc58a9",
+      "tests": [
+        {
+          "name": "authoring",
+          "status": "passed",
+          "seconds": 0.05
+        },
+        {
+          "name": "runtime_contracts",
+          "status": "passed",
+          "seconds": 0.12
+        },
+        {
+          "name": "assets_pipeline",
+          "status": "passed",
+          "seconds": 0.12
+        },
+        {
+          "name": "assets_blender_bundle",
+          "status": "passed",
+          "seconds": 0.07
+        },
+        {
+          "name": "render_graph",
+          "status": "passed",
+          "seconds": 0.01
+        },
+        {
+          "name": "render_offscreen",
+          "status": "passed",
+          "seconds": 0.35
+        },
+        {
+          "name": "render_sprite_alpha",
+          "status": "passed",
+          "seconds": 0.31
+        },
+        {
+          "name": "render_shader_reload",
+          "status": "passed",
+          "seconds": 2.47
+        },
+        {
+          "name": "render_window_lifecycle",
+          "status": "skipped",
+          "seconds": 4.02
+        },
+        {
+          "name": "player_scene_contracts",
+          "status": "passed",
+          "seconds": 0.01
+        },
+        {
+          "name": "player_shutdown_diagnostics",
+          "status": "passed",
+          "seconds": 0.37
+        },
+        {
+          "name": "editor_mcp",
+          "status": "passed",
+          "seconds": 0.02
+        },
+        {
+          "name": "process_and_cook",
+          "status": "passed",
+          "seconds": 0.29
+        },
+        {
+          "name": "build_schema_publication",
+          "status": "passed",
+          "seconds": 5.25
+        },
+        {
+          "name": "editor_plugins",
+          "status": "passed",
+          "seconds": 0.02
+        },
+        {
+          "name": "editor_session_settings",
+          "status": "passed",
+          "seconds": 0.01
+        },
+        {
+          "name": "ui_widgets",
+          "status": "passed",
+          "seconds": 0.12
+        },
+        {
+          "name": "ui_render",
+          "status": "passed",
+          "seconds": 0.43
+        },
+        {
+          "name": "editor_ui_import_conflicts",
+          "status": "passed",
+          "seconds": 0.71
+        },
+        {
+          "name": "editor_ui_project_settings",
+          "status": "passed",
+          "seconds": 0.83
+        },
+        {
+          "name": "editor_ui_reload",
+          "status": "passed",
+          "seconds": 3.9
+        },
+        {
+          "name": "editor_ui_launcher",
+          "status": "passed",
+          "seconds": 0.6
+        },
+        {
+          "name": "editor_ui_templates",
+          "status": "passed",
+          "seconds": 2.01
+        },
+        {
+          "name": "editor_ui_gizmos",
+          "status": "passed",
+          "seconds": 0.78
+        },
+        {
+          "name": "editor_ui_authoring",
+          "status": "passed",
+          "seconds": 1.2
+        },
+        {
+          "name": "editor_mcp_stdio",
+          "status": "passed",
+          "seconds": 0.28
+        },
+        {
+          "name": "editor_gui_mcp",
+          "status": "passed",
+          "seconds": 4.39
+        },
+        {
+          "name": "core",
+          "status": "passed",
+          "seconds": 0.1
+        },
+        {
+          "name": "tutorial_moving",
+          "status": "passed",
+          "seconds": 0.02
+        },
+        {
+          "name": "tutorial_following",
+          "status": "passed",
+          "seconds": 0.01
+        },
+        {
+          "name": "tutorial_spawning",
+          "status": "passed",
+          "seconds": 0.02
+        },
+        {
+          "name": "tutorial_physics",
+          "status": "passed",
+          "seconds": 0.06
+        },
+        {
+          "name": "playable_2d",
+          "status": "passed",
+          "seconds": 0.4
+        },
+        {
+          "name": "playable_3d",
+          "status": "passed",
+          "seconds": 0.88
+        },
+        {
+          "name": "editor_debug_overlay",
+          "status": "passed",
+          "seconds": 0.35
+        }
+      ],
+      "counts": {
+        "passed": 34,
+        "skipped": 1,
+        "failed": 0
+      }
+    },
+    {
+      "source_commit": "4cb82556de31268d2bde73948dd1ff1b6c02f162",
+      "description": "Targeted ASan/UBSan after source-location correction",
+      "raw_log_sha256": "955813d41b1d28cf53df0af7bfe42d3b05009a1e00cfa266d75b8955f08003e1",
+      "tests": [
+        {
+          "name": "assets_pipeline",
+          "status": "passed",
+          "seconds": 0.59
+        },
+        {
+          "name": "process_and_cook",
+          "status": "passed",
+          "seconds": 0.54
+        }
+      ],
+      "counts": {
+        "passed": 2,
+        "skipped": 0,
+        "failed": 0
+      }
+    },
+    {
+      "source_commit": "0f34b036313c011861dbfd5828ed45c4f7940b05",
+      "description": "Complete ASan/UBSan suite before the bounded source-location correction",
+      "raw_log_sha256": "fc34eb7195105c1cc7755eafa20580cdc23022c4edff86fe2f0571cb6cac8ba8",
+      "tests": [
+        {
+          "name": "authoring",
+          "status": "passed",
+          "seconds": 0.18
+        },
+        {
+          "name": "runtime_contracts",
+          "status": "passed",
+          "seconds": 0.76
+        },
+        {
+          "name": "assets_pipeline",
+          "status": "passed",
+          "seconds": 0.44
+        },
+        {
+          "name": "assets_blender_bundle",
+          "status": "passed",
+          "seconds": 0.07
+        },
+        {
+          "name": "editor_mcp",
+          "status": "passed",
+          "seconds": 0.08
+        },
+        {
+          "name": "process_and_cook",
+          "status": "passed",
+          "seconds": 0.53
+        },
+        {
+          "name": "build_schema_publication",
+          "status": "passed",
+          "seconds": 30.02
+        },
+        {
+          "name": "editor_plugins",
+          "status": "passed",
+          "seconds": 0.12
+        },
+        {
+          "name": "editor_session_settings",
+          "status": "passed",
+          "seconds": 0.09
+        },
+        {
+          "name": "ui_widgets",
+          "status": "passed",
+          "seconds": 0.35
+        },
+        {
+          "name": "editor_mcp_stdio",
+          "status": "passed",
+          "seconds": 0.58
+        },
+        {
+          "name": "core",
+          "status": "passed",
+          "seconds": 0.26
+        },
+        {
+          "name": "tutorial_moving",
+          "status": "passed",
+          "seconds": 0.14
+        },
+        {
+          "name": "tutorial_following",
+          "status": "passed",
+          "seconds": 0.06
+        },
+        {
+          "name": "tutorial_spawning",
+          "status": "passed",
+          "seconds": 0.14
+        },
+        {
+          "name": "tutorial_physics",
+          "status": "passed",
+          "seconds": 0.39
+        },
+        {
+          "name": "playable_2d",
+          "status": "passed",
+          "seconds": 2.16
+        },
+        {
+          "name": "playable_3d",
+          "status": "passed",
+          "seconds": 4.64
+        }
+      ],
+      "counts": {
+        "passed": 18,
+        "skipped": 0,
+        "failed": 0
+      }
+    }
+  ],
+  "skip_note": "The Wayland compositor declined programmatic restore. The XWayland lifecycle record is separate; this skipped invocation is not a passed native Wayland check."
+}

@@ -13,9 +13,10 @@ compiler, platform, CRT, configuration, dependencies and SDK source identity.
 - **Linux CI:** Ubuntu 24.04, x86-64, Clang **18.1.3**. The headless CPU suite and
   manual run on this profile. It is not evidence for desktop rendering on that runner.
 - **Windows CI:** Windows Server 2025 runner, x86-64, clang-cl **20.1.8**,
-  MSVC toolset **14.51.36231**, Windows SDK **10.0.26100.0**. Headless tests have
-  passed. Full Editor, software Vulkan and Release-package acceptance are tracked
-  separately in the implementation log until that job completes.
+  MSVC toolset **14.51.36231**, Windows SDK **10.0.26100.0**. Native headless tests,
+  the full Editor with optional diagnostics, all 35 CPU/software-GPU tests and both
+  relocated Release games passed. See the
+  [Windows record](validation/windows-software-vulkan-2026-09-18/README.md).
 
 These are recorded validation profiles, not a claim that every intermediate Clang
 release or every supported Windows desktop has been tested. The presets deliberately
@@ -78,8 +79,11 @@ An offline build is recorded only after a clean build directory is configured an
 built with network access disabled. A warm incremental build or archive checksum
 verification alone is not that acceptance check.
 
-Commit `d834cfad67cd81d8c4998b90c16791361ca8c0f8` passed this check on Linux: full
-native build and 19 CPU tests in a new user/network namespace with no external
-connectivity, using a `git archive` checkout and only prefetched inputs. See
-[`validation/offline-linux-2026-09-18.json`](validation/offline-linux-2026-09-18.json).
+Commit `0f34b036313c011861dbfd5828ed45c4f7940b05` passed this check on Linux: full
+native build and 20 CPU tests in a new user/network namespace with no external
+connectivity, using a `git archive` checkout and only prefetched inputs. A fresh
+project was then created and rendered from that SDK. See the
+[checkpoint 5 record](validation/checkpoint5-linux-2026-09-18/README.md).
+The [earlier offline run](validation/offline-linux-2026-09-18.json) retains its own
+`d834cfa` revision and 19-test result.
 Reproduce using `python3 tools/verify_offline_build.py --output .cache/offline-check`.

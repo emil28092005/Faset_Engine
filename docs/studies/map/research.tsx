@@ -71,7 +71,7 @@ function Architecture() {
     [560, 225, 245, "Player · отдельный процесс", "EnTT · C++ · physics · без MCP"],
     [560, 330, 245, "Vulkan 1.3 renderer", "MVP: direct draws + CPU frustum"],
   ] as const;
-  return <div style={{ overflowX: "auto" }}><svg viewBox="0 0 825 425" role="img" aria-label="Принятая архитектура Faset; реализация запланирована" style={{ width: "100%", minWidth: 650 }}>
+  return <div style={{ overflowX: "auto" }}><svg viewBox="0 0 825 425" role="img" aria-label="Принятая архитектура и границы подсистем Faset" style={{ width: "100%", minWidth: 650 }}>
     <defs><marker id="engine-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7" fill={t.text.tertiary}/></marker></defs>
     <g fill="none" stroke={t.stroke.primary} strokeWidth="1.5" markerEnd="url(#engine-arrow)">
       <path d="M140 80 V118 M410 80 V118 M685 80 V118 M560 155 H537 M140 185 V223 M265 258 H288 M535 258 H558 M685 185 V223 M685 290 V328"/>
@@ -101,7 +101,7 @@ export default function EngineResearch() {
       <Stack gap={5}><Text size="small" tone="tertiary">FASET ENGINE · РЕШЕНИЯ 18.09.2026</Text><H1>Архитектура, MVP и развитие графики</H1><Text tone="secondary">Linux + Windows · 2D / 3D · C++ Editor · Blender</Text></Stack>
       <Row gap={8} wrap><Button onClick={() => open("README.md")}>О проекте</Button><Button onClick={() => open("PLAN.md")}>План до / после MVP</Button><Button onClick={() => open("docs/ARCHITECTURE.md")}>Архитектура</Button></Row>
     </Row>
-    <Card><CardBody><Text><strong>Архитектура принята; идёт приёмка реализации MVP.</strong> Эта карта — работающий просмотрщик исследования, не редактор Faset. Результаты сборок, проверок и измерений опубликованы в docs/IMPLEMENTATION.md и docs/validation; исследовательские графические направления не считаются готовыми функциями. MCP предусмотрен строго в Editor; Player не содержит MCP и не предоставляет ему runtime worlds или игровые сессии.</Text></CardBody></Card>
+    <Card><CardBody><Text><strong>C++ MVP принят в зафиксированных профилях Linux и Windows.</strong> Эта карта — работающий просмотрщик исследования, не редактор Faset. Результаты и ограничения опубликованы в docs/validation/mvp-acceptance.md: Windows проверен через software Vulkan, физические Windows GPU и системный IME требуют отдельного покрытия. Исследовательские графические направления не считаются готовыми функциями. MCP предусмотрен строго в Editor; Player не содержит MCP и не предоставляет ему runtime worlds или игровые сессии.</Text></CardBody></Card>
     <Row gap={7} wrap>{["Решение", "Графика", "ECS и данные", "MCP и Blender", "Стек и экспорт", "Прототипы", "Источники"].map(name => <span key={name}><Pill active={tab === name} onClick={() => setTab(name)}>{name}</Pill></span>)}</Row>
     <Divider/>
 
@@ -215,7 +215,7 @@ export default function EngineResearch() {
       <Text tone="secondary">Карта и отчёты открываются без локальных копий движков. Optional source viewer использует sibling checkout; исходники чужих движков не входят в Faset. Dev/alpha snapshots — материалы исследования, не выбранные production-зависимости.</Text>
       <Row gap={8} wrap><Button onClick={() => open("README.md")}>README</Button><Button onClick={() => open("PLAN.md")}>PLAN</Button><Button onClick={() => open("docs/ARCHITECTURE.md")}>Архитектура</Button><Button onClick={() => open(root + "source-manifest.json")}>Полные source SHA и охват</Button></Row>
       <Stack gap={7}>{reports.map(r => <div key={r.path}><Row><Button onClick={() => open(root + r.path)}>{r.name}</Button></Row></div>)}</Stack>
-      <Text size="small" tone="tertiary">Прочитаны выбранные тела функций и официальные документы. Движки не собирались; UX-сравнение и GPU-бенчмарки не выполнены. Принятые решения не означают готовую реализацию.</Text>
+      <Text size="small" tone="tertiary">В исследованиях прочитаны выбранные тела функций и официальные документы. Сравнительные UX-тесты и GPU-бенчмарки изучаемых движков не проводились. Проверки реализованных функций Faset описаны отдельно в досье приёмки.</Text>
     </Stack>}
   </Stack>;
 }

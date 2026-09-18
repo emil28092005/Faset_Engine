@@ -1,0 +1,235 @@
+{
+  "format": "faset.validation-evidence",
+  "version": 1,
+  "status": "passed",
+  "scope": "Hosted Windows developer build, first-project UI contracts, software Vulkan and relocated Release games",
+  "source_checkout": {
+    "commit": "4cb82556de31268d2bde73948dd1ff1b6c02f162",
+    "fresh_checkout": true,
+    "clean_commit_match": true,
+    "checkout_step": "actions/checkout on a fresh GitHub-hosted runner; engine and game targets configured and built in this job"
+  },
+  "ci": {
+    "run_url": "https://github.com/emil28092005/Faset_Engine/actions/runs/35301244334",
+    "job_url": "https://github.com/emil28092005/Faset_Engine/actions/runs/35301244334/job/105465851154",
+    "started_utc": "2026-09-18T03:04:44Z",
+    "finished_utc": "2026-09-18T03:19:49Z",
+    "conclusion": "success",
+    "steps": [
+      {
+        "name": "Set up job",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+        "conclusion": "success"
+      },
+      {
+        "name": "Visual Studio x64 environment",
+        "conclusion": "success"
+      },
+      {
+        "name": "Enable the documented Windows long-path developer profile",
+        "conclusion": "success"
+      },
+      {
+        "name": "Identify pinned Vulkan source cache",
+        "conclusion": "success"
+      },
+      {
+        "name": "Restore pinned Vulkan test tools",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build official Vulkan loader and SwiftShader from pinned sources",
+        "conclusion": "success"
+      },
+      {
+        "name": "Save successfully built Vulkan test tools",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Probe Vulkan loader and SwiftShader before compiling the engine",
+        "conclusion": "success"
+      },
+      {
+        "name": "Fetch checksum-verified Slang compiler",
+        "conclusion": "success"
+      },
+      {
+        "name": "Configure full editor and Player",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build full editor and tests",
+        "conclusion": "success"
+      },
+      {
+        "name": "CPU contracts and software GPU pixel tests",
+        "conclusion": "success"
+      },
+      {
+        "name": "Real Release exports, 2D and 3D execution, incremental Debug rebuild",
+        "conclusion": "success"
+      },
+      {
+        "name": "Export and relocate both checked-in playable games",
+        "conclusion": "success"
+      },
+      {
+        "name": "Preserve graphics and export evidence",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "environment": {
+    "runner_label": "windows-2025",
+    "observed_setup": [
+      "Microsoft Windows Server 2025",
+      "Image: windows-2025-vs2026",
+      "Version: 20260907.229.1",
+      "-- The CXX compiler identification is Clang 20.1.8 with MSVC-like command-line"
+    ],
+    "compiler": "Clang 20.1.8 clang-cl, x64 MSVC ABI",
+    "editor_configuration": "Debug, FASET_DEBUG_IMGUI=ON",
+    "export_configuration": "Release, independent Ninja build with custom project C++ sources",
+    "windows_long_paths_enabled": true,
+    "device": "SwiftShader Device (LLVM 10.0.0)",
+    "validation_layer_available": false
+  },
+  "tests": {
+    "total": 35,
+    "passed": 35,
+    "failed": 0,
+    "skipped": 0,
+    "details": "tests.json"
+  },
+  "first_project_evidence": {
+    "test": "editor_ui_launcher",
+    "observed": "Create/Open through the instrumented launcher, Unicode paths, recents, directory browsing, validation and keyboard navigation; actual retained UI and software-rendered frame"
+  },
+  "games": [
+    {
+      "name": "collect-2d",
+      "generation": "260a10cf-3fe6-4689-ac7b-69b577954cc2",
+      "configuration": "Release",
+      "frames": 120,
+      "validation_enabled": false,
+      "validation_errors": 0,
+      "source_paths_hidden": true,
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 7,
+        "sha256": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a"
+      },
+      "export_compiler_evidence": [
+        "-- The C compiler identification is Clang 20.1.8 with MSVC-like command-line",
+        "-- The CXX compiler identification is Clang 20.1.8 with MSVC-like command-line"
+      ]
+    },
+    {
+      "name": "collect-3d",
+      "generation": "66191118-07cc-477b-9dc7-1e870be5ebc3",
+      "configuration": "Release",
+      "frames": 120,
+      "validation_enabled": false,
+      "validation_errors": 0,
+      "source_paths_hidden": true,
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 43,
+        "sha256": "0edc88eef9f641a780ef44664f58c811a22bd201c8d29e1fcb7531b88f251900"
+      },
+      "export_compiler_evidence": [
+        "-- The C compiler identification is Clang 20.1.8 with MSVC-like command-line",
+        "-- The CXX compiler identification is Clang 20.1.8 with MSVC-like command-line"
+      ]
+    }
+  ],
+  "limitations": [
+    "Software Vulkan on a GitHub-hosted Windows Server VM, not a physical desktop GPU qualification or performance benchmark.",
+    "Khronos validation layer is absent. Zero reported validation errors does not establish validation-layer coverage.",
+    "Fresh developer-toolchain setup and first-project tests are covered; no retail installer or manual OS IME composition acceptance is claimed."
+  ],
+  "original_ci_log_sha256": "ada23530651f10bba0e4aec1e0bbe3f4ba243c6dbf9dd5416a744598b4988552",
+  "retained_files": [
+    {
+      "path": "collect-2d-manifest.json",
+      "sha256": "53b70e2ffc6e4c455fa5cad21eee2735f1c3182e83ed3051b6b5457cb11af615",
+      "size": 4315
+    },
+    {
+      "path": "collect-2d-run.json",
+      "sha256": "9dcc203502d2504ffcc9dcfed4ecde118bda954ee8d4604e0b6992839390b731",
+      "size": 1011
+    },
+    {
+      "path": "collect-2d-validate.json",
+      "sha256": "ffd23bb53b1d0f7da885ec40f6ab932f3aee3cc17afc3c620abc16ec4a661d4c",
+      "size": 446
+    },
+    {
+      "path": "collect-2d.png",
+      "sha256": "c380583f2fd8bc09c5b0e1c6e755c35c3d64b5385ed66177b04d1bbdb532b236",
+      "size": 4525
+    },
+    {
+      "path": "collect-3d-manifest.json",
+      "sha256": "4f86450eec32e773fbdbfa93d0da69abab3056cf869b6fa1b4e4647fe27ccc3d",
+      "size": 5923
+    },
+    {
+      "path": "collect-3d-run.json",
+      "sha256": "cd21db5286b96f4d4a9a3e381563797230d0b1d8cdd8fbfb644eb272e9b82af6",
+      "size": 1127
+    },
+    {
+      "path": "collect-3d-validate.json",
+      "sha256": "6dedaca4e4ffa573b7991856e5f3464bf93f6e825192ad4c4d35693d731531ad",
+      "size": 562
+    },
+    {
+      "path": "collect-3d.png",
+      "sha256": "48ef9a82378f74e8ad5a0c438bb730773d684cce809afcef461756a38476375e",
+      "size": 20366
+    },
+    {
+      "path": "playable-report.json",
+      "sha256": "3783533ba50b9b4b2fe29fa3e13cbaf7c43b96d29dce8365fa72ae014bc960f1",
+      "size": 14528
+    },
+    {
+      "path": "probe.json",
+      "sha256": "0c85c12510dbb0d895faefb7d14f26935a5add675cf0477b29f543d72eed40d6",
+      "size": 1019
+    },
+    {
+      "path": "tests.json",
+      "sha256": "1115633850520f66159d204210249bd5eacf57e5b0f9c5f5f70834cd149a0634",
+      "size": 4731
+    },
+    {
+      "path": "toolchain.json",
+      "sha256": "969162d1f994724ff6f98d20353e62e3881477ebce98759ca325c8febb175176",
+      "size": 937
+    }
+  ]
+}

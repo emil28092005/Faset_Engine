@@ -1,0 +1,12 @@
+{
+  "arguments": [
+    "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\faset-playable-exports-do2lq63x\\Faset Café 世界\\collect-3d\\faset_player.exe",
+    "--validate"
+  ],
+  "cwd": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\faset-playable-exports-do2lq63x\\empty-working-directory",
+  "seconds": 0.03099999999994907,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"dimension\":3,\"validated\":true}\n",
+  "stderr": "warning: material material-bb63b094febbf90bb7049c9bcf7587bc has features beyond the initial base-color/PBR renderer\n"
+}

@@ -51,8 +51,8 @@ Schema declarations are tested for stable map-key/FieldId matching and defaults.
 
 ## Play complete small projects
 
-`examples/projects/collect-2d` and `examples/projects/collect-3d` contain complete projects with a manifest, scene, and a separate `Scripts` module. Open either folder with the Editor's `--project` option, then use Play. Each project's README also provides a direct Player build command.
+`examples/projects/collect-2d` and `examples/projects/collect-3d` contain complete projects with a manifest, scene, and a separate `Scripts` module. Open either folder with the Editor's `--project` option. The 2D project is ready to Play. For the 3D project, first import `Assets/exit-arch/manifest.json` from the Assets panel, then Play. Repeat this import after clearing its cache or cloning the project. Each project's README also provides the exact import and direct Player build commands.
 
 Move the blue block with A/D in 2D or WASD in 3D, jump with Space, collect three gold cubes, and reach the green exit after its red gate opens. E resets the round. One pickup is on a raised platform. A visible gold marker and the Player log confirm completion; these initial examples use geometric progress displays instead of a text HUD.
 
-The `playable_2d` and `playable_3d` CTests drive the actual modules through input, including the jump, objective, reset, and fresh session. The 3D module also explicitly registers a separately packaged `example.beacon` component from its local `Scripts/Extensions/Beacon.hpp`. Both projects use built-in geometry and need no imported assets to start.
+The `playable_2d` and `playable_3d` CTests drive the actual modules through input, including the jump, objective, reset, and fresh session. The 3D module also explicitly registers a separately packaged `example.beacon` component from its local `Scripts/Extensions/Beacon.hpp`. Gameplay geometry uses built-in primitives; the 3D scene additionally references the imported Blender arch. Its GLB bundle is included, so Blender is only needed to edit or recreate that source asset.

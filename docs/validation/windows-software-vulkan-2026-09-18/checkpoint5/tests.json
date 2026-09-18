@@ -1,0 +1,206 @@
+{
+  "format": "faset.ctest-summary",
+  "version": 1,
+  "source_commit": "0f34b036313c011861dbfd5828ed45c4f7940b05",
+  "passed": 35,
+  "failed": 0,
+  "skipped": 0,
+  "source_log_sha256": "784a057ec9067fc35e38e3eb87804f583b55745147e72c009f84fb87112361ba",
+  "tests": [
+    {
+      "name": "authoring",
+      "status": "passed",
+      "seconds": 1.76
+    },
+    {
+      "name": "runtime_contracts",
+      "status": "passed",
+      "seconds": 0.26
+    },
+    {
+      "name": "assets_pipeline",
+      "status": "passed",
+      "seconds": 0.95,
+      "observations": [
+        "assets: geometry/PBR/texture, GLB/glTF, cache, rename, deletion, overrides, failure, cancellation, standalone PNG/JPEG OK"
+      ]
+    },
+    {
+      "name": "assets_blender_bundle",
+      "status": "passed",
+      "seconds": 0.42
+    },
+    {
+      "name": "render_graph",
+      "status": "passed",
+      "seconds": 0.25
+    },
+    {
+      "name": "render_offscreen",
+      "status": "passed",
+      "seconds": 0.62
+    },
+    {
+      "name": "render_sprite_alpha",
+      "status": "passed",
+      "seconds": 0.26
+    },
+    {
+      "name": "render_shader_reload",
+      "status": "passed",
+      "seconds": 2.65
+    },
+    {
+      "name": "render_window_lifecycle",
+      "status": "passed",
+      "seconds": 1.03,
+      "observations": [
+        "driver=windows stage=created",
+        "stage=resized width=360 height=300 resize_events=2",
+        "clipboard=unicode_roundtrip_passed",
+        "text_input_area=coordinate_conversion_passed",
+        "stage=minimized fresh_frames=12 minimize_events=1 focus_lost_events=1",
+        "stage=restored restored_events=1 activation_required=0 frames=54 validation_enabled=0 validation_errors=0"
+      ]
+    },
+    {
+      "name": "player_scene_contracts",
+      "status": "passed",
+      "seconds": 0.16
+    },
+    {
+      "name": "player_shutdown_diagnostics",
+      "status": "passed",
+      "seconds": 0.17
+    },
+    {
+      "name": "editor_mcp",
+      "status": "passed",
+      "seconds": 0.06
+    },
+    {
+      "name": "process_and_cook",
+      "status": "passed",
+      "seconds": 0.64
+    },
+    {
+      "name": "build_schema_publication",
+      "status": "passed",
+      "seconds": 7.29
+    },
+    {
+      "name": "editor_plugins",
+      "status": "passed",
+      "seconds": 0.24
+    },
+    {
+      "name": "editor_session_settings",
+      "status": "passed",
+      "seconds": 0.19
+    },
+    {
+      "name": "ui_widgets",
+      "status": "passed",
+      "seconds": 0.14
+    },
+    {
+      "name": "ui_render",
+      "status": "passed",
+      "seconds": 0.48
+    },
+    {
+      "name": "editor_ui_import_conflicts",
+      "status": "passed",
+      "seconds": 0.93
+    },
+    {
+      "name": "editor_ui_project_settings",
+      "status": "passed",
+      "seconds": 1.23
+    },
+    {
+      "name": "editor_ui_reload",
+      "status": "passed",
+      "seconds": 4.26
+    },
+    {
+      "name": "editor_ui_launcher",
+      "status": "passed",
+      "seconds": 0.65,
+      "observations": [
+        "Launcher Unicode/create/open/validation/recents/directory browser/keyboard passed. C:\\Users\\runneradmin\\AppData\\Local\\Temp\\faset-проекты-1425bd32-d184-42d7-9ece-402897e8d0b2"
+      ]
+    },
+    {
+      "name": "editor_ui_templates",
+      "status": "passed",
+      "seconds": 2.98
+    },
+    {
+      "name": "editor_ui_gizmos",
+      "status": "passed",
+      "seconds": 1.16
+    },
+    {
+      "name": "editor_ui_authoring",
+      "status": "passed",
+      "seconds": 1.98
+    },
+    {
+      "name": "editor_mcp_stdio",
+      "status": "passed",
+      "seconds": 0.59
+    },
+    {
+      "name": "editor_gui_mcp",
+      "status": "passed",
+      "seconds": 4.66,
+      "observations": [
+        "Native GUI + MCP shared authoring, revision conflict, Undo, 12 fresh PNG captures and continued responsiveness passed"
+      ]
+    },
+    {
+      "name": "core",
+      "status": "passed",
+      "seconds": 0.16
+    },
+    {
+      "name": "tutorial_moving",
+      "status": "passed",
+      "seconds": 0.03
+    },
+    {
+      "name": "tutorial_following",
+      "status": "passed",
+      "seconds": 0.01
+    },
+    {
+      "name": "tutorial_spawning",
+      "status": "passed",
+      "seconds": 0.04
+    },
+    {
+      "name": "tutorial_physics",
+      "status": "passed",
+      "seconds": 0.1
+    },
+    {
+      "name": "playable_2d",
+      "status": "passed",
+      "seconds": 0.62
+    },
+    {
+      "name": "playable_3d",
+      "status": "passed",
+      "seconds": 1.34
+    },
+    {
+      "name": "editor_debug_overlay",
+      "status": "passed",
+      "seconds": 0.21,
+      "observations": [
+        "ImGui diagnostics, F12, font atlas, clipping and event isolation passed"
+      ]
+    }
+  ]
+}

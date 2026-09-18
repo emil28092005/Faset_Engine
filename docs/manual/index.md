@@ -4,11 +4,13 @@ Faset is a C++ engine for desktop 2D and 3D games on Linux and Windows.
 This manual focuses on writing gameplay: small working examples, the functions they use,
 and how those functions interact with scenes, physics, and the editor.
 
-!!! warning "Development status"
-    MVP implementation is in progress. A planned feature is not a working feature.
-    Individual guides state their prerequisites and validation status. The current
-    Editor, gameplay tutorials, two playable sample games and Linux export can be built
-    and tested. Final Windows graphics/export acceptance is still in progress.
+!!! note "MVP scope"
+    The C++ MVP includes the Editor, compiled gameplay tutorials, two playable games,
+    Blender import and standalone Linux/Windows export. Acceptance used a physical
+    Linux GPU and software Vulkan on Windows. See the
+    [acceptance dossier](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/mvp-acceptance.md)
+    for exact source revisions and coverage limits. Lua and advanced graphics remain
+    later milestones.
 
 Start with [how C++ gameplay works](scripting/index.md), then read
 [frame and physics updates](scripting/lifecycle.md). See

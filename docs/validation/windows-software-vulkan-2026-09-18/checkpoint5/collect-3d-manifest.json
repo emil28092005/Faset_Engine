@@ -1,0 +1,175 @@
+{
+  "asset_generations": {
+    "5832763b-3ed0-44d6-9088-0b524f196a91": "e8eb8805673cc22596d1c5b48fc6b8fbdf600d1c6a15c9633d14014a7eb1d11f"
+  },
+  "build_fingerprint": "2df2988bbee68e7cb0819b84708006393d85217630475289df5ef603fac4e0c3",
+  "configuration": "Release",
+  "executable": "faset_player.exe",
+  "files": [
+    {
+      "path": "assets/5832763b-3ed0-44d6-9088-0b524f196a91/current.json",
+      "sha256": "32a37e4497f1129c0c78f3ccab4c53e802afe60cabc7a445a31114bf071ff90a",
+      "size": 134
+    },
+    {
+      "path": "assets/5832763b-3ed0-44d6-9088-0b524f196a91/generations/e8eb8805673cc22596d1c5b48fc6b8fbdf600d1c6a15c9633d14014a7eb1d11f/manifest.json",
+      "sha256": "c13287d0ebbef75aa610af4a5d3e687e232b2450f3daaff6926fe6128250ead6",
+      "size": 4532
+    },
+    {
+      "path": "assets/5832763b-3ed0-44d6-9088-0b524f196a91/generations/e8eb8805673cc22596d1c5b48fc6b8fbdf600d1c6a15c9633d14014a7eb1d11f/meshes/mesh-0961e2a3f92977836a3aa80cab09277e-0.fmesh",
+      "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+      "size": 928
+    },
+    {
+      "path": "assets/5832763b-3ed0-44d6-9088-0b524f196a91/generations/e8eb8805673cc22596d1c5b48fc6b8fbdf600d1c6a15c9633d14014a7eb1d11f/meshes/mesh-93b5b3e52cb6bb120fefb80e2d8e222b-0.fmesh",
+      "sha256": "3875c16ea628d4126373ebfe07816621fbad3961596a2fcd112f1eec0e378071",
+      "size": 928
+    },
+    {
+      "path": "assets/5832763b-3ed0-44d6-9088-0b524f196a91/generations/e8eb8805673cc22596d1c5b48fc6b8fbdf600d1c6a15c9633d14014a7eb1d11f/meshes/mesh-fc069a07a87e0f831fd92efdbc4efa1f-0.fmesh",
+      "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+      "size": 928
+    },
+    {
+      "path": "faset_player.exe",
+      "sha256": "4eb9cf7a6d0c2d5e274fb2fe5d6ce6048abda7775dd41927edd77250ecc3eb3a",
+      "size": 4292096
+    },
+    {
+      "path": "Notices/box2d/LICENSE",
+      "sha256": "68a3e676d7e94093b102d5cba0d4e04af812040d6f230c3db67a6664574e43d2",
+      "size": 1067
+    },
+    {
+      "path": "Notices/box3d/LICENSE",
+      "sha256": "da5e31a26bf3cfd5ba5c96d6823e480128c81e76c107ef9d3ee5d94789184b90",
+      "size": 1067
+    },
+    {
+      "path": "Notices/dependencies.json",
+      "sha256": "a54639ad2d9ad13c2e5f1ec90d6775f5dfc493656789b78c7e44debe2a378fdc",
+      "size": 2206
+    },
+    {
+      "path": "Notices/entt/LICENSE",
+      "sha256": "0785027ce472d7c61f05fba664a1d3ba6639c1593ced351ad9e4bed868765d99",
+      "size": 1097
+    },
+    {
+      "path": "Notices/Faset-NOTICE.txt",
+      "sha256": "30c2e7e80f5153b31ab57675e07246aef9165965d64e36022b426a26449ece3f",
+      "size": 204
+    },
+    {
+      "path": "Notices/json/LICENSE.MIT",
+      "sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+      "size": 1076
+    },
+    {
+      "path": "Notices/sdl3/LICENSE.txt",
+      "sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+      "size": 884
+    },
+    {
+      "path": "Notices/stb/LICENSE",
+      "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63",
+      "size": 2510
+    },
+    {
+      "path": "README.txt",
+      "sha256": "c62b83aa59e8eec3b3508f9e9ad5e78eb4554a2369242c830debe8d5ffbab924",
+      "size": 229
+    },
+    {
+      "path": "scene.fscene",
+      "sha256": "21c364140669ec82c6886102667b255df5ccdf0ec77e0ca64060f84dd7b86632",
+      "size": 8639
+    },
+    {
+      "path": "shaders/fragmentMain.reflection.json",
+      "sha256": "ba43159da6ef0e8c305ba9a88414551ec273c487cdc7d324403998ba2d296f10",
+      "size": 2777
+    },
+    {
+      "path": "shaders/fragmentMain.spv",
+      "sha256": "f5c4f289917ecab5d00d543c053aac1d10e6cca311fd172daf06d315160a3505",
+      "size": 7436
+    },
+    {
+      "path": "shaders/shadowMain.reflection.json",
+      "sha256": "3f785e549f40abad75115d5dfc16b409f81bbb0eced6281c6eda33c2eb439249",
+      "size": 2772
+    },
+    {
+      "path": "shaders/shadowMain.spv",
+      "sha256": "7643b4d688492b5ee923b9606f0b0e70343ca05fa67673838206119a6f86d8d8",
+      "size": 784
+    },
+    {
+      "path": "shaders/vertexMain.reflection.json",
+      "sha256": "4459cc3113377b7fbc41b880529cf5ad474ad07d299e033eb9169ac7849894cf",
+      "size": 2768
+    },
+    {
+      "path": "shaders/vertexMain.spv",
+      "sha256": "1ad2631c35d654f48166321ae43d4165043e1b919b14f1dc61caf97b1ada0898",
+      "size": 1224
+    },
+    {
+      "path": "Windows-Runtime.txt",
+      "sha256": "1c53b7b6890d4a10408acfa7a27760ca1b176bb43dba9c25f3e5d2ac2d7d15db",
+      "size": 227
+    }
+  ],
+  "format": "faset.export",
+  "generation": "e8819c35-cd05-45d9-b7f4-3de060f62836",
+  "platform": "windows",
+  "prerequisites": [
+    "Windows x64",
+    "Vulkan 1.3 driver",
+    "Microsoft Visual C++ x64 Redistributable (Visual Studio 2022 or newer)"
+  ],
+  "renderer_profile": {
+    "api": "Vulkan 1.3",
+    "materials": [
+      "base-color factor and texture",
+      "metallic and roughness factors"
+    ],
+    "required_features": [
+      "dynamicRendering",
+      "synchronization2"
+    ],
+    "shadow_map": {
+      "resolution": 1024,
+      "world_extent": 40
+    },
+    "texture_sampling": "linear clamp, one mip level",
+    "unsupported_material_features": [
+      "normal maps",
+      "metallic-roughness maps",
+      "emissive and occlusion maps",
+      "alpha mode selection",
+      "unlit mode",
+      "per-material face culling"
+    ]
+  },
+  "scene_hash": "ee12794145c14ba5b599c5d9ae21648cccdfa91c47ee7742549f60d5fe7bc3e0",
+  "simulation": {
+    "fixed_delta": 0.016666666666666666,
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ],
+    "max_catch_up_ticks": 4,
+    "physics_substeps": 4
+  },
+  "units": {
+    "angle": "radian",
+    "coordinates": "right-handed Y-up",
+    "distance": "metre"
+  },
+  "validation_log": "warning: material material-bb63b094febbf90bb7049c9bcf7587bc has features beyond the initial base-color/PBR renderer\r\n{\"dimension\":3,\"validated\":true}\r\n",
+  "version": 1
+}

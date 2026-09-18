@@ -15,14 +15,14 @@ Live Vulkan allocations stayed at 15,750,288 bytes (2D) and 15,787,008 bytes (3D
 
 `render_call` includes GPU waits and synchronous readback; it is not CPU utilization. GPU timestamps cover submitted rendering. Frame timings exclude profile bookkeeping and final file writes. Synthetic 1/60-second simulation ticks run as fast as the offscreen loop allows. The resulting numbers are not display FPS or a real-time gameplay pacing test. Small sample scenes, one GPU, 240 frames and a static camera cannot establish scalability, a memory-leak guarantee, or broad performance claims. The imported 3D material also emits the recorded warning about unsupported material features in its manifest.
 
-Proposed P1 budgets for these exact scenes on this reference-class Linux host, at the same resolution and validation/readback settings:
+Initial P1 tracking budgets for these exact scenes on this reference-class Linux host, at the same resolution and validation/readback settings:
 
 - Measured frame p95 ≤ 4 ms; GPU p95 ≤ 1 ms; readback p95 ≤ 1 ms.
 - Simulation and snapshot p95 ≤ 0.5 ms each.
 - Explicit live Vulkan memory ≤ 20 MiB, with no growth after warmup over a future 3,000-frame resource-lifecycle run.
 - Startup from `main()` ≤ 500 ms for these tiny packages.
 
-These initial thresholds leave headroom above the observed values. They are **proposed**, not enforced acceptance criteria. P1 should retain cold-start results separately, run repeated sessions, measure editor input latency and larger content, and collect independent Windows hardware baselines before adopting release gates.
+These initial thresholds leave headroom above the observed values. They are tracking budgets for P1, not enforced MVP acceptance criteria or engine-wide guarantees. P1 should retain cold-start results separately, run repeated sessions, measure editor input latency and larger content, and collect independent Windows hardware baselines before adopting release gates.
 
 Reproduce export validation from the repository with `python tools/verify_playable_exports.py --editor build/linux-debug/faset_editor --output <new-empty-directory>`. Run each retained standalone Player with `--headless --frames 240 --profile <output.json>` to repeat the longer measurement. A new run builds current sources and produces new immutable generations; use the stored hashes to distinguish it from this record.
 

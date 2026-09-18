@@ -1,8 +1,9 @@
 # Build from source
 
-!!! note "Implementation checkpoint"
-    Linux Editor, Player and export integration are tested. Final Windows graphics/export
-    acceptance is tracked separately in the implementation report.
+!!! note "Verified build profiles"
+    The Editor, Player and both sample exports passed the recorded Linux and Windows
+    profiles. Linux rendering used an RTX 2080 Ti; Windows CI used SwiftShader. This
+    does not certify every graphics driver or display configuration.
 
 ## Linux prerequisites
 
@@ -91,8 +92,18 @@ cmake --build --preset windows-debug --parallel
 ctest --preset windows-debug
 ```
 
-Windows acceptance is tracked separately from Linux; a successful Linux build does
-not verify a Windows build.
+Windows acceptance uses a fresh native CI checkout, full Editor build, launcher
+Create/Open tests, native window/MCP tests and standalone Release exports. Its
+software Vulkan driver is a CI fixture; install your normal hardware Vulkan driver
+on a development desktop. See the
+[acceptance dossier](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/mvp-acceptance.md)
+for observed results.
+
+Native Wayland programmatic restore was skipped when the tested compositor declined
+the operation; XWayland passed. If this affects your desktop, run the Editor with
+`SDL_VIDEODRIVER=x11`. Real system IME composition and movement between physical
+monitors with different scale factors remain compatibility checks, beyond the
+passing deterministic text/DPI tests.
 
 The repository's `docs/TOOLCHAINS.md` records the exact compiler, SDK and GPU profiles
 used in observed validation, separately from the minimum tool requirements above.

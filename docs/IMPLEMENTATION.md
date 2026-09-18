@@ -3,6 +3,11 @@
 This log records working implementation and observed validation. It does not replace
 the acceptance criteria in `PLAN.md`. Incomplete platform or workflow checks remain open.
 
+**Current result:** the C++ MVP is accepted in the recorded Linux and Windows profiles.
+The [final dossier](validation/mvp-acceptance.md) maps M0–M9 to evidence and keeps
+unverified compatibility scenarios explicit. Earlier pending/failure statements below
+describe their respective checkpoints, not the final status.
+
 ## Checkpoint 1 — native foundation and independent subsystems
 
 Implemented:
@@ -287,3 +292,44 @@ Unicode relocation. It used SwiftShader without the Khronos validation layer and
 functional software-Vulkan evidence, not a physical-GPU benchmark. Checkpoint 5's
 newer Windows graphics/export run and the relocation correction have their own
 revision-specific gates.
+
+## MVP acceptance — `v0.1.0-mvp`
+
+Final engine source: `4cb82556de31268d2bde73948dd1ff1b6c02f162`. The publication
+commit adds documentation, acceptance records and research-viewer wording; it does
+not change the accepted engine, gameplay, shader or build-system sources.
+
+- [Final Linux evidence](validation/final-linux-2026-09-18/README.md): 34 passed,
+  one explicit native Wayland restore skip, zero failed. Both exact-source Release
+  games passed manifest validation and 120 frames after Unicode relocation with
+  their source projects hidden. An additional private namespace hid the entire SDK,
+  build directories, Editor and cached tools; both games still passed another 120
+  frames with matching captures, active Khronos validation and zero errors.
+- [Final Windows evidence](validation/windows-software-vulkan-2026-09-18/README.md):
+  [run 35301244334](https://github.com/emil28092005/Faset_Engine/actions/runs/35301244334)
+  passed the fresh full Editor build with ImGui diagnostics, **35/35 tests**, real
+  BuildService Release exports/incremental Debug rebuild and both checked-in games
+  after Unicode relocation. Each rendered 120 frames. SwiftShader supplied software
+  Vulkan; the Khronos layer was unavailable. This is functional Windows execution,
+  not physical Windows GPU or hardware-performance evidence.
+- [Native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35301244366)
+  passed for the same final source. The earlier clean offline build and first project
+  launch, seven recovery scenarios, actual Blender/live-Editor round-trip and full
+  18-test sanitizer run retain their `0f34b03` provenance. The two affected asset/cook
+  sanitizer checks passed again after the relocation correction.
+- PLAN now closes M0–M9 against the dossier. The English Manual documents the working
+  C++ tutorials, metadata/migrations, authoring, assets, MCP, extensions and export.
+  A final instruction check corrected the 3D sample's required first bundle import.
+  The recorded reference-scene thresholds are initial P1 tracking budgets.
+
+Final publication checks passed: strict MkDocs build, both research-map tests and its
+production build, 318 local Markdown links, retained Windows evidence hashes, all
+validation JSON records and `git diff --check`. The engine-source diff from the
+accepted commit is empty; no untested engine changes were bundled into publication.
+
+Known coverage limits remain: real OS IME composition, movement between physical
+monitors with different scales, native Wayland programmatic restore and additional
+GPU/driver families. Widget composition/DPI, SDL text-input boundaries, XWayland and
+Windows window lifecycle have their own passing evidence. The narrow static-mesh,
+root-level box-physics, one-window/C++ MVP profile remains explicit. Lua and advanced
+graphics are later work. UI references guide appearance; they do not define behavior.

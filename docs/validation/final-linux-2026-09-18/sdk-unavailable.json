@@ -1,0 +1,115 @@
+{
+  "format": "faset.sdk-unavailable-verification",
+  "version": 1,
+  "status": "passed",
+  "started_utc": "2026-09-18T03:10:58.685939+00:00",
+  "engine_commit": "4cb82556de31268d2bde73948dd1ff1b6c02f162",
+  "editor_sha256": "05e2b40c6c05282af71a03990c98c89c673c48a3cf1da0e17a59f911a947049a",
+  "sdk_paths_unavailable": {
+    "/home/emil/Desktop/Faset_Engine/CMakeLists.txt": true,
+    "/home/emil/Desktop/Faset_Engine/build/linux-debug/faset_editor": true,
+    "/home/emil/Desktop/Faset_Engine/build/linux-debug/shaders": true,
+    "/home/emil/Desktop/Faset_Engine/.cache/deps-src": true,
+    "/home/emil/Desktop/Faset_Engine/.cache/playable-release-final": true
+  },
+  "sdk_empty": true,
+  "mount_namespace": "mnt:[4026533743]",
+  "outer_mount_namespace": "mnt:[4026531832]",
+  "sdk_mount": [
+    "1374 111 0:82 / /home/emil/Desktop/Faset_Engine ro,nosuid,nodev,relatime - tmpfs faset-sdk-hidden ro,size=1024k,uid=1000,gid=1000,inode64"
+  ],
+  "environment": {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C.UTF-8",
+    "HOME": "/tmp/faset-sdk-unavailable-fp5gnvp2/home",
+    "XDG_CACHE_HOME": "/tmp/faset-sdk-unavailable-fp5gnvp2/cache",
+    "XDG_CONFIG_HOME": "/tmp/faset-sdk-unavailable-fp5gnvp2/config",
+    "XDG_DATA_HOME": "/tmp/faset-sdk-unavailable-fp5gnvp2/data"
+  },
+  "timings_are_benchmark_evidence": false,
+  "projects": [
+    {
+      "name": "collect-2d",
+      "package": "/tmp/faset-playable-exports-rnbvn4tk/Faset Café 世界/collect-2d",
+      "player_sha256": "f7902f414ab64573a697a8f36b59e203370779990f63c63fbd90c88a7eb1397b",
+      "verified_package_files": 17,
+      "default_scene_and_assets": true,
+      "validation_passed": true,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "validation_enabled": true,
+      "validation_errors": 0,
+      "frames": 120,
+      "capture_sha256": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a",
+      "capture_matches_final_release": true,
+      "status": "passed",
+      "trace_sdk_path_mentions": 0,
+      "traced_execve": [
+        "2514912 execve(\"/tmp/faset-playable-exports-rnbvn4tk/Faset Caf\\303\\251 \\344\\270\\226\\347\\225\\214/collect-2d/faset_player\", [\"/tmp/faset-playable-exports-rnbv\"..., \"--headless\", \"--frames\", \"120\", \"--capture\", \"/tmp/faset-sdk-unavailable-fp5gn\"..., \"--profile\", \"/tmp/faset-sdk-unavailable-fp5gn\"...], 0x7ffc06cf8bb0 /* 6 vars */) = 0"
+      ],
+      "dependency_paths_outside_sdk": true,
+      "elf_has_rpath_or_runpath": false,
+      "dependencies": [
+        "\tlinux-vdso.so.1 (0x00007c4f9ae17000)",
+        "\tlibvulkan.so.1 => /usr/lib/x86_64-linux-gnu/libvulkan.so.1 (0x00007c4f9a7c5000)",
+        "\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007c4f9a69f000)",
+        "\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007c4f9a200000)",
+        "\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007c4f9a671000)",
+        "\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007c4f99e00000)",
+        "\t/lib64/ld-linux-x86-64.so.2 (0x00007c4f9ae19000)"
+      ]
+    },
+    {
+      "name": "collect-3d",
+      "package": "/tmp/faset-playable-exports-rnbvn4tk/Faset Café 世界/collect-3d",
+      "player_sha256": "5537942ff7cd999de044168420b730c772a6f21c3cf81ece389e9495c9eae974",
+      "verified_package_files": 22,
+      "default_scene_and_assets": true,
+      "validation_passed": true,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "validation_enabled": true,
+      "validation_errors": 0,
+      "frames": 120,
+      "capture_sha256": "914060401de93d08b33bf09a1e210859e491a0060c331e5e2044f517356f4980",
+      "capture_matches_final_release": true,
+      "status": "passed",
+      "trace_sdk_path_mentions": 0,
+      "traced_execve": [
+        "2514989 execve(\"/tmp/faset-playable-exports-rnbvn4tk/Faset Caf\\303\\251 \\344\\270\\226\\347\\225\\214/collect-3d/faset_player\", [\"/tmp/faset-playable-exports-rnbv\"..., \"--headless\", \"--frames\", \"120\", \"--capture\", \"/tmp/faset-sdk-unavailable-fp5gn\"..., \"--profile\", \"/tmp/faset-sdk-unavailable-fp5gn\"...], 0x7ffe821118e0 /* 6 vars */) = 0"
+      ],
+      "dependency_paths_outside_sdk": true,
+      "elf_has_rpath_or_runpath": false,
+      "dependencies": [
+        "\tlinux-vdso.so.1 (0x000071bca491d000)",
+        "\tlibvulkan.so.1 => /usr/lib/x86_64-linux-gnu/libvulkan.so.1 (0x000071bca42ca000)",
+        "\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x000071bca41a4000)",
+        "\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x000071bca3e00000)",
+        "\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000071bca4176000)",
+        "\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x000071bca3a00000)",
+        "\t/lib64/ld-linux-x86-64.so.2 (0x000071bca491f000)"
+      ]
+    }
+  ],
+  "finished_utc": "2026-09-18T03:11:01.278406+00:00",
+  "outer_sdk_unchanged_after_namespace": true,
+  "outer_editor_sha256_after": "05e2b40c6c05282af71a03990c98c89c673c48a3cf1da0e17a59f911a947049a",
+  "retained_evidence_hashes": {
+    "collect-2d-dependencies.json": "c3882b5fec209be8e140b3a47bc4cd6e4c644baca4ce37308fb9420076fdd094",
+    "collect-2d-elf.json": "aa615e898a2ec9f7d68491d13f6bb5742a566ded87ce0d6c9c0ebe8fbe342de3",
+    "collect-2d-file-trace.log": "3fe847b2f8f8de66aeb04db69d02ba1b5bb311ffd64a057d405b527daa2e221d",
+    "collect-2d-profile.json": "5ab9c3e01d55e5f5a51d4e7d7d53bc1e39d3cac1d98544de246c8e1e05ef8a80",
+    "collect-2d-run.json": "b382c0582482d98c4c184949cb40d1c60939e18f772717b9c3d22f4ec94adba6",
+    "collect-2d-validate.json": "4fdf30c0fda6a275984a746b787f61c1ea50952558706da2232e97ca684a7bd1",
+    "collect-2d.ppm": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a",
+    "collect-3d-dependencies.json": "0839c22cd4269a9461106b6f64c9d7255378639f571bec892ed189f0803cdfe6",
+    "collect-3d-elf.json": "c0f212cfec469cf493d517108f7859638b5aa4529216f42097170bfa0dbd49ba",
+    "collect-3d-file-trace.log": "3df4929e94c9b21e69f8a4dc3aed5d7182c60606af52840c9f945531cb54d6d0",
+    "collect-3d-profile.json": "e461b8c882f7ba487a0dc0704d20c96eafcbfe51785f50796bd70d611896ba27",
+    "collect-3d-run.json": "2a4703d596c1a3aa5450b205ee382cfed9578884bf63a965fde04e6e672c5ca8",
+    "collect-3d-validate.json": "15f128930142c0fc233eeb2b8e3b2a4d5d80e9e578f54f78538e6ce74c93d4cd",
+    "collect-3d.ppm": "914060401de93d08b33bf09a1e210859e491a0060c331e5e2044f517356f4980",
+    "inner.py": "a24ef1b36550a8f1944bda95b13c90eca5d2ddd81f49bfddbceba291c75d3857",
+    "outer-mount-namespace.txt": "b38992f03c046722594e95d6dcdbb4fb1b75a0f4f0156c26cb2059b1bafecdd4",
+    "prior.json": "d0d1ea7b6c4ffc8e6d1ac7dfe0e8dcfa1875780abd8eeb8377621db810c84883",
+    "run.sh": "dad0a2d008508eb2b2f2e0b4d7b86a6f38e3de1bdd6f0272d4d99bfcde201489"
+  }
+}
