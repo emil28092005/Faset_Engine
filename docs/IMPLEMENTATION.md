@@ -327,6 +327,11 @@ production build, 318 local Markdown links, retained Windows evidence hashes, al
 validation JSON records and `git diff --check`. The engine-source diff from the
 accepted commit is empty; no untested engine changes were bundled into publication.
 
+The post-publication documentation check also verified hashes against Git blobs,
+which normalize Windows JSON line endings to LF. Evidence indices now identify both
+the retained repository bytes and original CRLF artifacts explicitly. This follow-up
+changes only documentation metadata and preserves the first MVP tag and engine code.
+
 Known coverage limits remain: real OS IME composition, movement between physical
 monitors with different scales, native Wayland programmatic restore and additional
 GPU/driver families. Widget composition/DPI, SDL text-input boundaries, XWayland and

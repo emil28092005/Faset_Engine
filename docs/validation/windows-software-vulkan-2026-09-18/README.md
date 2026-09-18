@@ -15,4 +15,10 @@ The [toolchain](final-source/toolchain.json) and [probe](final-source/probe.json
 
 Original detailed job logs and raw frame profiles are available in the linked CI artifact while its retention period lasts. This folder keeps the compact acceptance evidence and hashes of the original CTest/CI logs.
 
+Git stores these JSON records with LF line endings. Each retained-file `sha256` and
+`size` describes those repository bytes; where the original Windows artifact used
+CRLF, `original_artifact_sha256` and `original_artifact_size` preserve that separate
+byte identity. The documentation correction after the first MVP tag records this
+normalization explicitly; it does not change the test outcomes or packaged games.
+
 The earlier [checkpoint 5 record](checkpoint5/evidence.json) preserves the independently successful run of `0f34b036313c011861dbfd5828ed45c4f7940b05`. The final source run additionally covers the relocated importer metadata fix through `assets_pipeline`, followed by the complete export matrix again. [2D capture](final-source/collect-2d.png) · [3D capture](final-source/collect-3d.png).

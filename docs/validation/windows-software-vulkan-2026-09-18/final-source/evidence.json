@@ -178,13 +178,17 @@
     },
     {
       "path": "collect-2d-run.json",
-      "sha256": "9dcc203502d2504ffcc9dcfed4ecde118bda954ee8d4604e0b6992839390b731",
-      "size": 1011
+      "sha256": "c65e56ff39059612afb9456f26c2bd0674e883057f60551216875643d6a349cd",
+      "size": 993,
+      "original_artifact_sha256": "9dcc203502d2504ffcc9dcfed4ecde118bda954ee8d4604e0b6992839390b731",
+      "original_artifact_size": 1011
     },
     {
       "path": "collect-2d-validate.json",
-      "sha256": "ffd23bb53b1d0f7da885ec40f6ab932f3aee3cc17afc3c620abc16ec4a661d4c",
-      "size": 446
+      "sha256": "9d94363e13ac5df29f2a236356384564dcab3b73115d8e65f02b891ee655805f",
+      "size": 434,
+      "original_artifact_sha256": "ffd23bb53b1d0f7da885ec40f6ab932f3aee3cc17afc3c620abc16ec4a661d4c",
+      "original_artifact_size": 446
     },
     {
       "path": "collect-2d.png",
@@ -198,13 +202,17 @@
     },
     {
       "path": "collect-3d-run.json",
-      "sha256": "cd21db5286b96f4d4a9a3e381563797230d0b1d8cdd8fbfb644eb272e9b82af6",
-      "size": 1127
+      "sha256": "3dbf47e49bb1a27f68e1ffd222b2251a270469942cb20b08415f619a33b3c6c6",
+      "size": 1109,
+      "original_artifact_sha256": "cd21db5286b96f4d4a9a3e381563797230d0b1d8cdd8fbfb644eb272e9b82af6",
+      "original_artifact_size": 1127
     },
     {
       "path": "collect-3d-validate.json",
-      "sha256": "6dedaca4e4ffa573b7991856e5f3464bf93f6e825192ad4c4d35693d731531ad",
-      "size": 562
+      "sha256": "f15afce2a5248a0e74179bc69a4b653976ecc07ad7e28cb29669b07bfe89297c",
+      "size": 550,
+      "original_artifact_sha256": "6dedaca4e4ffa573b7991856e5f3464bf93f6e825192ad4c4d35693d731531ad",
+      "original_artifact_size": 562
     },
     {
       "path": "collect-3d.png",
@@ -213,13 +221,17 @@
     },
     {
       "path": "playable-report.json",
-      "sha256": "3783533ba50b9b4b2fe29fa3e13cbaf7c43b96d29dce8365fa72ae014bc960f1",
-      "size": 14528
+      "sha256": "e3e6743832ce6fd216b3352609d80ce1de63ec1c2c58c58034bd361967cb7a5d",
+      "size": 14093,
+      "original_artifact_sha256": "3783533ba50b9b4b2fe29fa3e13cbaf7c43b96d29dce8365fa72ae014bc960f1",
+      "original_artifact_size": 14528
     },
     {
       "path": "probe.json",
-      "sha256": "0c85c12510dbb0d895faefb7d14f26935a5add675cf0477b29f543d72eed40d6",
-      "size": 1019
+      "sha256": "fbc4c5f01a5d23c901fbdab366537da331002709bfbce42e06a84b1a64a1b396",
+      "size": 987,
+      "original_artifact_sha256": "0c85c12510dbb0d895faefb7d14f26935a5add675cf0477b29f543d72eed40d6",
+      "original_artifact_size": 1019
     },
     {
       "path": "tests.json",
@@ -228,8 +240,11 @@
     },
     {
       "path": "toolchain.json",
-      "sha256": "969162d1f994724ff6f98d20353e62e3881477ebce98759ca325c8febb175176",
-      "size": 937
+      "sha256": "daf1ce634e438ff9cd3a84a2c21313f3530279dfb27f15acf8b217833e06548d",
+      "size": 914,
+      "original_artifact_sha256": "969162d1f994724ff6f98d20353e62e3881477ebce98759ca325c8febb175176",
+      "original_artifact_size": 937
     }
-  ]
+  ],
+  "retained_file_hash_basis": "Repository bytes with LF text line endings. Where normalization changed original Windows artifact bytes, original_artifact_sha256 and original_artifact_size preserve their original provenance."
 }
