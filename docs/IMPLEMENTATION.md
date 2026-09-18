@@ -261,3 +261,29 @@ including the launcher fix, and proceeded to real native Release exports. That r
 predates checkpoint 5's new authoring/diagnostic changes, whose Windows checks remain
 separate. The next full Windows build enables the optional diagnostic module too.
 No MVP tag is claimed at this checkpoint.
+
+## Checkpoint 5 acceptance and source relocation correction
+
+The clean `0f34b03` Linux checkout built offline with 20/20 CPU tests, then created
+and rendered a fresh project using the Manual's command. Both checked-in games were
+exported in Release, moved outside the SDK into Unicode paths and run for 120 frames
+with source projects hidden; Khronos validation was active with no errors. All seven
+recovery scenarios and the real Blender/live-Editor round-trip passed. Exact inputs,
+hashes and limits are in [the Linux acceptance record](validation/checkpoint5-linux-2026-09-18/README.md).
+
+A subsequent source-relocation regression was reproduced and corrected: a cache-hit
+rename/move updated the logical source pointer while retaining the historical payload
+path, so the new freshness check incorrectly kept the asset stale. Publication now
+stores both paths atomically. Earlier pointers remain readable by resolving the
+payload relative to the moved logical source; immutable content generations and cache
+keys are unchanged. Regression cases cover PNG, Blender bundles and external glTF
+buffers/images, with both new and legacy pointer records. Full Linux integration
+remains 34 passed / 1 explicit Wayland skip / 0 failed; targeted ASan/UBSan asset/cook
+checks passed 2/2 after this correction.
+
+Windows run `35299805623` at `e0b9651` completed successfully, including both Release
+integration exports, incremental C++ rebuilding, and the two checked-in games with
+Unicode relocation. It used SwiftShader without the Khronos validation layer and is
+functional software-Vulkan evidence, not a physical-GPU benchmark. Checkpoint 5's
+newer Windows graphics/export run and the relocation correction have their own
+revision-specific gates.

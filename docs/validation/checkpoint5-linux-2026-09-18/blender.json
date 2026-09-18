@@ -1,0 +1,70 @@
+{
+  "source_commit": "0f34b036313c011861dbfd5828ed45c4f7940b05",
+  "recorded_at_utc": "2026-09-18T02:45:37.886125+00:00",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+  "working_tree_diff": [
+    " M tools/verify_blender_roundtrip.py"
+  ],
+  "candidate_binaries_note": "Existing integrated Debug binaries from checkpoint5 build; SHA256 captured after this run. Engine source unchanged; verification harness has explicit freshness assertions patched after candidate commit.",
+  "command": "python3 tools/verify_blender_roundtrip.py --blender .cache/blender/blender --editor build/linux-debug/faset_editor --ui-probe build/linux-debug/faset_blender_editor_probe --output .cache/blender-final-candidate/verified",
+  "hashes": {
+    "build/linux-debug/faset_editor": "04baf2ec09f3f097657553d5b862ba5c90749d2cdbf4a239c6b92a45dee56ee9",
+    "build/linux-debug/faset_blender_editor_probe": "141433f89ae20202a16597525bfdcd59586bf17ab72ada29104ca324857b5842",
+    ".cache/blender/blender": "5e15447670804c855fef6033ac9b8fd82696b762095becf0df79b1c2f8034397",
+    "tools/verify_blender_roundtrip.py": "ce3bb9d02500a6fe8becef23a7c966449a13d7d9d00d92f2177c0c431ac7f930",
+    "tests/blender/generate_fixture.py": "6d7951c0d35b8e4e71b81644af31d66af4e395511d929452a178f81ba30e487b",
+    "tests/editor_blender_reimport_probe.cpp": "0474276d04e8c18c1d2d8d55ff2cff8cfabba815bb3428af51394e22649e3923",
+    "tools/blender_addon/__init__.py": "e1a44aed99e09a6ad208966eb2e3808110d87311f5721774575a14471ed852e2",
+    "tools/blender_addon/bundle.py": "f0fd9707b853662be00d08440ab9cc65928cec5a8e053561834bd64fd43d1488",
+    "dependencies.lock.json": "0583b24061dfc6ba3db76be89ceeaf408cac18d237773833204074af5d8a81d5",
+    ".cache/blender-final-candidate/verified/fixture/initial/manifest.json": "830818ee07a003aad63ed1345b0179852b9de1ab9a322142bd23e50fb501ba7d",
+    ".cache/blender-final-candidate/verified/fixture/removed/manifest.json": "45e07ec2c4ae98c6a9b74a1b60089a2da1ff2ade1b9822d048b33de640d80665",
+    ".cache/blender-final-candidate/verified/fixture/renamed/manifest.json": "dfbe56099ec026eaedd4a25218f3e3270ac075a933d77d37f8b784963792250c",
+    ".cache/blender-final-candidate/verified/fixture/initial/payload/81fdfbd230989c9f4985963cddf63edcfb89c13a0ef4a9265c853006830be488.glb": "81fdfbd230989c9f4985963cddf63edcfb89c13a0ef4a9265c853006830be488",
+    ".cache/blender-final-candidate/verified/fixture/removed/payload/3a9c9671bc1804454227d14f38705b9deacfd95492bf0aea1d2754ba198f128b.glb": "3a9c9671bc1804454227d14f38705b9deacfd95492bf0aea1d2754ba198f128b",
+    ".cache/blender-final-candidate/verified/fixture/renamed/payload/568624163d90cf20f71629ca1cb11f128898260bc521ae66bfc1a3ae6bf4b3e6.glb": "568624163d90cf20f71629ca1cb11f128898260bc521ae66bfc1a3ae6bf4b3e6",
+    ".cache/blender-final-candidate/verified/live-editor/initial.ppm": "363273f070f212580088d52b273baf94cebd62410bb9cf775dee14792f18bd99",
+    ".cache/blender-final-candidate/verified/live-editor/renamed.ppm": "973a99aa43d4e32345bba023ec34dd443db9dc747590c128f996f5f258fd9038",
+    ".cache/blender-final-candidate/verified/live-editor/initial.png": "57313599964308512499eb94d35d8711ff230ec6e8f4542802a147741efc77d4",
+    ".cache/blender-final-candidate/verified/live-editor/renamed.png": "7df8f30b892f58af00ebfe48db3ddfb58150c1faffa19fa2fc792e3e65e8cfe1"
+  },
+  "results": {
+    "blender": "Blender 4.5.3 LTS",
+    "asset_id": "54c039e4-c19f-4365-a9f8-a38416ec6e3f",
+    "initial_generation": "499f254ce440ecb86118f2f6803f21013e763d35cfdba1c4356be7a457eec718",
+    "renamed_generation": "797e63652213752dc7c92029c4e9743517c5f40547b97eac748e60b17f142926",
+    "stable_output_ids": true,
+    "removed_output_conflict": true,
+    "failed_import_keeps_generation": true,
+    "authoring_preserved": true,
+    "changed_source_marked_stale": true,
+    "invalid_bundle_marked_stale": true,
+    "live_editor": {
+      "conflict_keeps_visible_generation": true,
+      "instances": 2,
+      "live_geometry_updated": true,
+      "opaque_gameplay_preserved": true,
+      "physics_fields_preserved": true,
+      "placement_and_tint_preserved": true,
+      "status": "passed",
+      "validation_enabled": true,
+      "validation_errors": 0
+    }
+  },
+  "limits": [
+    "Linux offscreen Vulkan Editor snapshot with validation; not a physical desktop input test.",
+    "No native OS IME or physical mixed-monitor DPI exercised.",
+    "Static geometry/material fixture; no skeleton/animation or arbitrary Blender shader fidelity claim.",
+    "Windows export and native platform acceptance are separate."
+  ],
+  "original_harness_failure": "Whole faset_assets response equality was invalidated by new freshness current->stale; immutable active manifests remain equal. Revised harness separately verifies stale bundle.changed/bundle.unavailable and last-good generation.",
+  "hardware_context": {
+    "host_gpu": "NVIDIA GeForce RTX 2080 Ti",
+    "nvidia_driver": "595.84"
+  },
+  "screenshot": {
+    "path": ".cache/blender-final-candidate/verified/live-editor/renamed.png",
+    "stage": "After successful stable-ID rename and geometry reimport, before removed-output conflict.",
+    "conversion": "PNG encoded from renderer-produced renamed.ppm without resizing, cropping, recoloring or content changes."
+  }
+}

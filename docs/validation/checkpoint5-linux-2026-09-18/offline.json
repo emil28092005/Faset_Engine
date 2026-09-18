@@ -1,0 +1,12 @@
+{
+  "format": "faset.offline-build",
+  "version": 1,
+  "revision": "0f34b036313c011861dbfd5828ed45c4f7940b05",
+  "recorded_at_utc": "2026-09-18T02:47:01.536454+00:00",
+  "seconds": 205.76940188600202,
+  "returncode": 0,
+  "network": "fresh user/network namespace; external connection must fail",
+  "source": "git archive of committed HEAD; no existing build directory",
+  "inputs": "prefetched archives + Slang; system compiler, SDK and development libraries",
+  "tests": "full native build, CPU CTests; GPU/window execution verified separately"
+}

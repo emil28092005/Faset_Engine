@@ -1,0 +1,20 @@
+{
+  "source_commit": "0f34b036313c011861dbfd5828ed45c4f7940b05",
+  "recorded_at_utc": "2026-09-18T02:50:10.534440+00:00",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+  "source": "Fresh offline git archive checkout, default options, no previous build directory",
+  "command": "xvfb-run -a <clean-sdk>/build/linux-debug/faset_editor --project <new-directory>/MyGame --new MyGame --dimension 3 --frames 3 --capture <evidence>/editor.ppm",
+  "editor_sha256": "71182902617d617749d383ff87d29929013751b9597dcdbcb5f25ce323ebb64b",
+  "checks": {
+    "exit_code": 0,
+    "project_name": "MyGame",
+    "dimension": 3,
+    "gameplay_files_match_templates": true,
+    "rendered_capture": [
+      1440,
+      900
+    ],
+    "capture_sha256": "e15c1e50106a4a188c817e9acb6382f13f094f163768a937ae39ddee3637971b"
+  },
+  "scope": "Manual build prerequisites already installed; engine built from clean source. Three native X11/Xvfb Editor frames; GPU execution does not prove physical OS IME or mixed-monitor behavior."
+}

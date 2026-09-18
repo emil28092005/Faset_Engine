@@ -133,7 +133,27 @@ Json AssetStore::current_manifest(const std::string& id) const {
     if (manifest.at("asset_id").get<std::string>() != id ||
         manifest.at("generation").get<std::string>() != generation)
         throw std::runtime_error("Cooked manifest identity does not match its generation");
-    // One pointer snapshot prevents mixing two concurrently published generations.
+    // Locations belong to the active pointer, not the immutable content recipe:
+    // moving sources can reuse an existing generation whose paths are historical.
+    // One pointer snapshot keeps logical source and payload in the same publication.
+    if (pointer.contains("payload_source"))
+        manifest["payload_source"] = pointer.at("payload_source");
+    else {
+        // Earlier pointers only stored source. Ordinary files are their own
+        // payload; a bundle payload keeps its path relative to the manifest.
+        const auto previous_source =
+            faset::path_from_utf8(manifest.at("source").get<std::string>());
+        const auto previous_payload = faset::path_from_utf8(
+            manifest.value("payload_source", faset::path_to_utf8(previous_source)));
+        const auto current_source = faset::path_from_utf8(pointer.at("source").get<std::string>());
+        const auto current_payload =
+            previous_payload == previous_source
+                ? current_source
+                : (current_source.parent_path() /
+                   previous_payload.lexically_relative(previous_source.parent_path()))
+                      .lexically_normal();
+        manifest["payload_source"] = faset::path_to_utf8(current_payload);
+    }
     manifest["source"] = pointer.at("source");
     return manifest;
 }

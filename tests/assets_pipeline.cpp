@@ -101,6 +101,95 @@ void success(const ImportResult& result) {
         throw std::runtime_error(text);
     }
 }
+void relocated_inputs(AssetPipeline& pipeline, const fs::path& root) {
+    const auto before = root / faset::path_from_utf8("Источники до переноса");
+    const auto after = root / faset::path_from_utf8("Источники после переноса");
+    fs::create_directories(before / "payload/nested");
+    glb(before / "payload/nested/mesh.glb", "Moved bundle");
+    const Json bundle{
+        {"schema_version", 1},
+        {"asset_id", "relocated-bundle"},
+        {"files",
+         Json::array({{{"path", "payload/nested/mesh.glb"},
+                       {"sha256", faset::sha256_file(before / "payload/nested/mesh.glb")}}})}};
+    save(before / "manifest.json", bundle.dump());
+    const auto first = pipeline.import_asset({before / "manifest.json"});
+    success(first);
+    const auto immutable = pipeline.generation_directory(first.asset_id) / "manifest.json";
+    const auto original_digest = faset::sha256_file(immutable);
+    fs::rename(before, after);
+    const auto moved = pipeline.import_asset({after / "manifest.json"});
+    success(moved);
+    require(moved.cache_hit && moved.generation == first.generation &&
+                moved.asset_id == first.asset_id,
+            "Bundle directory relocation must reuse the content generation and identity");
+    require(pipeline.freshness(first.asset_id).at("state") == "current" &&
+                pipeline.current_manifest(first.asset_id).at("payload_source") ==
+                    faset::path_to_utf8(after / "payload/nested/mesh.glb"),
+            "Moved bundle freshness must inspect the current payload location");
+    require(faset::sha256_file(immutable) == original_digest,
+            "Relocation must not rewrite an immutable generation manifest");
+    // Earlier pointers only recorded logical source; they must remain readable
+    // after a cache-hit relocation without consulting missing old source files.
+    const auto pointer = pipeline.cache_root() / "assets" / first.asset_id / "current.json";
+    auto old_pointer = faset::read_json(pointer);
+    old_pointer.erase("payload_source");
+    faset::atomic_write_json(pointer, old_pointer);
+    require(pipeline.freshness(first.asset_id).at("state") == "current" &&
+                pipeline.load_asset(first.asset_id).generation == first.generation,
+            "Legacy bundle pointer must resolve payload relative to the moved source");
+    glb(after / "payload/nested/mesh.glb", "Moved bundle", true, false, .8f);
+    require(pipeline.freshness(first.asset_id).at("state") == "stale" &&
+                pipeline.load_asset(first.asset_id).generation == first.generation,
+            "Changed relocated bundle payload must be stale without changing cooked data");
+
+    const auto external_before = root / "external-before";
+    const auto external_after = root / faset::path_from_utf8("Внешний glTF после переноса");
+    fs::create_directories(external_before / "deps");
+    auto gltf = document("Moved external", true, false);
+    gltf["buffers"][0]["uri"] = "deps/geometry.bin";
+    gltf["images"] = Json::array({{{"uri", "deps/picture.png"}, {"mimeType", "image/png"}}});
+    gltf["textures"] = Json::array({{{"source", 0}}});
+    gltf["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"] = {{"index", 0}};
+    save(external_before / "model.gltf", gltf.dump());
+    save(external_before / "deps/geometry.bin", geometry(0));
+    save(external_before / "deps/picture.png", faset::test_images::png_red_green);
+    const auto external = pipeline.import_asset({external_before / "model.gltf"});
+    success(external);
+    const auto external_immutable =
+        pipeline.generation_directory(external.asset_id) / "manifest.json";
+    const auto external_digest = faset::sha256_file(external_immutable);
+    fs::rename(external_before, external_after);
+    const auto relocated = pipeline.import_asset({external_after / "model.gltf"});
+    success(relocated);
+    require(relocated.cache_hit && relocated.generation == external.generation &&
+                relocated.asset_id == external.asset_id &&
+                pipeline.freshness(external.asset_id).at("state") == "current",
+            "Moving glTF and external dependencies together must preserve a current cache hit");
+    const auto external_pointer =
+        pipeline.cache_root() / "assets" / external.asset_id / "current.json";
+    auto legacy = faset::read_json(external_pointer);
+    legacy.erase("payload_source");
+    faset::atomic_write_json(external_pointer, legacy);
+    require(pipeline.freshness(external.asset_id).at("state") == "current",
+            "Legacy ordinary glTF pointer must treat the current source as payload");
+    save(external_after / "deps/geometry.bin", geometry(.4f));
+    auto freshness = pipeline.freshness(external.asset_id);
+    require(freshness.at("state") == "stale" &&
+                freshness.at("reasons")[0].at("code") == "dependency.changed" &&
+                freshness.at("reasons")[0].at("path") ==
+                    faset::path_to_utf8((external_after / "deps/geometry.bin").lexically_normal()),
+            "Freshness must hash external geometry at its new location after directory move");
+    save(external_after / "deps/geometry.bin", geometry(0));
+    save(external_after / "deps/picture.png", faset::test_images::png_blue_white);
+    freshness = pipeline.freshness(external.asset_id);
+    require(freshness.at("state") == "stale" &&
+                freshness.at("reasons")[0].at("path") ==
+                    faset::path_to_utf8((external_after / "deps/picture.png").lexically_normal()),
+            "Freshness must inspect moved external images too");
+    require(faset::sha256_file(external_immutable) == external_digest,
+            "Freshness/relocation must leave the published glTF generation immutable");
+}
 } // namespace
 int main() {
     const auto root =
@@ -410,6 +499,16 @@ int main() {
                 "Image rename retained old source pointer");
         require(pipeline.overrides(image_first.asset_id).contains(texture_id),
                 "Image rename/reimport lost overrides");
+        require(pipeline.freshness(image_first.asset_id).at("state") == "current",
+                "Renamed and reimported PNG must be current, not stale at its old payload path");
+        const auto image_pointer =
+            pipeline.cache_root() / "assets" / image_first.asset_id / "current.json";
+        auto old_image_pointer = faset::read_json(image_pointer);
+        old_image_pointer.erase("payload_source");
+        faset::atomic_write_json(image_pointer, old_image_pointer);
+        require(pipeline.freshness(image_first.asset_id).at("state") == "current",
+                "Legacy image pointer must follow the renamed logical source");
+        relocated_inputs(pipeline, root);
         const auto jpeg = root / "sprite.JPEG";
         save(jpeg, faset::test_images::jpeg_red_green);
         auto jpeg_import = pipeline.import_asset({jpeg});

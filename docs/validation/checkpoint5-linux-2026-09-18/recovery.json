@@ -1,0 +1,36 @@
+{
+  "format": "faset.editor-recovery-verification",
+  "version": 1,
+  "status": "passed",
+  "checks": [
+    "acknowledged unsaved edit survives killed Editor and explicit recovery",
+    "failed save preserves live authoring and last saved file",
+    "failed Player process is reported without changing authoring data",
+    "Undo repairs the scene, then Play and Stop leave authoring unchanged",
+    "failed C++ build keeps prior schema and reports stale status",
+    "fixed C++ rebuild restores current schema status",
+    "failed import preserves authoring"
+  ],
+  "recorded_at_utc": "2026-09-18T02:50:13.733355+00:00",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+  "editor_sha256": "04baf2ec09f3f097657553d5b862ba5c90749d2cdbf4a239c6b92a45dee56ee9",
+  "logs": [
+    "build completed",
+    "Gameplay schema loaded",
+    "Play started in a separate Player process",
+    "Player failed: unsupported builtin component version: faset.transform\n",
+    "Player exited with code 1",
+    "build completed",
+    "Gameplay schema loaded",
+    "Play started in a separate Player process",
+    "New round: collect the three gold cubes, then reach the green exit. E resets.\n{\"device\":\"NVIDIA GeForce RTX 2080 Ti\",\"dimension\":2,\"frames\":411,\"ticks\":104,\"validation_errors\":0}\n",
+    "Play stopped; authoring scene unchanged",
+    "build failed: Process exited with code 1; see job log; previous gameplay metadata remains available and is marked stale",
+    "build completed",
+    "Gameplay schema loaded",
+    "Asset import failed: Cannot read: /home/emil/Desktop/Faset_Engine/.cache/editor-recovery-final-candidate/project/Assets/missing.glb\n"
+  ],
+  "engine_commit": "0f34b036313c011861dbfd5828ed45c4f7940b05",
+  "engine_commit_at_completion": "0f34b036313c011861dbfd5828ed45c4f7940b05",
+  "source_note": "Completed before pending moved-input freshness changes to asset_data.cpp/asset_pipeline.cpp; final-candidate committed engine source."
+}

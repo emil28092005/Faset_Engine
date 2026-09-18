@@ -50,20 +50,35 @@ def verify(blender, editor, output, ui_probe=None):
     def ids(value):
         return sorted(value["outputs"])
     assert ids(manifest) == ids(renamed["result"]["manifest"]), (manifest, renamed)
+    def active_manifests(assets):
+        return {item["id"]: item["manifest"] for item in assets["assets"]}
+    def freshness(assets):
+        return next(item["freshness"] for item in assets["assets"] if item["id"] == identity)
     active = command("faset_assets", {})
+    assert freshness(active)["state"] == "current", active
     removed = import_stage("removed")
     assert removed["state"] == "conflict", removed
-    assert command("faset_assets", {}) == active
+    after_removal = command("faset_assets", {})
+    # Source freshness must change without replacing the last-good generation.
+    assert active_manifests(after_removal) == active_manifests(active)
+    assert freshness(after_removal)["state"] == "stale", after_removal
+    assert any(reason["code"] == "bundle.changed"
+               for reason in freshness(after_removal)["reasons"]), after_removal
     (source / "manifest.json").write_text('{"broken":true}')
     failed = command("faset_import", {"path": "Assets/door/manifest.json"})
     assert failed["state"] == "failed", failed
-    assert command("faset_assets", {}) == active
+    after_failure = command("faset_assets", {})
+    assert active_manifests(after_failure) == active_manifests(active)
+    assert freshness(after_failure)["state"] == "stale", after_failure
+    assert any(reason["code"] == "bundle.unavailable"
+               for reason in freshness(after_failure)["reasons"]), after_failure
     assert scene_file.read_bytes() == before
     report = {"blender": subprocess.check_output([str(blender), "--version"], text=True).splitlines()[0],
               "asset_id": identity, "initial_generation": first["result"]["generation"],
               "renamed_generation": renamed["result"]["generation"],
               "stable_output_ids": True, "removed_output_conflict": True,
-              "failed_import_keeps_generation": True, "authoring_preserved": True}
+              "failed_import_keeps_generation": True, "authoring_preserved": True,
+              "changed_source_marked_stale": True, "invalid_bundle_marked_stale": True}
     if ui_probe:
         probe = subprocess.run([str(ui_probe), str(fixture), str(output / "live-editor")],
                                capture_output=True, text=True, encoding="utf-8")

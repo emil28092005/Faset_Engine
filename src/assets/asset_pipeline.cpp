@@ -828,7 +828,8 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
             throw Cancelled{};
         atomic_json(asset_root / "current.json", {{"schema_version", 1},
                                                   {"generation", result.generation},
-                                                  {"source", faset::path_to_utf8(logical_source)}});
+                                                  {"source", faset::path_to_utf8(logical_source)},
+                                                  {"payload_source", faset::path_to_utf8(source)}});
         result.status = ImportStatus::succeeded;
         job.report(1, "complete");
     } catch (const Cancelled&) {
