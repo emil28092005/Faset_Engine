@@ -103,9 +103,17 @@ check **Jobs** and **Console**. A successful build and schema export refresh the
 Inspector. A failed build retains the previous metadata and reports the failure.
 
 A missing schema or unsupported component version appears as read-only raw fields
-with **Copy raw fields**. The Editor preserves that data. Restore the matching module
-or provide a migration and rebuild before expecting normal field editing or Play.
-See [Build, Play, and export](export.md) for the C++ iteration loop.
+with **Copy raw fields**. Restore a missing module to make its schema available.
+For an older component, declare [data migration rules](../scripting/api.md#editor-data-migrations),
+choose **Build C++**, then **Migrate to v…** in the Inspector. This is one undoable
+authoring edit; save explicitly afterward. Inherited components show **Open source
+to migrate** instead. Top-level local additions migrate in their owning instance.
+Missing rules or conversion errors preserve the data and appear in Console.
+
+Opening or recovering a scene never migrates it automatically. Future versions
+stay opaque and cannot be downgraded. Review instance overrides separately when
+changing the source field's units or meaning. See [Build, Play, and export](export.md)
+for the C++ iteration loop.
 
 ## Project settings
 

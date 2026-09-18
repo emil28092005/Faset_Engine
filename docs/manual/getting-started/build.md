@@ -6,7 +6,7 @@
 
 ## Linux prerequisites
 
-The selected toolchain is C++20, CMake 3.25 or later, Ninja, and Clang.
+The selected toolchain is C++20, CMake 3.25 or later, Ninja, Clang, and Python 3.12+.
 Graphical builds need Vulkan 1.3 headers/loader and a compatible driver.
 SDL3, FreeType and HarfBuzz are built from pinned source archives.
 
@@ -64,8 +64,10 @@ disconnecting. Prefetching source archives alone is not a complete offline SDK.
 ## Windows prerequisites
 
 Use an x64 Visual Studio Developer shell with the Windows SDK, MSVC runtime libraries,
-LLVM `clang-cl`, Ninja, CMake, and the Vulkan SDK available. Then use the
-`windows-debug` or `windows-release` presets.
+LLVM `clang-cl`, Ninja, CMake 3.25+, Python 3.12+, and the Vulkan SDK available.
+The commands below use the Python `py` launcher; substitute `python` if your
+installation exposes that command instead. Use the `windows-debug` or
+`windows-release` presets.
 
 Enable **Win32 long paths** on the Windows development machine before starting the
 build shell. Faset's executable manifest declares long-path support, and its direct

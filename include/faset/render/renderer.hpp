@@ -62,6 +62,12 @@ struct Quad {
     std::shared_ptr<const Texture> texture{};
     std::array<float, 4> uv_rect{0, 0, 1, 1};
 };
+struct UiTriangles {
+    // Non-indexed triangle list in drawable pixels, rendered after UI quads/text.
+    std::vector<Vertex> vertices;
+    std::shared_ptr<const Texture> texture{};
+    std::array<float, 4> clip_rect{}; // x/y/width/height; zero size uses the full target
+};
 struct Text {
     float x{}, y{};
     std::string value;
@@ -81,6 +87,7 @@ struct Snapshot {
     // UI coordinates are drawable pixels, top-left origin. Order is preserved per list.
     std::vector<Quad> ui_quads;
     std::vector<Text> ui_text;
+    std::vector<UiTriangles> ui_triangles;
 };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.
 void validate_shader_bundle(const std::filesystem::path& directory);
@@ -119,6 +126,8 @@ struct Event {
 struct FrameStats {
     std::uint64_t frame{};
     bool validation_enabled{};
+    bool gpu_labels_enabled{};
+    std::uint32_t gpu_label_count{};
     // Live VkDeviceMemory allocation sizes, including alignment; excludes driver internals.
     std::uint64_t gpu_allocated_bytes{};
     std::uint32_t texture_count{};

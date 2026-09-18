@@ -41,6 +41,11 @@ int main(int argc, char** argv) {
         }
         bool visible = argc > 1 && std::string(argv[1]) == "--visible";
         Renderer renderer({320, 240, "Faset render validation", !visible, true});
+        if (!visible) {
+            renderer.set_clipboard("Offscreen Café 世界");
+            require(renderer.clipboard() == "Offscreen Café 世界",
+                    "Offscreen clipboard is local and does not require SDL video");
+        }
         Snapshot scene;
         scene.eye = {4, 3, 5};
         scene.view_projection =
@@ -58,14 +63,27 @@ int main(int argc, char** argv) {
         texture->width = texture->height = 1;
         texture->rgba = {20, 220, 40, 255};
         scene.ui_quads.push_back({260, 8, 40, 20, {1, 1, 1, 1}, texture});
+        UiTriangles diagnostic;
+        diagnostic.vertices = {{{80, 8, 0}, {}, {0, 0, 1, 1}},
+                               {{150, 8, 0}, {}, {0, 0, 1, 1}},
+                               {{80, 40, 0}, {}, {0, 0, 1, 1}}};
+        diagnostic.clip_rect = {90, 8, 30, 32};
+        scene.ui_triangles.push_back(diagnostic);
         renderer.render(scene);
         require(renderer.stats().validation_errors == 0, "Vulkan validation reported an error");
+        if (renderer.stats().validation_enabled)
+            require(renderer.stats().gpu_labels_enabled,
+                    "Validation context exposes GPU pass labels");
+        require(!renderer.stats().gpu_labels_enabled || renderer.stats().gpu_label_count >= 3,
+                "Every submitted render graph pass receives a GPU label");
         auto pixels = renderer.pixels();
         require(pixels.size() == 320 * 240 * 4, "Readback dimensions");
         auto index = (10 * 320 + 10) * 4;
         require(pixels[index] > 190 && pixels[index + 1] < 50, "Colored UI pixel");
         index = (10 * 320 + 270) * 4;
         require(pixels[index] < 30 && pixels[index + 1] > 200, "Textured UI pixel");
+        require(pixels[(12 * 320 + 95) * 4 + 2] > 240 && pixels[(12 * 320 + 85) * 4 + 2] < 200,
+                "UI diagnostic triangles obey their per-command clip rectangle");
         texture->srgb = true;
         ++texture->revision;
         renderer.render(scene);

@@ -63,7 +63,7 @@ jobs:
       - name: Fetch checksum-verified Slang compiler
         run: python tools/fetch_slang.py
       - name: Configure full editor and Player
-        run: cmake --preset windows-debug -DFASET_BUILD_RENDERER=ON -DFASET_BUILD_EDITOR=ON
+        run: cmake --preset windows-debug -DFASET_BUILD_RENDERER=ON -DFASET_BUILD_EDITOR=ON -DFASET_DEBUG_IMGUI=ON
       - name: Build full editor and tests
         run: cmake --build --preset windows-debug --parallel 2
       - name: CPU contracts and software GPU pixel tests

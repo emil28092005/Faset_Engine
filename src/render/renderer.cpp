@@ -55,12 +55,14 @@ struct Image {
 struct Batch {
     std::uint32_t first{}, count{};
     const Texture* texture{};
+    std::array<float, 4> clip_rect{};
 };
 constexpr std::uint32_t shadow_size = 1024;
 } // namespace
 struct Renderer::Impl {
     RendererConfig config;
     SDL_Window* window{};
+    std::string offscreen_clipboard;
     bool sdl{}, close{}, dirty_swapchain{};
     std::uint32_t width{}, height{};
     VkInstance instance{};
@@ -90,6 +92,8 @@ struct Renderer::Impl {
     VkSampler shadow_sampler{}, color_sampler{};
     VkPipelineLayout pipeline_layout{};
     VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{}, sprite_pipeline{};
+    PFN_vkCmdBeginDebugUtilsLabelEXT begin_gpu_label{};
+    PFN_vkCmdEndDebugUtilsLabelEXT end_gpu_label{};
     struct GpuTexture {
         Image image;
         VkDescriptorSet descriptor{};
@@ -359,13 +363,24 @@ struct Renderer::Impl {
         check(vkEnumerateInstanceLayerProperties(&count, nullptr), "Enumerate layers");
         std::vector<VkLayerProperties> layers(count);
         check(vkEnumerateInstanceLayerProperties(&count, layers.data()), "Enumerate layers");
-        bool validation = c.validation && std::any_of(layers.begin(), layers.end(), [](auto& p) {
-                              return std::strcmp(p.layerName, "VK_LAYER_KHRONOS_validation") == 0;
-                          });
+        check(vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr),
+              "Enumerate instance extensions");
+        std::vector<VkExtensionProperties> instance_extensions(count);
+        check(vkEnumerateInstanceExtensionProperties(nullptr, &count, instance_extensions.data()),
+              "Enumerate instance extensions");
+        const bool debug_utils =
+            std::any_of(instance_extensions.begin(), instance_extensions.end(), [](const auto& p) {
+                return std::strcmp(p.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0;
+            });
+        bool validation =
+            c.validation && debug_utils && std::any_of(layers.begin(), layers.end(), [](auto& p) {
+                return std::strcmp(p.layerName, "VK_LAYER_KHRONOS_validation") == 0;
+            });
         statistics.validation_enabled = validation;
         if (c.validation && !validation)
-            std::cerr << "[Faset] Vulkan validation layer not installed; diagnostics disabled.\n";
-        if (validation)
+            std::cerr << "[Faset] Vulkan validation layer/debug-utils unavailable; validation "
+                         "disabled.\n";
+        if (debug_utils)
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         VkApplicationInfo app{};
         app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -473,6 +488,13 @@ struct Renderer::Impl {
         }
         check(vkCreateDevice(physical, &di, nullptr, &device), "Create Vulkan device");
         vkGetDeviceQueue(device, queue_family, 0, &queue);
+        if (debug_utils) {
+            begin_gpu_label = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
+                vkGetDeviceProcAddr(device, "vkCmdBeginDebugUtilsLabelEXT"));
+            end_gpu_label = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
+                vkGetDeviceProcAddr(device, "vkCmdEndDebugUtilsLabelEXT"));
+        }
+        statistics.gpu_labels_enabled = begin_gpu_label && end_gpu_label;
         VkCommandPoolCreateInfo pi{};
         pi.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         pi.queueFamilyIndex = queue_family;
@@ -1000,7 +1022,7 @@ struct Renderer::Impl {
     }
     void render(const Snapshot& snapshot) {
         auto start = std::chrono::steady_clock::now();
-        statistics.draw_calls = statistics.culled_meshes = 0;
+        statistics.draw_calls = statistics.culled_meshes = statistics.gpu_label_count = 0;
         bool can_present = surface != VK_NULL_HANDLE;
         if (surface) {
             // A capture may render between normal event-loop iterations. Keep the window
@@ -1033,6 +1055,9 @@ struct Renderer::Impl {
         for (const auto& sprite : snapshot.sprites)
             if (sprite.texture)
                 upload_texture(sprite.texture);
+        for (const auto& triangles : snapshot.ui_triangles)
+            if (triangles.texture)
+                upload_texture(triangles.texture);
         std::vector<GpuVertex> data;
         std::vector<Batch> scene_batches, shadow_batches, sprite_batches, ui_batches;
         for (const auto& item : snapshot.draws) {
@@ -1123,6 +1148,24 @@ struct Renderer::Impl {
         if (data.size() > text_first)
             ui_batches.push_back(
                 {text_first, static_cast<std::uint32_t>(data.size() - text_first), white.get()});
+        for (const auto& triangles : snapshot.ui_triangles) {
+            if (triangles.vertices.size() % 3 != 0)
+                throw std::invalid_argument("UI triangle list must contain complete triangles");
+            const auto first = static_cast<std::uint32_t>(data.size());
+            for (const auto& source : triangles.vertices) {
+                GpuVertex vertex{};
+                vertex.clip[0] = source.position[0] / float(width) * 2 - 1;
+                vertex.clip[1] = source.position[1] / float(height) * 2 - 1;
+                vertex.clip[3] = 1;
+                std::copy(source.color.begin(), source.color.end(), vertex.color);
+                std::copy(source.uv.begin(), source.uv.end(), vertex.uv);
+                vertex.material[0] = triangles.texture && triangles.texture->srgb ? 1.f : 0.f;
+                data.push_back(vertex);
+            }
+            ui_batches.push_back({first, static_cast<std::uint32_t>(triangles.vertices.size()),
+                                  triangles.texture ? triangles.texture.get() : white.get(),
+                                  triangles.clip_rect});
+        }
         statistics.vertices = static_cast<std::uint32_t>(data.size());
         auto byte_count = std::max<std::size_t>(sizeof(GpuVertex), data.size() * sizeof(GpuVertex));
         if (vertices.size < byte_count) {
@@ -1185,7 +1228,33 @@ struct Renderer::Impl {
             vkCmdSetScissor(command, 0, 1, &scissor);
         };
         RenderGraph graph;
-        graph.add("ShadowMap", {}, {"shadow"}, [&] {
+        auto add_pass = [&](std::string name, std::vector<std::string> reads,
+                            std::vector<std::string> writes, RenderGraph::Callback callback) {
+            const auto label_name = name;
+            graph.add(std::move(name), std::move(reads), std::move(writes),
+                      [this, label_name, callback = std::move(callback)] {
+                          if (statistics.gpu_labels_enabled) {
+                              VkDebugUtilsLabelEXT label{};
+                              label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+                              label.pLabelName = label_name.c_str();
+                              label.color[0] = .25f;
+                              label.color[1] = .65f;
+                              label.color[2] = .9f;
+                              label.color[3] = 1.f;
+                              begin_gpu_label(command, &label);
+                              ++statistics.gpu_label_count;
+                          }
+                          struct EndLabel {
+                              Impl& renderer;
+                              ~EndLabel() {
+                                  if (renderer.statistics.gpu_labels_enabled)
+                                      renderer.end_gpu_label(renderer.command);
+                              }
+                          } end{*this};
+                          callback();
+                      });
+        };
+        add_pass("ShadowMap", {}, {"shadow"}, [&] {
             transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_DEPTH_BIT);
             VkRenderingAttachmentInfo attachment{};
@@ -1214,7 +1283,7 @@ struct Renderer::Impl {
             transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
                        VK_IMAGE_ASPECT_DEPTH_BIT);
         });
-        graph.add("ForwardAndUI", {"shadow"}, {"color", "depth"}, [&] {
+        add_pass("ForwardAndUI", {"shadow"}, {"color", "depth"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
             transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -1281,6 +1350,20 @@ struct Renderer::Impl {
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                sizeof(push), &push);
             for (auto batch : ui_batches) {
+                VkRect2D scissor{{0, 0}, {width, height}};
+                if (batch.clip_rect[2] > 0 && batch.clip_rect[3] > 0) {
+                    const auto& clip = batch.clip_rect;
+                    const float x = std::clamp(clip[0], 0.f, float(width));
+                    const float y = std::clamp(clip[1], 0.f, float(height));
+                    const float right = std::clamp(clip[0] + clip[2], x, float(width));
+                    const float bottom = std::clamp(clip[1] + clip[3], y, float(height));
+                    scissor.offset = {static_cast<int>(x), static_cast<int>(y)};
+                    scissor.extent = {static_cast<unsigned>(right) - static_cast<unsigned>(x),
+                                      static_cast<unsigned>(bottom) - static_cast<unsigned>(y)};
+                }
+                if (!scissor.extent.width || !scissor.extent.height)
+                    continue;
+                vkCmdSetScissor(command, 0, 1, &scissor);
                 auto descriptor = textures.at(batch.texture).descriptor;
                 vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
                                         0, 1, &descriptor, 0, nullptr);
@@ -1289,7 +1372,7 @@ struct Renderer::Impl {
             }
             vkCmdEndRendering(command);
         });
-        graph.add("Readback", {"color"}, {"capture"}, [&] {
+        add_pass("Readback", {"color"}, {"capture"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
             VkBufferImageCopy copy{};
@@ -1299,7 +1382,7 @@ struct Renderer::Impl {
                                    readback.handle, 1, &copy);
         });
         if (swap_index)
-            graph.add("Presentation", {"color"}, {"swapchain"}, [&] {
+            add_pass("Presentation", {"color"}, {"swapchain"}, [&] {
                 auto index = *swap_index;
                 transition(command, swap_images[index], swap_layouts[index],
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -1487,10 +1570,16 @@ void Renderer::set_text_input_area(float x, float y, float width, float height) 
         throw std::runtime_error(SDL_GetError());
 }
 void Renderer::set_clipboard(const std::string& text) {
+    if (!impl_->window) {
+        impl_->offscreen_clipboard = text;
+        return;
+    }
     if (!SDL_SetClipboardText(text.c_str()))
         throw std::runtime_error(SDL_GetError());
 }
 std::string Renderer::clipboard() const {
+    if (!impl_->window)
+        return impl_->offscreen_clipboard;
     char* text = SDL_GetClipboardText();
     if (!text)
         return {};

@@ -17,7 +17,7 @@ struct Resolver {
     const SceneLoader& loader;
     std::string root;
     Json conflicts = Json::array();
-    std::set<std::string> sources;
+    std::set<std::string> sources{};
     void conflict(const Json& path, std::string code, const Json& record) {
         conflicts.push_back(
             {{"instance_path", path}, {"code", std::move(code)}, {"record", record}});

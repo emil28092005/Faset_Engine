@@ -288,9 +288,6 @@ Json AuthoringService::open(const std::filesystem::path& relative, bool recover)
         value.data = recovered.at("scene");
         value.revision = recovered.value("revision", 0u);
     }
-    for (auto& item : value.data["entities"])
-        for (auto& component : item["components"])
-            component = schemas_.migrate_component(component);
     documents_.emplace(id, std::move(value));
     return summary(state(id));
 }
@@ -375,6 +372,24 @@ void AuthoringService::apply(Json& scene, const Json& command) {
                                   [&](const Json& value) { return value.at("id") == id; });
         require(found != values.end(), "component.missing", "Component does not exist");
         values.erase(found);
+    } else if (op == "component.migrate") {
+        Json* object = nullptr;
+        if (command.contains("instance")) {
+            const auto instance_id = command.at("instance").get<std::string>();
+            for (auto& instance : scene.at("instances"))
+                if (instance.at("id") == instance_id && instance.contains("additions"))
+                    for (auto& addition : instance.at("additions"))
+                        if (addition.at("id") == command.at("entity"))
+                            object = &addition;
+            require(object, "template.addition_missing", "Instance-local entity is unavailable");
+        } else
+            object = &entity(scene, command.at("entity").get<std::string>());
+        auto& value = component(*object, command.at("component").get<std::string>());
+        const auto type = value.at("type").get<std::string>();
+        require(schemas_.contains(type), "schema.missing", "Component schema unavailable: " + type);
+        require(value.value("version", 1) <= schemas_.schema(type).value("version", 1),
+                "migration.future", "Cannot migrate a component from a newer schema");
+        value = schemas_.migrate_component(value);
     } else if (op == "component.set") {
         auto& value = component(entity(scene, command.at("entity").get<std::string>()),
                                 command.at("component").get<std::string>());
@@ -601,9 +616,6 @@ Json AuthoringService::recover(const std::string& id,
                 "recovery.disk_conflict",
                 "Scene file changed or disappeared since recovery was written");
     }
-    for (auto& item : candidate.data["entities"])
-        for (auto& component : item["components"])
-            component = schemas_.migrate_component(component);
     validate_scene(candidate.data, schemas_);
     if (documents_.contains(id)) {
         const auto& current = state(id);

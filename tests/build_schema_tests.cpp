@@ -2,7 +2,9 @@
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
 #include <faset/editor/build_service.hpp>
+#include <faset/editor/commands.hpp>
 #include <iostream>
+#include <limits>
 
 using namespace faset;
 namespace fs = std::filesystem;
@@ -12,15 +14,120 @@ void check(bool value, std::string_view message) {
         throw std::runtime_error(std::string(message));
 }
 Json manifest() {
-    return {
-        {"format", "faset.schema"},
-        {"version", 1},
-        {"types",
+    Json type{
+        {"id", "game.mover"},
+        {"version", 2},
+        {"fields",
+         {{"speed", {{"type", "number"}, {"default", 2.5}, {"min", 0}, {"max", 10}}},
+          {"enabled", {{"type", "boolean"}, {"default", true}}}}},
+        {"migrations",
          Json::array(
-             {{{"id", "game.mover"},
-               {"version", 2},
-               {"fields",
-                {{"speed", {{"type", "number"}, {"default", 2.5}, {"min", 0}, {"max", 10}}}}}}})}};
+             {{{"from_version", 1},
+               {"fields", {{"speed", {{"scale", 0.01}}}, {"enabled", {{"default", true}}}}}}})}};
+    return {{"format", "faset.schema"}, {"version", 1}, {"types", Json::array({type})}};
+}
+void migration_contracts(const fs::path& root, const Json& metadata) {
+    auto old_scene = authoring::make_scene("Legacy movement", 2);
+    auto object = authoring::make_entity(authoring::builtin_schemas(), "Mover");
+    object["id"] = "mover";
+    object["components"].push_back({{"id", "movement"},
+                                    {"type", "game.mover"},
+                                    {"version", 1},
+                                    {"fields", {{"speed", 300}, {"unknown", "preserve me"}}}});
+    old_scene["entities"].push_back(object);
+    atomic_write_json(root / "Scenes/legacy.scene.json", old_scene);
+    const auto original = read_text(root / "Scenes/legacy.scene.json");
+    authoring::AuthoringService service(root);
+    service.replace_external_schemas(metadata);
+    editor::Commands commands(service);
+    const auto opened =
+        commands.call("faset_document_open", {{"path", "Scenes/legacy.scene.json"}});
+    const auto id = opened.at("id").get<std::string>();
+    check(opened.at("scene") == old_scene && !opened.at("dirty").get<bool>(),
+          "Opening an older schema preserves opaque data without implicit migration");
+    auto apply = [&] {
+        return commands.call("faset_scene_edit",
+                             {{"document", id},
+                              {"revision", service.query(id).at("revision")},
+                              {"operations", Json::array({{{"op", "entity.rename"},
+                                                           {"entity", "mover"},
+                                                           {"name", "Migrated mover"}},
+                                                          {{"op", "component.migrate"},
+                                                           {"entity", "mover"},
+                                                           {"component", "movement"}}})}});
+    };
+    const auto migrated = apply();
+    const auto& value = migrated.at("scene").at("entities")[0].at("components")[1];
+    check(value.at("id") == "movement" && value.at("version") == 2 &&
+              value.at("fields").at("speed") == 3.0 && value.at("fields").at("enabled") == true &&
+              value.at("fields").at("unknown") == "preserve me",
+          "Exported declarative steps convert values and retain IDs and unknown fields");
+    check(read_text(root / "Scenes/legacy.scene.json") == original,
+          "Explicit migration remains unsaved until Save");
+    const auto undone =
+        commands.call("faset_undo", {{"document", id}, {"revision", migrated.at("revision")}});
+    check(undone.at("scene") == old_scene, "One Undo restores the entire migration transaction");
+    authoring::AuthoringService recovered(root);
+    recovered.replace_external_schemas(metadata);
+    check(recovered.recover(id).at("scene") == old_scene,
+          "Recovery preserves the journal's older version without automatic migration");
+    commands.call("faset_redo", {{"document", id}, {"revision", undone.at("revision")}});
+    check(service.query(id).at("scene") == migrated.at("scene"), "Redo restores migrated values");
+    commands.call("faset_undo", {{"document", id}, {"revision", service.query(id).at("revision")}});
+    for (const auto* failure : {"missing", "manual", "overflow"}) {
+        auto rules = metadata;
+        if (std::string_view(failure) == "missing")
+            rules["types"][0].erase("migrations");
+        else if (std::string_view(failure) == "manual")
+            rules["types"][0]["migrations"][0]["fields"]["speed"] = {{"require_manual", true}};
+        else
+            rules["types"][0]["migrations"][0]["fields"]["speed"]["scale"] =
+                std::numeric_limits<double>::max();
+        service.replace_external_schemas(rules);
+        const auto before = service.query(id);
+        bool rejected{};
+        try {
+            (void)apply();
+        } catch (const Error&) {
+            rejected = true;
+        }
+        check(rejected && service.query(id) == before &&
+                  read_text(root / "Scenes/legacy.scene.json") == original,
+              "Missing/manual/overflow migration preserves document, revision, Undo and source");
+        authoring::AuthoringService reopened(root);
+        reopened.replace_external_schemas(rules);
+        check(reopened.open("Scenes/legacy.scene.json").at("scene") == old_scene,
+              "An unavailable migration never prevents opening old data");
+    }
+    service.replace_external_schemas(metadata);
+    auto addition = object;
+    addition["id"] = "local-mover";
+    addition["components"][0]["id"] = "local-transform";
+    addition["components"][1]["id"] = "local-movement";
+    auto current = service.query(id);
+    current = service.transact(id, current.at("revision"),
+                               Json::array({{{"op", "template.instance"},
+                                             {"instance",
+                                              {{"id", "local-instance"},
+                                               {"source", "Scenes/unused.scene.json"},
+                                               {"additions", Json::array({addition})}}}}}));
+    const auto local_before = current;
+    current = commands.call("faset_scene_edit",
+                            {{"document", id},
+                             {"revision", current.at("revision")},
+                             {"operations", Json::array({{{"op", "component.migrate"},
+                                                          {"instance", "local-instance"},
+                                                          {"entity", "local-mover"},
+                                                          {"component", "local-movement"}}})}});
+    check(current.at("scene")
+                  .at("instances")[0]
+                  .at("additions")[0]
+                  .at("components")[1]
+                  .at("fields")
+                  .at("speed") == 3.0,
+          "Instance-local additions use the same migration command");
+    check(service.undo(id, current.at("revision")).at("scene") == local_before.at("scene"),
+          "Local-addition migration is one undoable edit");
 }
 int test_main(int argc, char** argv) {
     const auto root =
@@ -51,6 +158,7 @@ int test_main(int argc, char** argv) {
         const auto previous_registry = authoring.schemas().manifest();
         check(authoring.schemas().schema("game.mover").at("version") == 2,
               "Matching custom v2 metadata reaches authoring");
+        migration_contracts(config.project_root / "migration-contracts", read_json(schema));
 
         Json scene{
             {"format", "faset.scene"},
@@ -99,6 +207,22 @@ int test_main(int argc, char** argv) {
         invalid.push_back(candidate);
         candidate = valid;
         candidate["types"] = Json::object();
+        invalid.push_back(candidate);
+        for (const auto& step : Json::array(
+                 {{{"from_version", 2}, {"fields", Json::object()}},
+                  {{"from_version", 0}, {"fields", Json::object()}},
+                  {{"from_version", 1.5}, {"fields", Json::object()}},
+                  {{"from_version", 1}, {"fields", {{"speed", {{"execute", "unsafe"}}}}}},
+                  {{"from_version", 1}, {"fields", {{"speed", {{"scale", "bad"}}}}}},
+                  {{"from_version", 1}, {"fields", {{"speed", {{"scale", nullptr}}}}}},
+                  {{"from_version", 1}, {"fields", {{"speed", {{"require_manual", 1}}}}}},
+                  {{"from_version", 1}, {"fields", Json::object()}, {"unsupported", true}}})) {
+            candidate = valid;
+            candidate["types"][0]["migrations"] = Json::array({step});
+            invalid.push_back(candidate);
+        }
+        candidate = valid;
+        candidate["types"][0]["migrations"].push_back(candidate["types"][0]["migrations"][0]);
         invalid.push_back(candidate);
         for (std::size_t index = 0; index < invalid.size(); ++index) {
             atomic_write_json(config.project_root / "schema-fixture.json", invalid[index]);

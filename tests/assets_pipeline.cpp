@@ -115,6 +115,8 @@ int main() {
         glb(source);
         auto first = pipeline.import_asset({source});
         success(first);
+        require(pipeline.freshness(first.asset_id).at("state") == "current",
+                "new import must be current");
         require(first.manifest.at("input_key").at("target_profile") == "desktop-static-pbr-v1" &&
                     first.manifest.at("input_key")
                             .at("toolchain")
@@ -151,8 +153,13 @@ int main() {
         require(unchanged.cache_hit && unchanged.generation == first.generation,
                 "content cache hit");
         glb(source, "Renamed panel", true, false, .25f);
+        require(pipeline.freshness(first.asset_id).at("state") == "stale" &&
+                    pipeline.current_manifest(first.asset_id).at("generation") == first.generation,
+                "source edit must mark stale without publishing a generation");
         auto modified = pipeline.import_asset({source});
         success(modified);
+        require(pipeline.freshness(first.asset_id).at("state") == "current",
+                "successful reimport must clear stale state");
         require(modified.asset_id == first.asset_id && modified.generation != first.generation,
                 "stable asset identity and changed generation");
         asset = pipeline.load_asset(first.asset_id);
@@ -243,11 +250,36 @@ int main() {
         save(root / "external.gltf", external.dump());
         auto ext = pipeline.import_asset({root / "external.gltf"});
         success(ext);
+        const auto sidecar = root / "external.gltf.faset-import.json";
+        const auto recipe = faset::read_json(sidecar);
+        auto changed_recipe = recipe;
+        changed_recipe["settings"]["target"] = "changed-profile";
+        faset::atomic_write_json(sidecar, changed_recipe);
+        require(pipeline.freshness(ext.asset_id).at("state") == "stale",
+                "changed sidecar must mark imported asset stale");
+        faset::atomic_write_json(sidecar, recipe);
+        const auto image_path = root / faset::path_from_utf8("пиксель.png");
+        const auto original_time = fs::last_write_time(image_path);
+        auto altered_image = png;
+        altered_image.back() ^= 1;
+        save(image_path, altered_image);
+        fs::last_write_time(image_path, original_time);
+        require(pipeline.freshness(ext.asset_id).at("state") == "stale",
+                "external dependency content change with same size/time must be detected");
+        fs::remove(image_path);
+        require(pipeline.freshness(ext.asset_id).at("state") == "stale",
+                "missing source dependency must be diagnosed");
+        save(image_path, png);
+        require(pipeline.freshness(ext.asset_id).at("state") == "current",
+                "restoring exact recipe and dependency must clear stale state");
         auto ext_asset = pipeline.load_asset(ext.asset_id);
         require(ext_asset.textures.size() == 1 && ext_asset.textures[0].bytes.size() == png.size(),
                 "external image not extracted");
         require(ext_asset.materials[0].base_color_texture == 0, "material texture reference lost");
         save(root / faset::path_from_utf8("геометрия.bin"), geometry(.3f));
+        require(pipeline.freshness(ext.asset_id).at("reasons")[0].at("code") ==
+                    "dependency.changed",
+                "external geometry change must expose its reason");
         auto dependent = pipeline.import_asset({root / "external.gltf"});
         success(dependent);
         require(dependent.generation != ext.generation, "buffer dependency not invalidated");
@@ -263,12 +295,16 @@ int main() {
         save(bundle_dir / "manifest.json", bundle.dump());
         auto bundle_first = pipeline.import_asset({bundle_dir / "manifest.json"});
         success(bundle_first);
+        require(pipeline.freshness(bundle_first.asset_id).at("state") == "current",
+                "new Blender bundle must be current");
         require(bundle_first.asset_id == "bundle-asset", "bundle identity lost");
         glb(bundle_dir / "payload" / "second.glb", "Bundle renamed", true, false, .4f);
         bundle["files"][0] = {
             {"path", "payload/second.glb"},
             {"sha256", faset::sha256_file(bundle_dir / "payload" / "second.glb")}};
         save(bundle_dir / "manifest.json", bundle.dump());
+        require(pipeline.freshness(bundle_first.asset_id).at("state") == "stale",
+                "new bundle publication must invalidate freshness before reimport");
         auto bundle_second = pipeline.import_asset({bundle_dir / "manifest.json"});
         success(bundle_second);
         require(bundle_second.asset_id == bundle_first.asset_id &&

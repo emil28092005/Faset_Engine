@@ -847,6 +847,24 @@ struct EditorUI::Impl {
             transaction(Json::array(
                 {{{"op", "component.remove"}, {"entity", selected}, {"component", cid}}}));
     }
+    void migrate_component(const std::string& cid) {
+        const auto* object = entity(resolved, selected);
+        if (!object)
+            return;
+        Json operation = {{"op", "component.migrate"}, {"entity", selected}, {"component", cid}};
+        if (owned_addition(*object)) {
+            operation["instance"] = object->at("origin").at("path").front();
+            operation["entity"] = object->at("origin").at("object");
+            for (const auto& c : object->at("components"))
+                if (c.at("id") == cid)
+                    operation["component"] = c.at("source_id");
+        } else if (inherited(*object)) {
+            open_template_source(object->at("origin").at("path"),
+                                 object->at("origin").at("object"));
+            return;
+        }
+        transaction(Json::array({operation}));
+    }
     Json relative_address(const Json& object, const std::string& component_id = {},
                           const std::string& field = {}) const {
         const auto& origin = object.at("origin");
@@ -1119,7 +1137,9 @@ struct EditorUI::Impl {
             return;
         current = session.authoring().query(document);
         schemas = session.authoring().schemas().manifest();
-        const auto document_stamp = session.authoring().documents().dump();
+        // Resolution also depends on schemas: a rebuilt component version may
+        // invalidate an override or change how entity references are remapped.
+        const auto document_stamp = Json::array({session.authoring().documents(), schemas}).dump();
         if (shown_revision != current.at("revision").get<std::uint64_t>() ||
             resolved_stamp != document_stamp) {
             resolved_stamp = document_stamp;
@@ -1440,6 +1460,24 @@ struct EditorUI::Impl {
             if (!known) {
                 label(body, "opaque-note-" + cid, "Schema unavailable. Data is preserved.");
                 keep.insert("opaque-note-" + cid);
+                if (has_schema &&
+                    c.value("version", 1) <
+                        session.authoring().schemas().schema(type).value("version", 1)) {
+                    const auto version =
+                        session.authoring().schemas().schema(type).value("version", 1);
+                    label(body, "opaque-note-" + cid,
+                          "Stored v" + std::to_string(c.value("version", 1)) + " / schema v" +
+                              std::to_string(version) + ". Migration is explicit and undoable.");
+                    const auto action_id = "component-migrate-" + cid;
+                    auto& action = button(body, action_id,
+                                          source_object && !local_addition
+                                              ? "Open source to migrate"
+                                              : "Migrate to v" + std::to_string(version),
+                                          [this, cid] { migrate_component(cid); });
+                    action.tooltip =
+                        "Apply the schema's declared migration rules. Errors keep all stored data.";
+                    keep.insert(action_id);
+                }
                 auto& raw =
                     body.add(Kind::TextField, "opaque-fields-" + cid, c.at("fields").dump());
                 raw.enabled = false;
@@ -1617,13 +1655,30 @@ struct EditorUI::Impl {
                 asset.contains("manifest")
                     ? path_to_utf8(path_from_utf8(asset["manifest"].value("source", id)).filename())
                     : id;
-            auto& row = list.add(Kind::TreeRow, "asset-" + id, "Imported  /  " + name);
+            const auto freshness = asset.value("freshness", Json::object());
+            const auto state = freshness.value("state", std::string("unavailable"));
+            const auto prefix = state == "current" ? "Imported"
+                                : state == "stale" ? "Stale"
+                                                   : "Unavailable";
+            auto& row =
+                list.add(Kind::TreeRow, "asset-" + id, std::string(prefix) + "  /  " + name);
             row.layout.height = 25;
             row.indent = 1;
             row.drag_payload = {{"kind", "asset"}, {"id", id}, {"label", name}};
-            row.on_click = [this, id](Widget&) {
+            row.on_click = [this, id, asset, freshness, state](Widget&) {
                 renderer.set_clipboard(id);
-                status = "Asset ID copied; drag to viewport or an asset field";
+                if (asset.contains("manifest")) {
+                    source_file = generic_path_to_utf8(std::filesystem::relative(
+                        path_from_utf8(asset.at("manifest").at("source").get<std::string>()),
+                        session.config().project_root));
+                    assets_dirty = true;
+                }
+                status = state == "current"
+                             ? "Asset ID copied; drag to viewport or an asset field"
+                             : "Reimport required; select Import to refresh the selected source";
+                for (const auto& reason : freshness.value("reasons", Json::array()))
+                    report(reason.value("message", "Input changed") + ": " +
+                           reason.value("path", ""));
             };
             keep.insert(row.id);
         }

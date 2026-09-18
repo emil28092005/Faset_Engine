@@ -66,6 +66,9 @@ class AssetPipeline : public AssetStore {
     explicit AssetPipeline(std::filesystem::path cache_root);
     ImportResult import_asset(const ImportRequest& request, ImportJob& job);
     ImportResult import_asset(const ImportRequest& request);
+    // Inspect source/recipe/dependency hashes without importing or changing the
+    // active generation. Only editor tools need source freshness; Player does not.
+    Json freshness(const std::string& asset_id) const;
     // Overrides are authoring data beside the source, never generated cache contents.
     Json overrides(const std::string& asset_id) const;
     void set_overrides(const std::string& asset_id, const Json& overrides);

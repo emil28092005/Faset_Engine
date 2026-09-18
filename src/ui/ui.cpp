@@ -420,15 +420,49 @@ struct Context::Impl {
         if (ime_enabled)
             ime_enabled(false);
     }
+    void reveal(Widget& widget) {
+        // Reveal inside-out: an offscreen nested scroller still needs its own
+        // contents positioned before an outer scroller brings it into view.
+        auto* branch = &widget;
+        for (auto* parent = widget.parent; parent; branch = parent, parent = parent->parent) {
+            if (!parent->layout.scroll || parent->kind == Kind::Row || branch->layout.absolute)
+                continue;
+            const float padding = parent->layout.padding * scale;
+            const float top = parent->rect.y + padding;
+            const float extent = std::max(0.f, parent->rect.height - 2 * padding);
+            if (extent <= 0)
+                continue;
+            float delta = 0;
+            if (widget.rect.y < top || widget.rect.height > extent)
+                delta = widget.rect.y - top;
+            else if (widget.rect.y + widget.rect.height > top + extent)
+                delta = widget.rect.y + widget.rect.height - top - extent;
+            const float scroll = std::clamp(parent->scroll_y + delta, 0.f,
+                                            std::max(0.f, parent->content_height - extent));
+            if (scroll != parent->scroll_y) {
+                parent->scroll_y = scroll;
+                arrange(root, {0, 0, width, height}, {0, 0, width, height});
+            }
+        }
+    }
     bool focus(const std::string& id) {
         auto* widget = find(id);
         if (!widget || !focusable(*widget))
             return false;
-        if (focused == id)
+        if (focused == id) {
+            reveal(*widget);
+            if (field(*widget) && ime_rectangle)
+                ime_rectangle(widget->rect);
             return true;
+        }
         if (!commit())
             return false;
+        // A commit callback may reconcile the retained tree.
+        widget = find(id);
+        if (!widget || !focusable(*widget))
+            return false;
         focused = id;
+        reveal(*widget);
         if (field(*widget)) {
             auto& edit = edits[id];
             const auto text = widget->kind == Kind::NumberField

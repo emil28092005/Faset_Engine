@@ -3,6 +3,9 @@
 #include <faset/core/io.hpp>
 #include <faset/editor/editor_ui.hpp>
 #include <faset/editor/mcp.hpp>
+#ifdef FASET_HAS_DEBUG_OVERLAY
+#include <faset/editor/debug_overlay.hpp>
+#endif
 #include <thread>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
@@ -54,6 +57,22 @@ int run_editor_ui(Session& session, bool enable_mcp, std::uint64_t max_frames,
     const auto font = session.config().engine_root / "assets/fonts/NotoSans.ttf";
     const auto theme = session.config().engine_root / "assets/ui/dark.json";
     EditorUI ui(session, renderer, font, theme);
+#ifdef FASET_HAS_DEBUG_OVERLAY
+    DebugOverlay diagnostics;
+    auto previous_frame = std::chrono::steady_clock::now();
+#endif
+    const auto draw_frame = [&] {
+#ifdef FASET_HAS_DEBUG_OVERLAY
+        const auto now = std::chrono::steady_clock::now();
+        const auto delta = std::chrono::duration<float>(now - previous_frame).count();
+        previous_frame = now;
+        auto snapshot = ui.snapshot();
+        diagnostics.append(snapshot, renderer, delta);
+        renderer.render(snapshot);
+#else
+        renderer.render(ui.snapshot());
+#endif
+    };
     ui.set_project_switch_enabled(!enable_mcp);
     McpServer server(session.commands());
     StdioTransport transport;
@@ -66,7 +85,7 @@ int run_editor_ui(Session& session, bool enable_mcp, std::uint64_t max_frames,
         [&](const Json& arguments) {
             session.poll();
             ui.frame({});
-            renderer.render(ui.snapshot());
+            draw_frame();
             auto region =
                 arguments.value("viewport_only", true)
                     ? ui.snapshot().scene_rect
@@ -101,8 +120,12 @@ int run_editor_ui(Session& session, bool enable_mcp, std::uint64_t max_frames,
                 }
             }
         session.poll();
-        ui.frame(renderer.poll_events());
-        renderer.render(ui.snapshot());
+        auto events = renderer.poll_events();
+#ifdef FASET_HAS_DEBUG_OVERLAY
+        events = diagnostics.process_events(events);
+#endif
+        ui.frame(events);
+        draw_frame();
         if (ui.project_switch_requested())
             return 3; // Application-level request: destroy this Session before opening another.
         ++frame;

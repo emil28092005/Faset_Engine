@@ -114,7 +114,8 @@ Commands::Commands(authoring::AuthoringService& authoring) : authoring_(authorin
         true);
     add("faset_scene_edit",
         "Apply one atomic authoring batch with optimistic revision checking and one Undo step. "
-        "Operations: entity.create/rename/delete/duplicate/reparent; component.add/remove/set; "
+        "Operations: entity.create/rename/delete/duplicate/reparent; "
+        "component.add/remove/set/migrate; "
         "scene.rename/simulation; "
         "template.instance/override/revert/suppress/restore/add/addition_set/reparent/remove/"
         "source_set. Use "

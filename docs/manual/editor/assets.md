@@ -26,6 +26,18 @@ With MCP, call `faset_import`, then query `faset_job` using the returned job ID.
 `faset_job_cancel` requests cancellation. Cancelling an import does not Undo an
 authoring edit. See [MCP and CLI](mcp.md) for transport setup and errors.
 
+The Assets panel marks an imported asset **Stale** when its source, external glTF
+buffer/image, Blender bundle, saved import settings, importer, or target profile
+differs from the active generation. Select the imported row, then **Import / Reimport**;
+the Console reports the changed input. **Refresh** checks immediately, and the panel
+also refreshes periodically. `faset_assets` exposes the same `freshness.state` and
+structured `freshness.reasons` to MCP clients. Checks compare contents, including
+files whose size and timestamp stayed unchanged. The last good cooked asset remains
+visible until reimport succeeds; checking freshness never publishes a generation.
+Cook and export refuse referenced stale or unavailable sources and explain which
+input needs reimport. A standalone exported game uses only its packaged cooked
+generation and never needs the original source files.
+
 ## Import an image
 
 PNG and JPEG become image assets. Drag an imported image into a scene to create a

@@ -45,6 +45,7 @@ nav:
       - Assets and Blender: editor/assets.md
       - Build, Play, and export: editor/export.md
       - Profiling and measurements: editor/profiling.md
+      - Optional developer diagnostics: editor/diagnostics.md
       - MCP and command line: editor/mcp.md
       - Native extensions: editor/extensions.md
   - Contributing to this manual: contributing.md

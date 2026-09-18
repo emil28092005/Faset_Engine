@@ -56,6 +56,10 @@ Open [localhost:4178](http://localhost:4178). The map is a documentation viewer,
 
 ## Repository contents
 
-Documentation, studies, the source manifest, and the map's code are tracked in Git. Third-party engine source trees, installed dependencies, build outputs, and caches are excluded. Source links are pinned to the commits examined during research; Unreal Engine links may require access through Epic.
+Faset's C++ source, tests, sample games, Blender add-on, Manual, architecture, studies,
+selected validation evidence, and research map are tracked in Git. Third-party engine
+source trees, installed dependencies, build outputs, and caches are excluded. Research
+source links are pinned to the commits examined; Unreal Engine links may require
+access through Epic.
 
 See the [publication notes](docs/PUBLICATION.md) for publication scope and licensing status. A license for Faset's own content has not yet been selected. Third-party projects retain their own license terms.

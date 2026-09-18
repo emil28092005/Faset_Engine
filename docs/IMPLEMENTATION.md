@@ -228,3 +228,36 @@ the Assets panel, scrolling keyboard focus into view, delivery of explicit gamep
 schema migrations, GPU pass labels, and wiring optional ImGui diagnostics. These
 remain under implementation and verification; the research map now links current
 implementation evidence instead of claiming the engine has not been started.
+
+## Checkpoint 5 — close the final authoring and diagnostics gaps
+
+- Asset freshness compares source, bundle payload, external buffer/image, recipe,
+  importer and profile contents without publishing a generation. GUI and MCP expose
+  the same state/reasons; selecting a stale imported row prepares Reimport. Cook and
+  export reject stale referenced sources while keeping the previous successful result.
+- Gameplay schemas carry validated declarative migration steps. Inspector and MCP
+  apply `component.migrate` as an explicit revision-checked Undo transaction. Opening
+  old data remains possible without rules. Tests cover local components, instance-local
+  additions, opening inherited sources, missing/manual rules and overflow rollback.
+  The Manual explains the sparse-override limitation when field units change.
+- Keyboard focus scrolls long and nested Inspector/Assets lists into view at 1×/2×,
+  preserves unfinished text and keeps invalid numeric edits visible. Template preview
+  and conflicts are also invalidated when schema metadata changes without a scene edit.
+- Vulkan passes emit optional debug-utils labels. An optional `FASET_DEBUG_IMGUI=ON`
+  Editor module shows real renderer diagnostics via F12; the Player remains independent.
+  GPU tests cover textured/clipped ImGui geometry and event ownership for gestures
+  crossing the panel in either direction. Offscreen clipboard operations are local
+  to that renderer and never touch the desktop clipboard.
+- The Windows launcher fixture compares canonical filesystem identities, including
+  hosted-runner short TEMP aliases, and now distinguishes selection/path failures.
+
+Integrated Linux with optional diagnostics enabled: **34 passed, 1 skipped, 0 failed**
+of 35 tests. The skip remains native Wayland programmatic restore; XWayland passed.
+ASan/UBSan passed **18/18**, including process cleanup, metadata publication and
+migration transactions. Strict MkDocs and local Markdown file-link checks passed.
+
+Windows run `35299805623` at `e0b9651` passed all **34** tests in its CPU/GPU/UI suite,
+including the launcher fix, and proceeded to real native Release exports. That run
+predates checkpoint 5's new authoring/diagnostic changes, whose Windows checks remain
+separate. The next full Windows build enables the optional diagnostic module too.
+No MVP tag is claimed at this checkpoint.

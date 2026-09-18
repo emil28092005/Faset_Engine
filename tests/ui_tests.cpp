@@ -113,10 +113,113 @@ void display_scale_contract() {
     check(panel.scroll_y == 60 && panel.children[1]->rect.y == panel.rect.y,
           "DPI changes retain the logical scroll position");
 }
+void keyboard_scroll_contract() {
+    for (float scale : {1.f, 2.f}) {
+        ui::Context context(path_from_utf8(FASET_TEST_FONT));
+        auto& columns = context.root().add(ui::Kind::Row, "panels");
+        columns.layout.height = 150;
+        auto& inspector = columns.add(ui::Kind::Column, "inspector");
+        inspector.layout.width = 200;
+        inspector.layout.padding = 8;
+        inspector.layout.gap = 4;
+        inspector.layout.scroll = true;
+        auto& assets = columns.add(ui::Kind::Column, "assets");
+        assets.layout.width = 200;
+        assets.layout.padding = 8;
+        assets.layout.gap = 3;
+        assets.layout.scroll = true;
+        int commits = 0, activations = 0;
+        for (int i = 0; i < 30; ++i) {
+            auto& field = inspector.add(ui::Kind::TextField, "property-" + std::to_string(i),
+                                        "Property " + std::to_string(i));
+            field.layout.height = 30;
+            field.on_commit = [&](ui::Widget&) { ++commits; };
+            auto& asset = assets.add(ui::Kind::Button, "asset-" + std::to_string(i), "Model.glb");
+            asset.layout.height = 28;
+            asset.on_click = [&](ui::Widget&) { ++activations; };
+        }
+        ui::Rect ime;
+        context.set_ime([](bool) {}, [&](ui::Rect rect) { ime = rect; });
+        context.layout(440 * scale, 200 * scale, scale);
+        check(context.find("property-29")->clip.height == 0 &&
+                  context.find("asset-29")->clip.height == 0,
+              "Long Inspector and Assets start with offscreen controls");
+        auto visible = [&](const std::string& id) {
+            const auto* widget = context.find(id);
+            const auto r = widget->rect.intersection(widget->clip);
+            check(context.focused_id() == id && std::abs(r.height - widget->rect.height) < .01f &&
+                      std::abs(r.width - widget->rect.width) < .01f,
+                  "Keyboard focus must reveal the entire control in its clipped panel");
+        };
+        for (int i = 0; i < 30; ++i) {
+            context.handle(key("Tab"));
+            visible("property-" + std::to_string(i));
+            check(ime.y == context.find(context.focused_id())->rect.y,
+                  "IME rectangle follows the newly scrolled field");
+        }
+        context.handle(key("A", true));
+        context.handle(text("Изменено"));
+        const float inspector_scroll = inspector.scroll_y;
+        for (int i = 0; i < 30; ++i) {
+            context.handle(key("Tab"));
+            visible("asset-" + std::to_string(i));
+            context.handle(key("Return"));
+        }
+        check(commits == 1 && activations == 30 && inspector.scroll_y == inspector_scroll,
+              "Focus scroll commits one draft, activates assets and leaves unrelated panel alone");
+        for (int i = 28; i >= 0; --i) {
+            context.handle(key("Tab", false, true));
+            visible("asset-" + std::to_string(i));
+        }
+        for (int i = 29; i >= 0; --i) {
+            context.handle(key("Tab", false, true));
+            visible("property-" + std::to_string(i));
+        }
+        check(inspector.scroll_y == 0 && assets.scroll_y == 0 && commits == 1,
+              "Reverse keyboard traversal returns both panels to the top without edits");
+        context.handle(text(" draft"));
+        inspector.scroll_y = inspector_scroll;
+        context.layout(440 * scale, 200 * scale, scale);
+        check(context.find("property-0")->clip.height == 0,
+              "A manual scroll may move an active field out of view");
+        check(context.focus("property-0"), "Refocus active field");
+        visible("property-0");
+        check(context.find("property-0")->text == "Property 0 draft" && commits == 1,
+              "Revealing the current focus preserves its uncommitted edit");
+    }
+    ui::Context nested(path_from_utf8(FASET_TEST_FONT));
+    auto& outer = nested.root().add(ui::Kind::Column, "outer");
+    outer.layout.height = 120;
+    outer.layout.padding = 6;
+    outer.layout.scroll = true;
+    outer.add(ui::Kind::Label, "spacer").layout.height = 240;
+    auto& inner = outer.add(ui::Kind::Column, "inner");
+    inner.layout.height = 85;
+    inner.layout.padding = 5;
+    inner.layout.scroll = true;
+    for (int i = 0; i < 15; ++i)
+        inner.add(ui::Kind::TextField, "nested-" + std::to_string(i)).layout.height = 30;
+    nested.layout(260, 160);
+    check(nested.focus("nested-14"), "Focus deeply clipped control");
+    auto* target = nested.find("nested-14");
+    check(outer.scroll_y > 0 && inner.scroll_y > 0 && target->clip.height == target->rect.height,
+          "Focus reveals a control through both initially clipped scroll ancestors");
+    auto& invalid = inner.add(ui::Kind::NumberField, "invalid-number");
+    invalid.layout.height = 30;
+    nested.layout(260, 160);
+    nested.focus("invalid-number");
+    nested.handle(text("bad number"));
+    const auto old_outer = outer.scroll_y, old_inner = inner.scroll_y;
+    nested.handle(key("Tab"));
+    check(nested.focused_id() == "invalid-number" && !invalid.error.empty() &&
+              outer.scroll_y == old_outer && inner.scroll_y == old_inner,
+          "Rejected numeric commit retains focus and scroll instead of hiding the error");
+}
 } // namespace
 int main() {
     try {
         display_scale_contract();
+        keyboard_scroll_contract();
         ui::TextBuffer buffer("Привет");
         check(buffer.backspace() && buffer.text() == "Приве", "UTF-8 backspace split codepoint");
         check(buffer.undo() && buffer.text() == "Привет", "text undo");

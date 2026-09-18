@@ -120,7 +120,8 @@ Json Session::assets_list() const {
                 try {
                     const auto id = path_to_utf8(entry.path().filename());
                     const auto manifest = assets_.current_manifest(id);
-                    list.push_back({{"id", id}, {"manifest", manifest}});
+                    list.push_back(
+                        {{"id", id}, {"manifest", manifest}, {"freshness", assets_.freshness(id)}});
                 } catch (const std::exception& error) {
                     list.push_back(
                         {{"id", path_to_utf8(entry.path().filename())}, {"error", error.what()}});
@@ -375,7 +376,7 @@ void Session::register_commands() {
             return Json{{"settings", value}, {"revision", sha256(value.dump())}};
         });
     commands_.add(
-        "faset_assets", "List imported asset manifests and resource identities.",
+        "faset_assets", "List imported assets with source/dependency/recipe freshness and reasons.",
         schema(Json::object()), [&](const Json&) { return assets_list(); }, true);
     commands_.add(
         "faset_import",

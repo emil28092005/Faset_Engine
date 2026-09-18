@@ -1,3 +1,4 @@
+#include "assets_image_fixtures.hpp"
 #include <bit>
 #include <chrono>
 #include <cstdlib>
@@ -380,6 +381,41 @@ int test_main(int argc, char** argv) {
                 "Unknown component type blocks cooking");
         require(read_text(service.config().cache_root / "last_cook.json") == previous,
                 "Unknown schema preserves last good generation");
+        const auto picture = config.project_root / "Assets" / path_from_utf8("Freshness Café.png");
+        auto write_picture = [&](const auto& bytes) {
+            atomic_write(picture,
+                         std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+        };
+        write_picture(test_images::png_red_green);
+        assets::AssetPipeline importer(service.config().cache_root);
+        const auto imported = importer.import_asset({picture});
+        require(imported.ok(), "Freshness fixture imports a real image");
+        auto textured = scene(2);
+        textured["entities"].push_back(
+            {{"id", "sprite"},
+             {"components", Json::array({{{"type", "faset.sprite"},
+                                          {"version", 1},
+                                          {"fields", {{"texture", imported.asset_id}}}}})}});
+        require(service.wait(service.start_cook(textured)).state == "succeeded",
+                "Current referenced assets can be cooked");
+        const auto fresh_pointer = read_text(service.config().cache_root / "last_cook.json");
+        write_picture(test_images::png_blue_white);
+        for (const auto& stale :
+             {service.wait(service.start_cook(textured)),
+              service.wait(service.start_export(textured, temporary / "export"))}) {
+            require(stale.state == "failed" && stale.error.find("Reimport") != std::string::npos,
+                    "Stale source blocks cook and export before compilation/publication");
+            require(read_text(service.config().cache_root / "last_cook.json") == fresh_pointer,
+                    "Stale source preserves the published cook pointer");
+        }
+        require(!fs::exists(temporary / "export" / "current.json"),
+                "Stale export never publishes a game pointer");
+        require(importer.import_asset({picture}).ok() &&
+                    service.wait(service.start_cook(textured)).state == "succeeded",
+                "Explicit reimport permits cooking the refreshed generation");
+        fs::remove(picture);
+        require(service.wait(service.start_cook(textured)).state == "failed",
+                "Unavailable source cannot silently cook old cached content");
         std::cout << "Literal process arguments, pipes, cancellation, scaffold and atomic cook "
                      "contracts passed\n";
         fs::remove_all(temporary);

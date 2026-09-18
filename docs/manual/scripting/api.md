@@ -76,6 +76,82 @@ automatic migrations or authoring-style custom-field constraint validation.
 
 `snapshot()` returns a value snapshot for rendering; `snapshotJson()` provides its JSON representation. `diagnostics()` returns a read-only vector of runtime messages. These are native C++ APIs for the Player and tests, **not MCP endpoints**.
 
+## Editor data migrations
+
+Gameplay schema versions describe saved component data. When a field changes units
+or meaning, increase the type's `version` and include declarative `migrations` in
+that type returned by `gameplay::schema()`. For example, this type declaration
+converts version 1 speed values from centimetres per second to metres per second:
+
+```json
+{
+  "id": "game.mover",
+  "version": 2,
+  "fields": {
+    "speed": {"type": "number", "default": 2.5, "min": 0, "max": 10},
+    "enabled": {"type": "boolean", "default": true}
+  },
+  "migrations": [
+    {
+      "from_version": 1,
+      "fields": {
+        "speed": {"scale": 0.01},
+        "enabled": {"default": true}
+      }
+    }
+  ]
+}
+```
+
+Build C++ to export and validate the declaration. The Editor reads these rules
+from the same schema manifest as field metadata; it does not load the gameplay
+library or execute a migration callback. Invalid metadata or migration rules fail
+the build before replacing the last published binary/schema generation.
+
+Each step upgrades `from_version` to the next integer version. A component at
+version 1 needs both steps 1 and 2 to reach version 3. Empty `fields` explicitly
+allows a version step with no value conversion. Supported field operations are:
+
+- `default`: insert a value only when the field is absent.
+- `scale`: multiply an existing numeric field by a finite number.
+- `require_manual`: when `true`, stop if the field is present, so incompatible data
+  requires an explicit manual conversion.
+
+Rules preserve component/entity IDs and fields they do not mention. The final
+values must satisfy the current field schema. Unsupported operations, repeated
+steps, invalid version ranges, invalid rules and non-finite scale values are
+rejected when the schema is loaded. Arithmetic overflow during conversion also
+fails without applying the transaction.
+
+Opening or recovering a scene preserves older component versions as opaque data;
+it never migrates them automatically. Missing rules therefore do not prevent
+opening the scene. Choose **Migrate to v…** in the Inspector after rebuilding the
+schema, or use the same editor's `faset_scene_edit` operation with the current
+document revision:
+
+```json
+{
+  "document": "document-id",
+  "revision": 3,
+  "operations": [
+    {"op": "component.migrate", "entity": "entity-id", "component": "component-id"}
+  ]
+}
+```
+
+The whole batch is one Undo step and is written to the recovery journal. Save
+explicitly to update the scene file. Missing steps, a manual-conversion requirement
+or a validation error leave the document and revision unchanged. Future versions
+cannot be downgraded. The same operation accepts an `instance` ID when `entity`
+and `component` identify a top-level instance-local addition using its original
+stored IDs, rather than resolved preview IDs.
+
+Inherited components belong to their source document: open that source to migrate
+them. Sparse field overrides in other instances are not automatically converted;
+review and explicitly update overrides when changing a field's units or meaning.
+The Player performs no migration and still requires the scene version to match its
+linked gameplay schema before Play or exported-game validation.
+
 ## Inspect a running Player locally
 
 The Player has local development controls in addition to gameplay input: **P** toggles

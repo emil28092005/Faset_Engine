@@ -844,6 +844,76 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
     }
     return result;
 }
+Json AssetPipeline::freshness(const std::string& id) const {
+    Json result{{"state", "current"}, {"reasons", Json::array()}};
+    auto stale = [&](const std::string& code, const fs::path& path, const std::string& message) {
+        result["state"] = "stale";
+        result["reasons"].push_back(
+            {{"code", code}, {"path", faset::path_to_utf8(path)}, {"message", message}});
+    };
+    try {
+        const auto manifest = current_manifest(id);
+        result["generation"] = manifest.at("generation");
+        const auto source = faset::path_from_utf8(manifest.at("source").get<std::string>());
+        const auto payload =
+            faset::path_from_utf8(manifest.at("payload_source").get<std::string>());
+        const auto& key = manifest.at("input_key");
+        auto check_file = [&](const fs::path& path, const std::string& digest,
+                              const std::string& code) {
+            try {
+                if (faset::sha256_file(path) != digest)
+                    stale(code, path, "Input changed; reimport to update the active generation");
+            } catch (const std::exception& error) {
+                stale("input.unavailable", path, error.what());
+            }
+        };
+        check_file(payload, manifest.at("source_sha256"), "source.changed");
+        if (key.contains("bundle_sha256")) {
+            check_file(source, key.at("bundle_sha256"), "bundle.changed");
+            // The bundle can declare more than its selected GLB. Validate every
+            // declared payload, as import does, even when the manifest is unchanged.
+            try {
+                const auto bundle = read_json(source);
+                for (const auto& file : bundle.at("files")) {
+                    const auto relative = faset::path_from_utf8(file.at("path").get<std::string>());
+                    if (relative.is_absolute() ||
+                        faset::generic_path_to_utf8(relative).find("..") != std::string::npos)
+                        throw std::runtime_error("Invalid bundle payload path");
+                    check_file(source.parent_path() / relative, file.at("sha256"),
+                               "bundle.payload_changed");
+                }
+            } catch (const std::exception& error) {
+                stale("bundle.unavailable", source, error.what());
+            }
+        }
+        for (const auto& [uri, digest] : key.at("dependencies").items())
+            check_file(external_path(payload, uri), digest, "dependency.changed");
+
+        const auto sidecar =
+            faset::path_from_utf8(faset::path_to_utf8(source) + ".faset-import.json");
+        try {
+            const auto metadata = read_json(sidecar);
+            if (metadata.value("schema_version", 0) != 1 || metadata.value("asset_id", "") != id ||
+                metadata.value("settings", Json::object()) != manifest.at("settings"))
+                stale("settings.changed", sidecar,
+                      "Import identity or recipe changed; reimport required");
+        } catch (const std::exception& error) {
+            stale("settings.unavailable", sidecar, error.what());
+        }
+        const bool image = manifest.value("kind", "scene") == "image";
+        const std::string recipe = image ? "faset-image-1/stb-2.30" : importer_version;
+        const std::string profile = image ? "desktop-image-v1" : "desktop-static-pbr-v1";
+        const Json toolchain{{"cgltf", FASET_CGLTF_COMMIT}, {"stb", FASET_STB_COMMIT}};
+        if (key.at("importer") != recipe || key.at("target_profile") != profile ||
+            key.at("toolchain") != toolchain)
+            stale("importer.changed", source,
+                  "Importer, toolchain or target profile changed; reimport required");
+    } catch (const std::exception& error) {
+        result["state"] = "unavailable";
+        result["reasons"].push_back({{"code", "manifest.unavailable"}, {"message", error.what()}});
+    }
+    return result;
+}
 Json AssetPipeline::overrides(const std::string& id) const {
     const auto source = current_manifest(id).at("source").get<std::string>();
     const auto path = faset::path_from_utf8(source + ".faset-overrides.json");

@@ -44,7 +44,7 @@ Read the callback from top to bottom:
 
 The `[](...) { ... }` expression is a C++ lambda: a function stored in `Behavior::update`. Empty brackets mean it captures no local variables. `registerBehavior` takes ownership of the callback object. Register before calling `load`; registration while entities exist or a callback is running is rejected.
 
-The `schema()` function describes editable configuration. It does not create a runtime object. `tutorial.move_x` is the stable `TypeId`; `speed` is a stable `FieldId` within that type. Keep these IDs when changing a display label. Changing a field's meaning or units needs an explicit data migration, not just a new label.
+The `schema()` function describes editable configuration. It does not create a runtime object. `tutorial.move_x` is the stable `TypeId`; `speed` is a stable `FieldId` within that type. Keep these IDs when changing a display label. Changing a field's meaning or units needs an [explicit data migration](api.md#editor-data-migrations), not just a new label.
 
 ## Attach the behavior
 

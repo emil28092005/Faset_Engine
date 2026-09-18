@@ -43,6 +43,176 @@ void text(editor::EditorUI& ui, const std::string& id, const std::string& value,
         events.push_back(key("Return"));
     ui.frame(events);
 }
+void migration_workflow(render::Renderer& renderer, const std::filesystem::path& root) {
+    editor::Session session({root, path_from_utf8(FASET_TEST_ENGINE), root});
+    const auto gameplay_manifest = Json::parse(R"({"types":[
+        {"id":"test.migratable","version":2,"name":"Movement","fields":{
+          "speed":{"id":"speed","type":"number","default":1.0},
+          "enabled":{"id":"enabled","type":"bool","default":true}},
+          "migrations":[{"from_version":1,"fields":{"speed":{"scale":0.01},"enabled":{"default":true}}}]},
+        {"id":"test.no_migration","version":2,"fields":{
+          "speed":{"id":"speed","type":"number","default":1.0}}}
+    ]})");
+    session.authoring().replace_external_schemas(gameplay_manifest);
+    auto object = authoring::make_entity(session.authoring().schemas(), "Old movement");
+    const auto cid = new_id();
+    object["components"].push_back({{"id", cid},
+                                    {"type", "test.migratable"},
+                                    {"version", 1},
+                                    {"fields", {{"speed", 250.0}, {"unknown", "retained"}}}});
+    const auto old = object["components"].back();
+    auto source_scene = authoring::make_scene("Old source");
+    source_scene["entities"].push_back(object);
+    atomic_write_json(root / "Assets/old-source.fscene", source_scene);
+    const auto doc = session.authoring().create("Migration test").at("id").get<std::string>();
+    const auto instance = new_id();
+    session.authoring().transact(
+        doc, 0,
+        Json::array({{{"op", "entity.create"}, {"entity", object}},
+                     {{"op", "template.instance"},
+                      {"instance", {{"id", instance}, {"source", "Assets/old-source.fscene"}}}}}));
+    session.authoring().save(doc, "Scenes/migration.fscene");
+    editor::EditorUI ui(session, renderer,
+                        path_from_utf8(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
+                        path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/dark.json");
+    ui.frame({});
+    // Explicit keyboard activation also exercises focus reveal in a long Inspector.
+    auto activate = [&](const std::string& id) {
+        check(ui.widgets().focus(id), "Migration workflow action must be focusable");
+        ui.frame({key("Return")});
+    };
+    ui.select_entity(object.at("id"));
+    ui.frame({});
+    check(ui.widgets().find("opaque-fields-" + cid) &&
+              !ui.widgets().find("opaque-fields-" + cid)->enabled,
+          "Older component opens preserved and read-only before explicit migration");
+    const auto before = session.authoring().query(doc);
+    activate("component-migrate-" + cid);
+    auto after = session.authoring().query(doc);
+    const auto migrated = after["scene"]["entities"][0]["components"].back();
+    check(after["revision"] == before["revision"].get<std::uint64_t>() + 1 &&
+              migrated["id"] == cid && migrated["version"] == 2 &&
+              migrated["fields"]["speed"] == 2.5 && migrated["fields"]["enabled"] == true &&
+              migrated["fields"]["unknown"] == "retained",
+          "Inspector Migrate applies declared rules atomically while preserving identity and data");
+    check(ui.widgets().find("field-" + cid + "-speed-value") &&
+              !ui.widgets().find("component-migrate-" + cid),
+          "Successful migration replaces opaque presentation with typed fields");
+    activate("undo");
+    check(session.authoring().query(doc)["scene"]["entities"][0]["components"].back() == old &&
+              ui.widgets().find("component-migrate-" + cid),
+          "One Undo restores the original version and opaque Inspector");
+    auto unresolved = object;
+    unresolved["id"] = new_id();
+    unresolved["name"] = "Missing rule";
+    for (auto& c : unresolved["components"])
+        c["id"] = new_id();
+    unresolved["components"].back()["type"] = "test.no_migration";
+    const auto unresolved_cid = unresolved["components"].back()["id"].get<std::string>();
+    auto local = object;
+    local["id"] = new_id();
+    for (auto& c : local["components"])
+        c["id"] = new_id();
+    after = session.authoring().query(doc);
+    session.authoring().transact(
+        doc, after["revision"],
+        Json::array({{{"op", "entity.create"}, {"entity", unresolved}},
+                     {{"op", "template.add"}, {"instance", instance}, {"value", local}}}));
+    ui.select_entity(unresolved.at("id"));
+    ui.frame({});
+    const auto failed_before = session.authoring().query(doc);
+    activate("component-migrate-" + unresolved_cid);
+    check(session.authoring().query(doc) == failed_before &&
+              ui.widgets().find("status")->text.find("migration") != std::string::npos,
+          "Missing migration reports an actionable error without revision or source changes");
+    auto resolved = session.commands().resolved_scene(doc).at("scene").at("entities");
+    for (const auto& e : resolved) {
+        if (!e.contains("origin") || e["origin"].value("path", Json::array()).empty())
+            continue;
+        if (e["origin"].value("local", false)) {
+            ui.select_entity(e.at("id"));
+            ui.frame({});
+            activate("component-migrate-" + e["components"].back()["id"].get<std::string>());
+            const auto record =
+                session.authoring().query(doc)["scene"]["instances"][0]["additions"][0];
+            check(
+                record["id"] == local["id"] &&
+                    record["components"].back()["id"] == local["components"].back()["id"] &&
+                    record["components"].back()["version"] == 2,
+                "Local-addition migration addresses original source IDs, not resolved runtime IDs");
+            activate("undo");
+            check(session.authoring().query(doc)["scene"]["instances"][0]["additions"][0] == local,
+                  "Local-addition migration is one undoable transaction");
+        }
+    }
+    for (const auto& e : resolved) {
+        if (!e.contains("origin") || e["origin"].value("path", Json::array()).empty() ||
+            e["origin"].value("local", false))
+            continue;
+        ui.select_entity(e.at("id"));
+        ui.frame({});
+        const auto action = "component-migrate-" + e["components"].back()["id"].get<std::string>();
+        check(ui.widgets().find(action)->text == "Open source to migrate",
+              "Inherited migration explicitly navigates to the owning source");
+        const auto main_before = session.authoring().query(doc);
+        activate(action);
+        check(ui.current_document() == source_scene.at("id").get<std::string>() &&
+                  session.authoring().query(doc) == main_before &&
+                  session.authoring()
+                          .query(ui.current_document())["scene"]["entities"][0]["components"]
+                          .back() == old &&
+                  ui.widgets().find("component-migrate-" + cid),
+              "Opening source keeps old data unchanged and offers explicit migration there");
+        break;
+    }
+    // A metadata rebuild must invalidate the cached resolved scene even when
+    // neither the document nor its open source has changed revision.
+    auto v1 = gameplay_manifest;
+    v1["types"][0]["version"] = 1;
+    v1["types"][0].erase("migrations");
+    v1["types"][0]["fields"].erase("enabled");
+    session.authoring().replace_external_schemas(v1);
+    auto main = session.authoring().query(doc);
+    session.authoring().transact(doc, main.at("revision"),
+                                 Json::array({{{"op", "template.override"},
+                                               {"instance", instance},
+                                               {"address",
+                                                {{"path", Json::array()},
+                                                 {"object", object.at("id")},
+                                                 {"component", cid},
+                                                 {"field", "speed"}}},
+                                               {"value", 900.0}}}));
+    ui.select_document(doc);
+    std::string inherited_id, inherited_cid;
+    for (const auto& e : resolved)
+        if (e.contains("origin") && !e["origin"].value("path", Json::array()).empty() &&
+            !e["origin"].value("local", false)) {
+            inherited_id = e.at("id");
+            inherited_cid = e["components"].back().at("id");
+            break;
+        }
+    check(!inherited_id.empty(), "Migration schema-cache fixture has an inherited object");
+    ui.select_entity(inherited_id);
+    ui.frame({});
+    const auto field_id = "field-" + inherited_cid + "-speed-value";
+    check(ui.widgets().find(field_id) && ui.widgets().find(field_id)->value == 900.0 &&
+              !ui.widgets().find("conflict-0-text"),
+          "V1 schema applies and caches the inherited field override");
+    const auto documents_before = session.authoring().documents();
+    session.authoring().replace_external_schemas(gameplay_manifest);
+    ui.frame({});
+    const auto* conflict = ui.widgets().find("conflict-0-text");
+    check(session.authoring().documents() == documents_before && conflict &&
+              conflict->text.starts_with("override.schema_version") &&
+              !ui.widgets().find(field_id) && ui.widgets().find("opaque-fields-" + inherited_cid),
+          "Schema-only rebuild refreshes resolved conflicts and opaque fields without authoring "
+          "edits");
+    session.authoring().replace_external_schemas(v1);
+    ui.frame({});
+    check(!ui.widgets().find("conflict-0-text") && ui.widgets().find(field_id) &&
+              ui.widgets().find(field_id)->value == 900.0,
+          "Restoring compatible metadata clears cached conflicts and reapplies retained override");
+}
 int main() {
     auto root =
         std::filesystem::temp_directory_path() / path_from_utf8("faset-ui-проект-" + new_id());
@@ -253,6 +423,7 @@ int main() {
         check(ui.project_switch_requested(), "Confirmed project switch is exposed to application");
         renderer.render(ui.snapshot());
         renderer.capture(root / "editor-ui.ppm");
+        migration_workflow(renderer, root / "migration-workflow");
         check(renderer.stats().validation_errors == 0, "Vulkan validation errors");
         std::cout << "Editor UI: actual events create/select/rename/typed "
                      "fields/Undo/Redo/conflict/one drag transaction passed. "

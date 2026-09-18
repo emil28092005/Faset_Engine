@@ -170,6 +170,8 @@ class Context {
     void draw(render::Snapshot&);
     bool update_text(const std::string& id, const std::string& value, bool force = false);
     bool update_number(const std::string& id, double value, bool force = false);
+    // Reveal the target in enclosing vertical scrollers without changing text
+    // edits; a previous field must commit successfully before focus moves.
     bool focus(const std::string& id);
     const std::string& focused_id() const;
     void clear_focus(bool commit = true);

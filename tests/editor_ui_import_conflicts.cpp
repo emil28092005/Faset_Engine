@@ -100,7 +100,12 @@ int main() {
         atomic_write_json(source, gltf);
         click(ui, "tab-assets");
         click(ui, "asset-refresh");
-        click(ui, "file-Assets/model.gltf");
+        const auto freshness = session.commands().call("faset_assets", Json::object());
+        check(freshness.at("assets")[0].at("freshness").at("state") == "stale",
+              "MCP exposes changed-source freshness before reimport");
+        check(ui.widgets().find("asset-" + asset_id)->text.starts_with("Stale"),
+              "Manual asset list marks the changed source stale");
+        click(ui, "asset-" + asset_id);
         auto before = jobs(session);
         click(ui, "asset-import");
         const auto conflict_id = new_job(session, before);
@@ -154,6 +159,10 @@ int main() {
               "Resolved import conflicts leave the review list");
         check(session.authoring().query(ui.current_document()) == document_before,
               "Import approval never rewrites the authoring scene or its Undo revision");
+        click(ui, "tab-assets");
+        click(ui, "asset-refresh");
+        check(ui.widgets().find("asset-" + asset_id)->text.starts_with("Imported"),
+              "Successful import clears stale status in the same Editor session");
         renderer.render(ui.snapshot());
         check(renderer.stats().validation_errors == 0, "Vulkan validation");
         std::cout << "Import UI: removed IDs/names, stale review rejection, explicit retry and "

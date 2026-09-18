@@ -100,6 +100,25 @@ SchemaRegistry gameplay_schemas(const Json& manifest) {
                 "Gameplay schema duplicates a builtin or gameplay TypeId: " + id);
         result.register_schema(schema);
     }
+    for (const auto& schema : types) {
+        if (!schema.contains("migrations"))
+            continue;
+        require(schema.at("migrations").is_array(), "migration.invalid",
+                "Migrations must be an array of version steps");
+        for (const auto& step : schema.at("migrations")) {
+            require(
+                step.is_object() && step.contains("from_version") &&
+                    step.at("from_version").is_number_integer() && step.at("from_version") > 0 &&
+                    step.at("from_version") < schema.value("version", 1) &&
+                    step.contains("fields") && step.at("fields").is_object(),
+                "migration.invalid", "Migration requires a supported earlier version and fields");
+            for (const auto& [key, unused] : step.items())
+                require(key == "from_version" || key == "fields", "migration.invalid",
+                        "Unsupported migration step property: " + key);
+            result.add_migration(schema.at("id"), step.at("from_version").get<int>(),
+                                 step.at("fields"));
+        }
+    }
     return result;
 }
 bool SchemaRegistry::contains(const std::string& type) const {
@@ -139,9 +158,25 @@ void SchemaRegistry::validate_component(const Json& component) const {
             validate_field(value, metadata["fields"][id]);
 }
 void SchemaRegistry::add_migration(const std::string& type, int from_version, Json rules) {
-    require(from_version > 0 && rules.is_object(), "migration.invalid", "Invalid migration");
+    require(contains(type) && from_version > 0 && from_version < schema(type).value("version", 1) &&
+                rules.is_object(),
+            "migration.invalid", "Migration requires a registered type and an earlier version");
     require(!migrations_.contains({type, from_version}), "migration.duplicate",
             "Migration already exists");
+    for (const auto& [field, rule] : rules.items()) {
+        require(!field.empty() && rule.is_object(), "migration.invalid",
+                "Migration fields require nonempty IDs and rule objects");
+        for (const auto& [operation, value] : rule.items()) {
+            require(operation == "default" || operation == "scale" || operation == "require_manual",
+                    "migration.invalid", "Unsupported migration operation: " + operation);
+            if (operation == "scale")
+                require(value.is_number() && std::isfinite(value.get<double>()),
+                        "migration.invalid", "Migration scale must be a finite number");
+            else if (operation == "require_manual")
+                require(value.is_boolean(), "migration.invalid",
+                        "Migration require_manual must be a boolean");
+        }
+    }
     migrations_[{type, from_version}] = std::move(rules);
 }
 Json SchemaRegistry::migrate_component(const Json& source) const {
@@ -150,6 +185,10 @@ Json SchemaRegistry::migrate_component(const Json& source) const {
     if (!contains(type))
         return result;
     const auto current = schema(type).value("version", 1);
+    if (result.contains("version"))
+        require(result.at("version").is_number_integer() && result.at("version") > 0 &&
+                    result.at("version") <= std::numeric_limits<int>::max(),
+                "migration.invalid", "Component version must be a positive supported integer");
     auto version = result.value("version", 1);
     if (version > current)
         return result;
@@ -163,8 +202,11 @@ Json SchemaRegistry::migrate_component(const Json& source) const {
             if (rule.contains("scale") && result["fields"].contains(field)) {
                 require(result["fields"][field].is_number(), "migration.type",
                         "Cannot scale a nonnumeric field");
-                result["fields"][field] =
+                const auto scaled =
                     result["fields"][field].get<double>() * rule["scale"].get<double>();
+                require(std::isfinite(scaled), "migration.nonfinite",
+                        "Migration produced a non-finite field value");
+                result["fields"][field] = scaled;
             }
             if (rule.value("require_manual", false) && result["fields"].contains(field))
                 throw Error("migration.manual", "Field requires explicit manual migration",

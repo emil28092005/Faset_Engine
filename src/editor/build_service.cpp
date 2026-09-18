@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <deque>
 #include <faset/assets/asset_data.hpp>
+#include <faset/assets/asset_pipeline.hpp>
 #include <faset/authoring/schema.hpp>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
@@ -225,9 +226,16 @@ struct BuildService::Impl {
         }
     }
     void validate_assets(const Json& scene) {
-        assets::AssetStore pipeline(config.cache_root);
-        for (const auto& id : asset_references(scene))
+        assets::AssetPipeline pipeline(config.cache_root);
+        for (const auto& id : asset_references(scene)) {
             pipeline.load_asset(id);
+            const auto freshness = pipeline.freshness(id);
+            if (freshness.value("state", std::string("unavailable")) != "current")
+                throw std::runtime_error("Asset " + id +
+                                         " is stale or unavailable. Reimport before cooking or "
+                                         "exporting. Details: " +
+                                         freshness.dump());
+        }
     }
     Json build(Job& job, bool exporting = false) {
         const auto& configuration = exporting ? config.export_configuration : config.configuration;
