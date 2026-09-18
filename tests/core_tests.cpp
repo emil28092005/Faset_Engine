@@ -17,7 +17,7 @@ int main() {
         faset::atomic_write_json(directory/"state.json",{{"value",2},{"text","Привет 世界"}});
         CHECK(faset::read_json(directory/"state.json").at("value")==2);
         CHECK(faset::sha256_file(directory/"state.json")==faset::sha256(faset::read_text(directory/"state.json")));
-        CHECK(faset::project_path(directory,"assets/../state.json")==directory/"state.json");
+        CHECK(std::filesystem::equivalent(faset::project_path(directory,"assets/../state.json"),directory/"state.json"));
         bool rejected=false;try { faset::project_path(directory,"../escape"); } catch(const faset::Error&) {rejected=true;} CHECK(rejected);
         rejected=false;try { faset::project_path(directory,directory/"state.json"); } catch(const faset::Error&) {rejected=true;} CHECK(rejected);
         std::filesystem::remove_all(directory);

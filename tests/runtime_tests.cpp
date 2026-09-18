@@ -21,7 +21,7 @@ void physics(int dimension){
     auto type=dimension==2?"faset.rigid_body_2d":"faset.rigid_body_3d";
     Json extents=dimension==2?Json{10,0.5}:Json{10,0.5,10};
     floor["components"].push_back(component(type,{{"body_type","static"},{"half_extents",extents}}));
-    falling["components"].push_back(component(type));doc["entities"]={floor,falling};world.load(doc);auto h=world.find("falling");
+    falling["components"].push_back(component(type));doc["entities"]=Json::array({floor,falling});world.load(doc);auto h=world.find("falling");
     bool contact=false;
     for(int i=0;i<240;++i){world.advance(1.0/60);for(const auto& event:world.collisions())contact=contact||event.began;}
     near(world.transform(h).position[1],0.5f,0.09f,"body must fall and settle on actual solver floor");check(contact,"native contact event must be delivered");
@@ -75,15 +75,15 @@ void structuralFailuresAndCallbacks(){
     b.fixedUpdate=[&](Runtime&,EntityHandle,double){order.push_back("fixed");throw std::runtime_error("intentional callback failure");};
     b.update=[&](Runtime&,EntityHandle,double){order.push_back("update");};
     b.lateUpdate=[&](Runtime& r,EntityHandle h,double){order.push_back("late");auto p=r.presentation(h);p.position[2]=9;r.setPresentation(h,p);};
-    callbacks.registerBehavior("test",b);auto object=entity("callbacks");object["components"].push_back(component("test"));doc["entities"]={object};callbacks.load(doc);callbacks.singleStep();
+    callbacks.registerBehavior("test",b);auto object=entity("callbacks");object["components"].push_back(component("test"));doc["entities"]=Json::array({object});callbacks.load(doc);callbacks.singleStep();
     check(order==std::vector<std::string>{"start","fixed","update","late"},"callback failure does not skip remaining phases");check(callbacks.diagnostics().size()==1,"callback exception diagnostic");near(callbacks.snapshot().entities[0].transform.position[2],9,0.001f,"LateUpdate changes final presentation only");near(callbacks.transform(callbacks.find("callbacks")).position[2],0,0.001f,"presentation does not overwrite simulation");callbacks.clear();
 }
 void sampleGameplay(){
-    Runtime world;faset::gameplay::registerGameplay(world);auto doc=scene(3);auto door=entity("door");door["components"].push_back(component("gameplay.door",{{"speed",2.0}}));doc["entities"]={door};world.load(doc);
+    Runtime world;faset::gameplay::registerGameplay(world);auto doc=scene(3);auto door=entity("door");door["components"].push_back(component("gameplay.door",{{"speed",2.0}}));doc["entities"]=Json::array({door});world.load(doc);
     world.advance(1.0/60,{0,0,false,true});for(int i=0;i<59;++i)world.advance(1.0/60);
     near(world.transform(world.find("door")).rotation[1],1.5707963f,0.001f,"sample door opens through real static gameplay callback");
     world.advance(1.0/60,{0,0,false,true});for(int i=0;i<59;++i)world.advance(1.0/60);
     near(world.transform(world.find("door")).rotation[1],0,0.001f,"sample door toggles closed");
 }
 }
-int main(){try{physics(2);physics(3);lifecycle();clockAndValidation();structuralFailuresAndCallbacks();sampleGameplay();std::cout<<"runtime contracts passed: actual Box2D/Box3D collisions, lifecycle, handles, interpolation, deferred mutation, catchup, pause, validation, gameplay\n";return 0;}catch(const std::exception& ex){std::cerr<<ex.what()<<'\n';return 1;}}
+int main(){try{auto run=[](const char* name,auto fn){try{fn();std::cout<<name<<" passed\n";}catch(const std::exception& error){throw std::runtime_error(std::string(name)+": "+error.what());}};run("Box2D",[]{physics(2);});run("Box3D",[]{physics(3);});run("Lifecycle",lifecycle);run("Clock/validation",clockAndValidation);run("Structural failures",structuralFailuresAndCallbacks);run("Sample gameplay",sampleGameplay);std::cout<<"runtime contracts passed: actual Box2D/Box3D collisions, lifecycle, handles, interpolation, deferred mutation, catchup, pause, validation, gameplay\n";return 0;}catch(const std::exception& ex){std::cerr<<ex.what()<<'\n';return 1;}}
