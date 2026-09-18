@@ -44,8 +44,8 @@ def run(executable, project):
         names = {tool["name"] for tool in request("tools/list")["result"]["tools"]}
         assert {"faset_scene_edit", "faset_export", "faset_job_cancel", "faset_plugins"} <= names
         assert "faset_runtime_query" not in names and "faset_editor_capture" not in names
-        if (project / "Scenes/main.scene.json").exists():
-            opened = call("faset_document_open", {"path": "Scenes/main.scene.json"})
+        if (project / "Scenes/Начало Café 世界.scene.json").exists():
+            opened = call("faset_document_open", {"path": "Scenes/Начало Café 世界.scene.json"})
             assert opened["scene"]["entities"][0]["name"] == "Door 世界"
             return
         scene = call("faset_document_create", {"name": "MCP integration", "dimension": 3})
@@ -62,7 +62,7 @@ def run(executable, project):
         assert undone["scene"]["entities"] == []
         redone = call("faset_redo", {"document": identity, "revision": 2})
         assert redone["scene"] == changed["scene"]
-        saved = call("faset_document_save", {"document": identity, "path": "Scenes/main.scene.json"})
+        saved = call("faset_document_save", {"document": identity, "path": "Scenes/Начало Café 世界.scene.json"})
         assert not saved["dirty"]
         call("faset_document_open", {"path": "../outside.json"}, True)
         assert request("resources/read", {"uri": "faset://documents"})["result"]["contents"]
@@ -109,8 +109,14 @@ def eof_tail(executable, project):
 
 
 with tempfile.TemporaryDirectory(prefix="faset-mcp-stdio-") as temporary:
-    run(sys.argv[1], pathlib.Path(temporary))
-    run(sys.argv[1], pathlib.Path(temporary))
-    disconnected_output(sys.argv[1], pathlib.Path(temporary))
-    eof_tail(sys.argv[1], pathlib.Path(temporary))
+    project = pathlib.Path(temporary) / "Faset Café 世界"
+    created = subprocess.run([sys.argv[1], "--project", str(project), "--new", "Проект Café 世界",
+        "--command", json.dumps({"name": "faset_project", "arguments": {}}, ensure_ascii=False)],
+        capture_output=True, text=True, encoding="utf-8", timeout=20)
+    assert created.returncode == 0, created.stderr
+    assert json.loads((project / "project.faset.json").read_text(encoding="utf-8"))["name"] == "Проект Café 世界"
+    run(sys.argv[1], project)
+    run(sys.argv[1], project)
+    disconnected_output(sys.argv[1], project)
+    eof_tail(sys.argv[1], project)
 print("Real MCP stdio lifecycle, clean stdout, revision conflict, retry, Undo/Redo, disk reopen, broken output pipe and EOF shutdown passed")

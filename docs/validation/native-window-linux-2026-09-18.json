@@ -1,0 +1,50 @@
+{
+  "format": "faset.native-window-validation",
+  "version": 1,
+  "date": "2026-09-18",
+  "platform": "Linux, KDE Wayland session and isolated Xvfb",
+  "source_checkout": "Working tree around5ac4db4 plus checkpoint4 changes; not an exact clean-commit result",
+  "fixture": "tests/render_window_tests.cpp",
+  "cases": [
+    {
+      "surface": "XWayland in the active desktop",
+      "result": "passed",
+      "scope": [
+        "resize convergence",
+        "fresh readback while minimized",
+        "native minimize/restore events",
+        "live SDL display-scale getter",
+        "native SDL text input start/stop",
+        "drawable-pixel input-area conversion checked through SDL_GetTextInputArea"
+      ],
+      "clipboard": "Skipped because the existing clipboard advertised non-text payload; no replacement attempted.",
+      "log": "driver=x11 stage=created\nstage=resized width=360 height=300 resize_events=2\nclipboard=skipped_to_preserve_non_text_payload\ntext_input_area=coordinate_conversion_passed\nstage=minimized fresh_frames=12 minimize_events=1 focus_lost_events=1\nstage=restored restored_events=1 activation_required=0 frames=56 validation_enabled=1 validation_errors=0\n"
+    },
+    {
+      "surface": "Private Xvfb server, SDL X11 driver",
+      "result": "clipboard and input-area checks passed; lifecycle skipped",
+      "scope": [
+        "Unicode clipboard roundtrip through Renderer/SDL",
+        "saved plain-text clipboard restored without logging contents",
+        "native SDL text-input activation and rectangle conversion"
+      ],
+      "limit": "No window manager; minimize request unconfirmed, so this is not minimize/restore acceptance.",
+      "log": "driver=x11 stage=created\nstage=resized width=360 height=300 resize_events=2\nclipboard=unicode_roundtrip_passed\ntext_input_area=coordinate_conversion_passed\nSKIP: window system declined the minimize request\n"
+    },
+    {
+      "surface": "Native Wayland in the active desktop",
+      "result": "partial; restore acceptance unresolved",
+      "scope": [
+        "resize convergence",
+        "12 fresh readbacks while SDL reported minimized"
+      ],
+      "limit": "Compositor did not confirm restore/activation. SDL Wayland may synthesize its minimized flag because xdg-shell has no minimized-state acknowledgement; physical minimization is not independently established."
+    }
+  ],
+  "limits": [
+    "No real OS IME composition session was performed.",
+    "Synthetic text events in other tests do not substitute for real IME acceptance.",
+    "Windows native clipboard/window behavior requires its own run.",
+    "No clipboard contents were retained in logs or artifacts."
+  ]
+}

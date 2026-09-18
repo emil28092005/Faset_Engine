@@ -51,16 +51,17 @@ int main() {
                                          {"name", "Original project"},
                                          {"dimension", 3},
                                          {"custom_metadata", {{"preserve", true}}}});
-        editor::Session session({root, FASET_TEST_ENGINE, root});
+        editor::Session session({root, path_from_utf8(FASET_TEST_ENGINE), root});
         render::Renderer renderer({1280, 800, "Project settings acceptance", true, true});
         editor::EditorUI ui(session, renderer,
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/ui/dark.json");
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/dark.json");
         ui.frame({});
         click(ui, "add-cube");
-        session.authoring().save(ui.current_document(), "Scenes/Main.scene.json");
+        session.authoring().save(ui.current_document(),
+                                 path_from_utf8("Scenes/Главная.scene.json"));
         const auto other = session.authoring().create("Other", 2);
-        session.authoring().save(other.at("id"), "Scenes/Other.scene.json");
+        session.authoring().save(other.at("id"), path_from_utf8("Scenes/Другая.scene.json"));
         ui.frame({});
         const auto document_before = session.authoring().query(ui.current_document());
         const auto project_before = read_json(project_file);
@@ -75,12 +76,12 @@ int main() {
         text(ui, "project-settings-name", "Новый проект");
         click(ui, "project-settings-2d");
         click(ui, "project-scene-choice-1");
-        check(ui.widgets().find("project-settings-start")->text == "Scenes/Other.scene.json",
+        check(ui.widgets().find("project-settings-start")->text == "Scenes/Другая.scene.json",
               "Saved scene chooser sets project-relative path");
         click(ui, "project-settings-save");
         auto saved = read_json(project_file);
         check(saved["name"] == "Новый проект" && saved["dimension"] == 2 &&
-                  saved["start_scene"] == "Scenes/Other.scene.json",
+                  saved["start_scene"] == "Scenes/Другая.scene.json",
               "Explicit Save project persists typed settings");
         check(saved["custom_metadata"] == project_before["custom_metadata"] &&
                   saved["id"] == project_before["id"],
@@ -113,7 +114,7 @@ int main() {
         click(ui, "project-settings-3d");
         click(ui, "project-scene-choice-0");
         click(ui, "project-settings-save");
-        check(read_json(project_file)["start_scene"] == "Scenes/Main.scene.json",
+        check(read_json(project_file)["start_scene"] == "Scenes/Главная.scene.json",
               "Save after explicit reload uses new content revision");
         check(session.authoring().query(ui.current_document()) == document_before,
               "Project settings remain outside scene Undo throughout conflicts");
@@ -126,10 +127,10 @@ int main() {
         check(renderer.stats().validation_errors == 0, "Project settings Vulkan validation");
         std::cout << "Project settings name/type/start-scene Save/Cancel/Reload/conflict, metadata "
                      "preservation and separate scene Undo passed. "
-                  << root << '\n';
+                  << path_to_utf8(root) << '\n';
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << e.what() << "\nRetained: " << root << '\n';
+        std::cerr << e.what() << "\nRetained: " << path_to_utf8(root) << '\n';
         return 1;
     }
 }

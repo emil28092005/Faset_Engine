@@ -73,20 +73,20 @@ float position(const Json& object) {
 int main() {
     const auto root = std::filesystem::temp_directory_path() / ("faset-template-ui-" + new_id());
     try {
-        editor::Session session({root, FASET_TEST_ENGINE, root});
+        editor::Session session({root, path_from_utf8(FASET_TEST_ENGINE), root});
         render::Renderer renderer({1280, 900, "Template workflow test", true, true});
         editor::EditorUI ui(session, renderer,
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/ui/dark.json");
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/dark.json");
         ui.frame({});
         const auto main = ui.current_document();
         click(ui, "add-cube");
         text(ui, "object-name", "Door");
         const auto local = ui.selected_entity();
         click(ui, "menu-Scene");
-        text(ui, "template-path", "Assets/Templates/Door.scene.json");
+        text(ui, "template-path", "Assets/Templates/Дверь.scene.json");
         click(ui, "save-template");
-        check(std::filesystem::exists(root / "Assets/Templates/Door.scene.json"),
+        check(std::filesystem::exists(root / path_from_utf8("Assets/Templates/Дверь.scene.json")),
               "Manual source template creation");
         for (int i = 0; i < 2; ++i) {
             click(ui, "menu-Scene");
@@ -105,12 +105,12 @@ int main() {
         click(ui, "menu-Scene");
         click(ui, "instance-template");
         click(ui, "menu-File");
-        text(ui, "save-path", "Assets/Templates/Outer.scene.json");
+        text(ui, "save-path", "Assets/Templates/Внешняя.scene.json");
         click(ui, "save-as-button");
         click(ui, "back-document");
         check(ui.current_document() == main, "Open source/back document navigation");
         click(ui, "menu-Scene");
-        text(ui, "template-path", "Assets/Templates/Outer.scene.json");
+        text(ui, "template-path", "Assets/Templates/Внешняя.scene.json");
         click(ui, "instance-template");
         auto nested = leaf(session, main, 2);
         const auto nested_id = nested.at("id").get<std::string>();
@@ -178,6 +178,35 @@ int main() {
         check(query(session, ui)["scene"]["simulation"]["gravity"][1] == -9.81,
               "Simulation Undo restores gravity");
 
+        // Save through the same controls a user sees, then open a new editor
+        // session: an in-memory resolver alone cannot prove persistent identity.
+        click(ui, "entity-" + nested_id);
+        click(ui, "object-open-source");
+        click(ui, "save");
+        click(ui, "back-document");
+        click(ui, "menu-File");
+        text(ui, "save-path", "Scenes/Экземпляры.scene.json");
+        click(ui, "save-as-button");
+        const auto saved_scene = query(session, ui).at("scene");
+        const auto saved_resolved = session.commands().resolved_scene(main);
+        {
+            editor::Session reopened({root, path_from_utf8(FASET_TEST_ENGINE), root});
+            editor::EditorUI reopened_ui(
+                reopened, renderer, path_from_utf8(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
+                path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/dark.json");
+            reopened_ui.frame({});
+            click(reopened_ui, "menu-File");
+            text(reopened_ui, "open-path", "Scenes/Экземпляры.scene.json");
+            click(reopened_ui, "open-path-button");
+            check(query(reopened, reopened_ui).at("scene") == saved_scene,
+                  "Save and reopen preserve instance IDs, overrides and local additions");
+            check(reopened.commands().resolved_scene(reopened_ui.current_document()) ==
+                      saved_resolved,
+                  "New session resolves saved nested source edits with identical provenance");
+            check(leaf(reopened, reopened_ui.current_document(), 2).at("id") == nested_id,
+                  "Resolved nested object identity survives reopening");
+        }
+
         nested = leaf(session, main, 2);
         click(ui, "entity-" + nested_id);
         text(ui, position_field(nested), "7");
@@ -218,10 +247,10 @@ int main() {
         std::cout << "Manual templates: create/two instances/nesting/overrides/Revert/source "
                      "rename/suppression restore/local additions/conflicts/opaque versions; "
                      "simulation UI+Undo passed. "
-                  << root << '\n';
+                  << path_to_utf8(root) << '\n';
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << error.what() << "\nRetained: " << root << '\n';
+        std::cerr << error.what() << "\nRetained: " << path_to_utf8(root) << '\n';
         return 1;
     }
 }

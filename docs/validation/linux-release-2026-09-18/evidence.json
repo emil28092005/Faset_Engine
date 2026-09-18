@@ -1,0 +1,312 @@
+{
+  "format": "faset.validation-evidence",
+  "version": 1,
+  "status": "passed",
+  "scope": "Linux relocated Release game export and offscreen small-scene measurement",
+  "source_checkout": {
+    "reference_commit": "5ac4db438dae5ee28e5619e62cf8d6647beecd52",
+    "clean_commit_match": false,
+    "description": "Shared working tree around 5ac4db4 plus in-progress checkpoint 4 work; builds were not made from a frozen clean commit. Exact exported binary/shader hashes are retained in each manifest."
+  },
+  "export_started_utc": "2026-09-18T01:46:06.267995+00:00",
+  "export_finished_utc": "2026-09-18T01:49:50.149934+00:00",
+  "host": {
+    "os": "Ubuntu 26.04 LTS",
+    "kernel": "7.0.0-31-generic x86_64",
+    "cpu": "AMD Ryzen 7 1700 Eight-Core Processor (8 cores,16 threads)",
+    "system_memory_bytes": 33571037184,
+    "gpu": "NVIDIA GeForce RTX 2080 Ti",
+    "gpu_memory_mib": 11264,
+    "nvidia_driver": "595.84"
+  },
+  "configuration": {
+    "build": "Release",
+    "compiler": "Clang 21.1.8",
+    "cxx_flags": "-O3 -DNDEBUG",
+    "cmake": "4.2.3",
+    "api": "Vulkan 1.3",
+    "resolution": [
+      1280,
+      720
+    ],
+    "presentation": "offscreen",
+    "validation_enabled": true,
+    "physics_debug": false,
+    "frames_per_final_profile": 240,
+    "fixed_delta_seconds": 0.016666666666666666,
+    "simulation": "synthetic fixed timestep, no player input",
+    "sampling": "nearest rank, all completed frames, cold first frame retained"
+  },
+  "verification": {
+    "tool": "tools/verify_playable_exports.py",
+    "project_copies_and_relocated_binaries_include": "Faset Café 世界",
+    "steps": [
+      "Copy exact checked-in sample project inputs",
+      "Real Editor import of 3D Blender arch bundle",
+      "Real Editor Release export",
+      "Verify every package file size and SHA256",
+      "Copy generation outside engine/source trees",
+      "Hide disposable source-project paths",
+      "Launch Player from unrelated empty cwd without scene/assets arguments",
+      "CPU --validate then 120-frame offscreen capture and profile",
+      "Additional 240-frame no-debug profile of each same relocated executable"
+    ],
+    "validation_errors": 0
+  },
+  "projects": [
+    {
+      "name": "collect-2d",
+      "dimension": 2,
+      "generation": "48ec8546-3750-463f-9c4c-f76c3b933256",
+      "build_fingerprint": "5b1996b0fe44eeaa01ee1fd581f9f063f8c84147128e896541d27207dbab9aaa",
+      "scene_hash": "05ab2c3e5b152ab25867976c47635961f440f41d8cd0408732eb2d8d5b7800a8",
+      "asset_generations": {},
+      "source_inputs": [
+        {
+          "path": ".gitignore",
+          "sha256": "53aa4d7124d4c8d93b8d7c4cb470b6c82b844e019a660d6243ffeadc50602de1"
+        },
+        {
+          "path": "README.md",
+          "sha256": "d6c35206b10ee28efd5cc02da77a3ce9b6e1f8ce085793150bbf2f23bd925d65"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "be48a6d21385e717b6c8ebf9a3b4322eebbeff6bb067428e089ab5214be79854"
+        },
+        {
+          "path": "Scripts/Gameplay.cpp",
+          "sha256": "6b581b24da613e1915819de0a0f0ea820dd3333efa62c4b479a9ea7ffdbc6bcc"
+        },
+        {
+          "path": "Scripts/Gameplay.hpp",
+          "sha256": "4121587182ed4f74901b1c0757c53daadbf309af1d6bb5dd87fef142130ccbbe"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "36e2acd32210f5489372a2331346a3294ead2395f0713e3e5fd2da4e83263689"
+        }
+      ],
+      "package_file_count": 17,
+      "source_project_paths_unavailable": true,
+      "standalone_validation": "passed",
+      "standalone_render_frames": 120,
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 7,
+        "sha256": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a"
+      },
+      "final_profile": "collect-2d-profile-240.json",
+      "profile_recorded_at_utc": "2026-09-18T01:51:24.599491+00:00",
+      "gpu_allocated_bytes": {
+        "min": 15750288,
+        "max": 15750288
+      },
+      "draw_calls": [
+        11
+      ],
+      "vertices": [
+        66
+      ],
+      "texture_count": [
+        1
+      ],
+      "summary_ms": {
+        "gpu": {
+          "max": 0.58912,
+          "min": 0.563616,
+          "p50": 0.564832,
+          "p95": 0.57856,
+          "samples": 240
+        },
+        "render_call": {
+          "max": 5.705444,
+          "min": 1.581003,
+          "p50": 1.865269,
+          "p95": 2.22086,
+          "samples": 240
+        },
+        "renderer_cpu": {
+          "max": 5.701056,
+          "min": 1.578639,
+          "p50": 1.861723,
+          "p95": 2.216031,
+          "samples": 240
+        },
+        "renderer_readback_cpu": {
+          "max": 2.763424,
+          "min": 0.432917,
+          "p50": 0.509912,
+          "p95": 0.632894,
+          "samples": 240
+        },
+        "simulation": {
+          "max": 0.513789,
+          "min": 0.144743,
+          "p50": 0.200708,
+          "p95": 0.258247,
+          "samples": 240
+        },
+        "snapshot": {
+          "max": 0.25444,
+          "min": 0.127029,
+          "p50": 0.170341,
+          "p95": 0.214946,
+          "samples": 240
+        },
+        "wall": {
+          "max": 6.089358,
+          "min": 1.879436,
+          "p50": 2.233955,
+          "p95": 2.684014,
+          "samples": 240
+        }
+      }
+    },
+    {
+      "name": "collect-3d",
+      "dimension": 3,
+      "generation": "17281e17-9f4f-44f0-8821-6e0071e9a45b",
+      "build_fingerprint": "5a516f5c4bded8f8e3f027b3dd2812a34b7f40b37e281c21ce87d7586fff88e4",
+      "scene_hash": "6510f994ee01af5823614911fcdeff0fd433846d937ff1a65d5bf5fb08e45e8f",
+      "asset_generations": {
+        "5832763b-3ed0-44d6-9088-0b524f196a91": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2"
+      },
+      "source_inputs": [
+        {
+          "path": ".gitignore",
+          "sha256": "53aa4d7124d4c8d93b8d7c4cb470b6c82b844e019a660d6243ffeadc50602de1"
+        },
+        {
+          "path": "Assets/exit-arch/create.py",
+          "sha256": "9c7291124fb1498a3f992ef74afc39cd98f9cc3e2ff4687c633bece85d580905"
+        },
+        {
+          "path": "Assets/exit-arch/manifest.json",
+          "sha256": "7a13347adc89761fb02ebeab3c58ba87f319cd62f53ec87a3bb61bcd066ffa55"
+        },
+        {
+          "path": "Assets/exit-arch/manifest.json.faset-import.json",
+          "sha256": "ef4eef28a18a0cc40a40df75db34c97faa5d783b891265f862633f3aec514afc"
+        },
+        {
+          "path": "Assets/exit-arch/payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb",
+          "sha256": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3"
+        },
+        {
+          "path": "Assets/exit-arch/source.blend",
+          "sha256": "ff2676bec97ab778e531e87a185ad716049ea3b05b4a4f0027a6345737735035"
+        },
+        {
+          "path": "README.md",
+          "sha256": "2df5ca4df47ab5d3d05d41508201296d4ad5ec876245f19f061767ade6a30e8f"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "61b65baf79e52f07ac386a7f98acf985a1b09e88770cdde37ef461dc94b9dcd7"
+        },
+        {
+          "path": "Scripts/Extensions/Beacon.hpp",
+          "sha256": "c60d56161eead16f541835053ad32ac3333383d83015709c060b7d45e0af5a97"
+        },
+        {
+          "path": "Scripts/Gameplay.cpp",
+          "sha256": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a"
+        },
+        {
+          "path": "Scripts/Gameplay.hpp",
+          "sha256": "4121587182ed4f74901b1c0757c53daadbf309af1d6bb5dd87fef142130ccbbe"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "43d273b1054ec9069369073f54cc1fc7efb3d6b699dcd342c552a2dc2ef852ef"
+        }
+      ],
+      "package_file_count": 22,
+      "source_project_paths_unavailable": true,
+      "standalone_validation": "passed",
+      "standalone_render_frames": 120,
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 42,
+        "sha256": "914060401de93d08b33bf09a1e210859e491a0060c331e5e2044f517356f4980"
+      },
+      "final_profile": "collect-3d-profile-240.json",
+      "profile_recorded_at_utc": "2026-09-18T01:51:25.501500+00:00",
+      "gpu_allocated_bytes": {
+        "min": 15787008,
+        "max": 15787008
+      },
+      "draw_calls": [
+        31
+      ],
+      "vertices": [
+        576
+      ],
+      "texture_count": [
+        1
+      ],
+      "summary_ms": {
+        "gpu": {
+          "max": 0.624064,
+          "min": 0.58432,
+          "p50": 0.58752,
+          "p95": 0.600448,
+          "samples": 240
+        },
+        "render_call": {
+          "max": 4.807059,
+          "min": 1.644403,
+          "p50": 1.884165,
+          "p95": 2.179593,
+          "samples": 240
+        },
+        "renderer_cpu": {
+          "max": 4.803463,
+          "min": 1.626759,
+          "p50": 1.880197,
+          "p95": 2.174082,
+          "samples": 240
+        },
+        "renderer_readback_cpu": {
+          "max": 2.729419,
+          "min": 0.398812,
+          "p50": 0.468945,
+          "p95": 0.608337,
+          "samples": 240
+        },
+        "simulation": {
+          "max": 0.441703,
+          "min": 0.185701,
+          "p50": 0.213223,
+          "p95": 0.300146,
+          "samples": 240
+        },
+        "snapshot": {
+          "max": 0.740007,
+          "min": 0.162066,
+          "p50": 0.181302,
+          "p95": 0.257285,
+          "samples": 240
+        },
+        "wall": {
+          "max": 5.902556,
+          "min": 2.040269,
+          "p50": 2.298847,
+          "p95": 2.732225,
+          "samples": 240
+        }
+      }
+    }
+  ],
+  "evidence_sha256": {
+    "collect-2d-profile-240.json": "0141cb2ad6d31394b542d575dce3409fef82ff2e77fe91eb4a7183811471e36f",
+    "collect-3d-profile-240.json": "bedf3a68df03c1af42bdb4d3b416d930c6e92fa6e99033c63ea9b17ae977c8c6",
+    "collect-2d-manifest.json": "83a0c8a58dae07376c0db58ca58b115d9ecedb245bcba88bdcd5429796ba5be9",
+    "collect-3d-manifest.json": "6374a6af5618a6c613b09978b2bf42300b1565808ded21bf9c2b82444027f252",
+    "collect-2d.png": "c380583f2fd8bc09c5b0e1c6e755c35c3d64b5385ed66177b04d1bbdb532b236",
+    "collect-3d.png": "98941a2004c3345da336294fa0e1b9e363922fc581c7a8612652ecbb0d764c07"
+  }
+}

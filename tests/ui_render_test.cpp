@@ -2,13 +2,13 @@
 #include <faset/ui/ui.hpp>
 #include <iostream>
 using namespace faset;
-int main(int argc, char** argv) {
+int ui_render_main(int argc, char** argv) {
     try {
         render::Renderer renderer({1280, 800, "Faset UI reference implementation", true, true});
-        ui::Context ui(FASET_TEST_FONT);
-        ui.set_theme(ui::Theme::load(FASET_UI_THEME));
+        ui::Context ui(path_from_utf8(FASET_TEST_FONT));
+        ui.set_theme(ui::Theme::load(path_from_utf8(FASET_UI_THEME)));
         ui.apply_layout(
-            read_json(std::filesystem::path(FASET_UI_THEME).parent_path() / "editor-layout.json"));
+            read_json(path_from_utf8(FASET_UI_THEME).parent_path() / "editor-layout.json"));
         auto& menu = ui.find("menubar")->add(ui::Kind::Row, "menuitems");
         for (const auto& name : {"Faset", "File", "Edit", "Scene", "View", "Help"})
             menu.add(ui::Kind::Button, "menu-" + std::string(name), name).layout.width = 65;
@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
         snapshot.draws.push_back(crate);
         ui.draw(snapshot);
         renderer.render(snapshot);
-        renderer.capture(argc > 1 ? argv[1] : "ui-test.ppm");
+        renderer.capture(path_from_utf8(argc > 1 ? argv[1] : "ui-test.ppm"));
         if (renderer.stats().validation_errors)
             throw std::runtime_error("Vulkan validation reported UI rendering errors");
         std::cout << "UI glyph atlas and retained panels rendered on " << renderer.stats().device
@@ -113,3 +113,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    return run_utf8_main(argc, argv, ui_render_main);
+}
+#else
+int main(int argc, char** argv) {
+    return ui_render_main(argc, argv);
+}
+#endif

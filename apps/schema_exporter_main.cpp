@@ -3,7 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 
-int main(int argc, char** argv) {
+int schema_main(int argc, char** argv) {
     try {
         std::filesystem::path output;
         for (int i = 1; i < argc; ++i) {
@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
                 return 0;
             }
             if (argument == "--output" && i + 1 < argc && output.empty())
-                output = argv[++i];
+                output = faset::path_from_utf8(argv[++i]);
             else
                 throw std::invalid_argument("Unknown, repeated or incomplete argument: " +
                                             argument);
@@ -33,3 +33,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    return faset::run_utf8_main(argc, argv, schema_main);
+}
+#else
+int main(int argc, char** argv) {
+    return schema_main(argc, argv);
+}
+#endif

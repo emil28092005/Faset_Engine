@@ -6,6 +6,7 @@
 #include <faset/core/io.hpp>
 #include <faset/player/SceneView.hpp>
 #include <faset/runtime/Runtime.hpp>
+#include <faset/runtime/schema.hpp>
 #include <filesystem>
 #include <iostream>
 #include <set>
@@ -167,12 +168,13 @@ void validatePackagedShaders(const std::filesystem::path& directory) {
         for (const auto* extension : {".spv", ".reflection.json"}) {
             const auto path = shaders / (std::string(entry) + extension);
             if (!std::filesystem::is_regular_file(path))
-                throw std::runtime_error("Packaged shader file is missing: " + path.string());
+                throw std::runtime_error("Packaged shader file is missing: " +
+                                         faset::path_to_utf8(path));
         }
     faset::render::validate_shader_bundle(shaders);
 }
 } // namespace
-int main(int argc, char** argv) {
+int player_main(int argc, char** argv) {
     const auto started = Clock::now();
     try {
         std::filesystem::path scenePath, assetsPath, capturePath, controlPath, profilePath;
@@ -207,15 +209,15 @@ int main(int argc, char** argv) {
                 return argv[++i];
             };
             if (arg == "--scene")
-                scenePath = value();
+                scenePath = faset::path_from_utf8(value());
             else if (arg == "--assets")
-                assetsPath = value();
+                assetsPath = faset::path_from_utf8(value());
             else if (arg == "--capture")
-                capturePath = value();
+                capturePath = faset::path_from_utf8(value());
             else if (arg == "--control")
-                controlPath = value();
+                controlPath = faset::path_from_utf8(value());
             else if (arg == "--profile")
-                profilePath = value();
+                profilePath = faset::path_from_utf8(value());
             else if (arg == "--frames")
                 maximumFrames = count(value());
             else if (arg == "--headless")
@@ -239,11 +241,12 @@ int main(int argc, char** argv) {
             assetsPath = scenePath.parent_path();
         if (!std::filesystem::is_directory(assetsPath))
             throw std::invalid_argument("Asset cache directory does not exist: " +
-                                        assetsPath.string());
+                                        faset::path_to_utf8(assetsPath));
         if (headless && maximumFrames == 0)
             maximumFrames = 1;
         const auto sceneReadStarted = Clock::now();
         const auto document = faset::player::readScene(scenePath);
+        faset::runtime::validate_scene_schemas(document, faset::gameplay::schema());
         const auto config = simulationConfig(document);
         const auto sceneReadFinished = Clock::now();
         const auto executableRoot = executableDirectory(argv[0]);
@@ -406,6 +409,12 @@ int main(int argc, char** argv) {
             }
             ++frames;
         }
+        const auto completedTicks = world.snapshot().tick;
+        // Run normal shutdown while diagnostics are still observable. Runtime's
+        // destructor is a fallback and cannot print messages after this scope ends.
+        world.clear();
+        while (logCursor < world.diagnostics().size())
+            std::cerr << world.diagnostics()[logCursor++] << '\n';
         if (!capturePath.empty()) {
             if (frames == 0)
                 throw std::runtime_error("No frame was rendered for capture");
@@ -438,8 +447,8 @@ int main(int argc, char** argv) {
                   "renderer_readback_cpu measures map/copy/unmap wall time within that call. "
                   "GPU timestamps cover submitted rendering, not CPU work. A missing/zero GPU "
                   "timestamp is null. Frame durations exclude profile bookkeeping and final "
-                  "capture/profile file writes. Startup begins at main(), excluding OS "
-                  "loader/launcher."},
+                  "capture/profile file writes. Startup begins at Player application entry "
+                  "after platform argument normalization, excluding OS loader/launcher."},
                  {"startup_ms",
                   {{"scene_read", milliseconds(sceneReadStarted, sceneReadFinished)},
                    {"world_initialization", milliseconds(worldStarted, rendererStarted)},
@@ -448,7 +457,7 @@ int main(int argc, char** argv) {
             faset::atomic_write_json(profilePath, report);
         }
         std::cout << nlohmann::json{{"frames", frames},
-                                    {"ticks", world.snapshot().tick},
+                                    {"ticks", completedTicks},
                                     {"dimension", document.value("dimension", 3)},
                                     {"device", stats.device},
                                     {"validation_errors", stats.validation_errors}}
@@ -460,3 +469,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    return faset::run_utf8_main(argc, argv, player_main);
+}
+#else
+int main(int argc, char** argv) {
+    return player_main(argc, argv);
+}
+#endif

@@ -5,12 +5,19 @@
 #include <deque>
 #include <entt/entt.hpp>
 #include <faset/runtime/Runtime.hpp>
+#include <faset/runtime/schema.hpp>
 #include <numbers>
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
 
 namespace faset::runtime {
+bool is_builtin_component(std::string_view type) noexcept {
+    constexpr std::array<std::string_view, 7> types{
+        "faset.transform", "faset.sprite",        "faset.mesh",         "faset.camera",
+        "faset.light",     "faset.rigid_body_2d", "faset.rigid_body_3d"};
+    return std::find(types.begin(), types.end(), type) != types.end();
+}
 namespace {
 using Json = nlohmann::json;
 std::atomic<std::uint64_t> nextSession{1};
@@ -19,6 +26,20 @@ constexpr const char* body3 = "faset.rigid_body_3d";
 void require(bool condition, const std::string& message) {
     if (!condition)
         throw std::invalid_argument(message);
+}
+std::uint64_t schemaVersion(const Json& record, const std::string& context) {
+    if (!record.contains("version"))
+        return 1;
+    const auto& value = record.at("version");
+    if (value.is_number_unsigned()) {
+        const auto version = value.get<std::uint64_t>();
+        require(version > 0, context + ": version must be a positive integer");
+        return version;
+    }
+    require(value.is_number_integer(), context + ": version must be a positive integer");
+    const auto version = value.get<std::int64_t>();
+    require(version > 0, context + ": version must be a positive integer");
+    return static_cast<std::uint64_t>(version);
 }
 template <std::size_t N>
 std::array<float, N> vectorValue(const Json& object, const char* key,
@@ -111,11 +132,13 @@ void validateEntity(const Json& entity, int dimension) {
         require(component.contains("type") && component["type"].is_string() &&
                     !component["type"].get<std::string>().empty(),
                 "component requires type");
-        require(component.value("version", 1) == 1, "unsupported component version");
+        const auto type = component["type"].get<std::string>();
+        const auto version = schemaVersion(component, "component " + type);
+        require(!is_builtin_component(type) || version == 1,
+                "unsupported builtin component version: " + type);
         require(component.contains("fields") && component["fields"].is_object(),
                 "component requires fields");
         require(ids.insert(component["id"].get<std::string>()).second, "duplicate component id");
-        const auto type = component["type"].get<std::string>();
         require(types.insert(type).second, "duplicate component type");
         const auto& f = component["fields"];
         if (type == "faset.transform")
@@ -195,6 +218,52 @@ Transform interpolate(const Transform& a, const Transform& b, float alpha) {
     return out;
 }
 } // namespace
+
+void validate_scene_schemas(const Json& scene, const Json& gameplay_schema) {
+    require(gameplay_schema.is_array() ||
+                (gameplay_schema.is_object() && gameplay_schema.contains("types") &&
+                 gameplay_schema.at("types").is_array()),
+            "gameplay schema must be an array or a types manifest");
+    const auto& schemas =
+        gameplay_schema.is_array() ? gameplay_schema : gameplay_schema.at("types");
+    std::unordered_map<std::string, std::uint64_t> available;
+    for (const auto& schema : schemas) {
+        require(schema.is_object() && schema.contains("id") && schema.at("id").is_string() &&
+                    !schema.at("id").get<std::string>().empty(),
+                "gameplay schema requires a nonempty TypeId");
+        const auto id = schema.at("id").get<std::string>();
+        const auto version = schemaVersion(schema, "schema " + id);
+        require(!is_builtin_component(id),
+                "gameplay schema duplicates a builtin component TypeId: " + id);
+        require(available.emplace(id, version).second, "duplicate gameplay schema TypeId: " + id);
+    }
+    require(scene.is_object() && scene.contains("entities") && scene.at("entities").is_array(),
+            "scene entities must be an array");
+    for (const auto& entity : scene.at("entities")) {
+        require(entity.is_object() && entity.contains("components") &&
+                    entity.at("components").is_array(),
+                "entity components must be an array");
+        for (const auto& component : entity.at("components")) {
+            require(component.is_object() && component.contains("type") &&
+                        component.at("type").is_string() &&
+                        !component.at("type").get<std::string>().empty(),
+                    "component requires a nonempty TypeId");
+            const auto type = component.at("type").get<std::string>();
+            const auto version = schemaVersion(component, "component " + type);
+            if (is_builtin_component(type)) {
+                require(version == 1, "unsupported builtin component version: " + type);
+                continue;
+            }
+            const auto found = available.find(type);
+            require(found != available.end(),
+                    "component schema is absent from linked gameplay module: " + type);
+            require(found->second == version, "component schema version mismatch: " + type +
+                                                  " (scene " + std::to_string(version) +
+                                                  ", linked gameplay " +
+                                                  std::to_string(found->second) + ")");
+        }
+    }
+}
 
 struct Runtime::Impl {
     struct Data {

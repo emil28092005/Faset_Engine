@@ -107,3 +107,5 @@ if(BUILD_TESTING)
 endif()
 
 include(cmake/Tutorials.cmake)
+
+include(cmake/WindowsPlatform.cmake)

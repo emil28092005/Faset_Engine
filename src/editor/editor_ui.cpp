@@ -174,6 +174,7 @@ struct EditorUI::Impl {
     std::uint64_t shown_revision = std::numeric_limits<std::uint64_t>::max();
     std::map<std::string, std::uint64_t> edit_revisions;
     std::map<std::string, Json> preview_fields;
+    std::map<std::string, std::string> import_retries;
     std::filesystem::path layout_path;
     std::filesystem::path theme_source_path, layout_source_path;
     std::string attempted_theme, attempted_layout, applied_theme, applied_layout,
@@ -196,6 +197,14 @@ struct EditorUI::Impl {
     std::uint64_t gizmo_revision = 0;
     std::string gizmo_component;
     ui::Rect viewport;
+    float ui_scale = 1;
+    unsigned layout_width = 0, layout_height = 0;
+    float logical_width() const {
+        return float(renderer.width()) / ui_scale;
+    }
+    float logical_height() const {
+        return float(renderer.height()) / ui_scale;
+    }
     Vec3 gizmo_origin{};
     render::Vec2 gizmo_drag_start{}, gizmo_drag_end{};
     float gizmo_world_length = 1;
@@ -253,12 +262,13 @@ struct EditorUI::Impl {
             document = session.authoring()
                            .create("Untitled", session.project().value("dimension", 3))
                            .at("id");
+        ui_scale = std::clamp(renderer.display_scale(), .5f, 4.f);
         refresh();
     }
     void persist_layout() {
-        dock.set_size("scene", ui.find("scene_panel")->rect.width);
-        dock.set_size("inspector", ui.find("inspector_panel")->rect.width);
-        dock.set_size("bottom", ui.find("bottom_panel")->rect.height);
+        dock.set_size("scene", ui.find("scene_panel")->rect.width / ui_scale);
+        dock.set_size("inspector", ui.find("inspector_panel")->rect.width / ui_scale);
+        dock.set_size("bottom", ui.find("bottom_panel")->rect.height / ui_scale);
         try {
             dock.save(layout_path);
         } catch (const std::exception& e) {
@@ -897,7 +907,8 @@ struct EditorUI::Impl {
                 }
             if (!open)
                 try {
-                    source_scene = read_json(project_path(session.config().project_root, source));
+                    source_scene = read_json(
+                        project_path(session.config().project_root, path_from_utf8(source)));
                 } catch (...) {
                     return source;
                 }
@@ -983,7 +994,8 @@ struct EditorUI::Impl {
     }
     void instance_scene(const std::string& path) {
         try {
-            auto data = read_json(project_path(session.config().project_root, path));
+            auto data =
+                read_json(project_path(session.config().project_root, path_from_utf8(path)));
             authoring::validate_scene(data, session.authoring().schemas());
             if (data.at("id") == document)
                 throw std::runtime_error("A scene cannot instance itself");
@@ -1019,7 +1031,7 @@ struct EditorUI::Impl {
                             subtree.insert(item.at("id").get<std::string>()).second || changed;
             }
             auto result = call("faset_document_create",
-                               {{"name", std::filesystem::path(path).stem().string()},
+                               {{"name", path_to_utf8(path_from_utf8(path).stem())},
                                 {"dimension", current.at("scene").value("dimension", 3)}});
             if (result.is_null())
                 return;
@@ -1075,9 +1087,9 @@ struct EditorUI::Impl {
         const bool image = manifest.is_object() && manifest.value("kind", std::string()) == "image";
         const auto name =
             manifest.is_object()
-                ? std::filesystem::path(manifest.value("source", std::string("Imported asset")))
-                      .stem()
-                      .string()
+                ? path_to_utf8(
+                      path_from_utf8(manifest.value("source", std::string("Imported asset")))
+                          .stem())
                 : "Imported asset";
         auto object = authoring::make_entity(session.authoring().schemas(), name);
         const auto entity_id = object.at("id").get<std::string>();
@@ -1218,7 +1230,7 @@ struct EditorUI::Impl {
         std::function<void(Json, int)> append_group = [&](Json path, int depth) {
             const auto source = instance_source(path);
             auto& row = tree.add(Kind::TreeRow, "instance-" + path.dump(),
-                                 "[T] " + std::filesystem::path(source).filename().string());
+                                 "[T] " + path_to_utf8(path_from_utf8(source).filename()));
             row.indent = depth;
             row.selected = instance_selection == path;
             row.on_click = [this, path](Widget&) { select_instance(path); };
@@ -1378,7 +1390,7 @@ struct EditorUI::Impl {
             const auto path = e->at("origin").at("path");
             const auto object = e->at("origin").at("object").get<std::string>();
             label(body, "object-origin",
-                  "Source: " + std::filesystem::path(instance_source(path)).filename().string());
+                  "Source: " + path_to_utf8(path_from_utf8(instance_source(path)).filename()));
             keep.insert("object-origin");
             button(body, "object-open-source", "Open source",
                    [this, path, object] { open_template_source(path, object); });
@@ -1565,9 +1577,8 @@ struct EditorUI::Impl {
                         break;
                     if (!entry.is_regular_file())
                         continue;
-                    auto relative =
-                        std::filesystem::relative(entry.path(), session.config().project_root)
-                            .generic_string();
+                    auto relative = generic_path_to_utf8(
+                        std::filesystem::relative(entry.path(), session.config().project_root));
                     if (relative.find(".faset-") != std::string::npos)
                         continue;
                     if (!asset_filter.empty() && relative.find(asset_filter) == std::string::npos)
@@ -1602,11 +1613,10 @@ struct EditorUI::Impl {
         }
         for (const auto& asset : assets) {
             const auto id = asset.at("id").get<std::string>();
-            const auto name = asset.contains("manifest")
-                                  ? std::filesystem::path(asset["manifest"].value("source", id))
-                                        .filename()
-                                        .string()
-                                  : id;
+            const auto name =
+                asset.contains("manifest")
+                    ? path_to_utf8(path_from_utf8(asset["manifest"].value("source", id)).filename())
+                    : id;
             auto& row = list.add(Kind::TreeRow, "asset-" + id, "Imported  /  " + name);
             row.layout.height = 25;
             row.indent = 1;
@@ -1624,6 +1634,8 @@ struct EditorUI::Impl {
         trim_children(list, keep);
     }
     void refresh_bottom() {
+        const auto jobs_response = call("faset_jobs");
+        const auto all_jobs = jobs_response.is_null() ? Json::array() : jobs_response.at("jobs");
         for (const auto& panel : session.plugin_panels()) {
             const auto panel_id = panel.at("id").get<std::string>();
             const auto dock_id = "plugin-" + panel_id;
@@ -1674,8 +1686,6 @@ struct EditorUI::Impl {
         ui.find("console-items")->visible = active_bottom == "console";
         ui.find("job-items")->visible = active_bottom == "jobs";
         ui.find("conflict-items")->visible = active_bottom == "conflicts";
-        ui.find("tab-conflicts")->text =
-            "Conflicts (" + std::to_string(template_conflicts.size()) + ")";
         auto& conflict_list = *ui.find("conflict-items");
         std::set<std::string> conflict_keep;
         std::size_t conflict_index = 0;
@@ -1687,7 +1697,7 @@ struct EditorUI::Impl {
             const auto path = conflict.at("instance_path");
             auto& text = row.add(
                 Kind::Label, id + "-text",
-                code + " · " + std::filesystem::path(instance_source(path)).filename().string());
+                code + " · " + path_to_utf8(path_from_utf8(instance_source(path)).filename()));
             text.layout.flex = 1;
             button(
                 row, id + "-source", "Open source", [this, path] { open_template_source(path); },
@@ -1716,9 +1726,113 @@ struct EditorUI::Impl {
             }
             conflict_keep.insert(id);
         }
+        std::size_t import_conflicts = 0;
+        for (const auto& job : all_jobs) {
+            if (job.value("kind", std::string()) != "import" ||
+                job.value("state", std::string()) != "conflict")
+                continue;
+            const auto job_id = job.at("id").get<std::string>();
+            const auto& result = job.at("result");
+            const auto request = job.value("request", Json::object());
+            bool pending = false, superseded = false;
+            std::string retry_error;
+            if (const auto found = import_retries.find(job_id); found != import_retries.end())
+                for (const auto& retry : all_jobs)
+                    if (retry.at("id") == found->second) {
+                        const auto state = retry.value("state", std::string());
+                        pending = state == "queued" || state == "running";
+                        superseded = state == "succeeded" || state == "conflict";
+                        if (state == "failed" || state == "cancelled")
+                            retry_error = retry.value("error", std::string("Retry cancelled"));
+                    }
+            for (const auto& asset : assets)
+                if (asset.at("id") == result.value("asset_id", std::string()) &&
+                    asset.contains("manifest") &&
+                    asset.at("manifest").at("generation") ==
+                        result.value("generation", std::string()))
+                    superseded = true;
+            if (superseded)
+                continue;
+            ++import_conflicts;
+            const auto id = "import-conflict-" + job_id;
+            auto& group = conflict_list.add(Kind::Column, id);
+            group.layout.padding = 6;
+            group.layout.gap = 3;
+            conflict_keep.insert(id);
+            label(group, id + "-title", "Import removal: " + request.value("path", job_id));
+            label(group, id + "-note",
+                  "The previous asset stays active. Update affected references before accepting.");
+            label(group, id + "-generation",
+                  "Reviewed generation: " + result.value("generation", std::string()));
+            auto diagnostic = job.value("error", std::string());
+            std::replace(diagnostic.begin(), diagnostic.end(), '\n', ' ');
+            label(group, id + "-diagnostic", diagnostic);
+            const auto removed = result.value("removed_output_ids", Json::array());
+            auto& outputs = group.add(Kind::Column, id + "-outputs");
+            outputs.layout.height = std::min(150.f, std::max(26.f, float(removed.size()) * 26));
+            outputs.layout.scroll = true;
+            outputs.layout.gap = 0;
+            std::set<std::string> output_keep;
+            for (const auto& output : removed) {
+                const auto output_id = output.get<std::string>();
+                std::string name;
+                for (const auto& asset : assets)
+                    if (asset.at("id") == result.value("asset_id", std::string()) &&
+                        asset.contains("manifest"))
+                        for (const auto* collection : {"nodes", "meshes", "materials", "textures"})
+                            for (const auto& item :
+                                 asset.at("manifest").value(collection, Json::array()))
+                                if (item.at("id") == output_id)
+                                    name = item.value("name", std::string());
+                const auto output_widget = id + "-output-" + output_id;
+                label(outputs, output_widget, output_id + (name.empty() ? "" : "  /  " + name));
+                outputs.find(output_widget)->layout.height = 26;
+                output_keep.insert(output_widget);
+            }
+            trim_children(outputs, output_keep);
+            auto& actions = group.add(Kind::Row, id + "-actions");
+            actions.layout.height = 30;
+            const auto retry = [this, job_id, request, result](bool accept) {
+                Json arguments = {{"path", request.at("path")}, {"allow_removed_outputs", accept}};
+                if (request.contains("settings") && !request.at("settings").is_null())
+                    arguments["settings"] = request.at("settings");
+                if (accept) {
+                    arguments["expected_generation"] = result.at("generation");
+                    arguments["expected_active_generation"] = result.at("previous_generation");
+                }
+                auto submitted = call("faset_import", arguments);
+                if (!submitted.is_null()) {
+                    import_retries[job_id] = submitted.at("job");
+                    status =
+                        accept
+                            ? "Publishing the reviewed import; source changes require a new review"
+                            : "Reimporting source for a fresh review";
+                }
+            };
+            button(
+                actions, id + "-retry", "Reimport / review again", [retry] { retry(false); }, 185)
+                .enabled = !pending && request.contains("path");
+            button(
+                actions, id + "-accept", "Accept reviewed removal", [retry] { retry(true); }, 190)
+                .enabled = !pending && request.contains("path") && !removed.empty();
+            button(
+                actions, id + "-copy", "Copy removed IDs",
+                [this, removed] { renderer.set_clipboard(removed.dump(2)); }, 145);
+            auto detail = pending ? "Import in progress; the previous generation remains active."
+                                  : "Accepting removes these outputs. Scene references are not "
+                                    "remapped automatically.";
+            label(group, id + "-detail", detail);
+            if (!retry_error.empty()) {
+                std::replace(retry_error.begin(), retry_error.end(), '\n', ' ');
+                label(group, id + "-error", retry_error);
+            } else
+                group.remove(id + "-error");
+        }
+        ui.find("tab-conflicts")->text =
+            "Conflicts (" + std::to_string(template_conflicts.size() + import_conflicts) + ")";
         if (conflict_keep.empty()) {
             label(conflict_list, "conflicts-empty",
-                  "No template conflicts. Missing targets preserve their overrides here.");
+                  "No template or import conflicts. Missing targets preserve their data here.");
             conflict_keep.insert("conflicts-empty");
         }
         trim_children(conflict_list, conflict_keep);
@@ -1738,27 +1852,28 @@ struct EditorUI::Impl {
             keep.insert("log-empty");
         }
         trim_children(console, keep);
-        auto result = call("faset_jobs");
         auto& jobs = *ui.find("job-items");
         keep.clear();
-        if (!result.is_null())
-            for (const auto& job : result.at("jobs")) {
-                const auto id = job.at("id").get<std::string>();
-                auto& row = jobs.add(Kind::Row, "job-" + id);
-                row.layout.height = 28;
-                keep.insert(row.id);
-                const auto state = job.value("state", std::string());
-                auto& text =
-                    row.add(Kind::Label, "job-text-" + id,
-                            job.value("kind", std::string("Job")) + " · " + state + " · " +
-                                job.value("stage", std::string()) + " " +
-                                std::to_string(int(job.value("progress", 0.0) * 100)) + "%");
-                text.layout.flex = 1;
-                auto& cancel = button(
-                    row, "job-cancel-" + id, "Cancel",
-                    [this, id] { call("faset_job_cancel", {{"id", id}}); }, 72);
-                cancel.enabled = state == "queued" || state == "running";
-            }
+        for (const auto& job : all_jobs) {
+            const auto id = job.at("id").get<std::string>();
+            auto& row = jobs.add(Kind::Row, "job-" + id);
+            row.layout.height = 28;
+            keep.insert(row.id);
+            const auto state = job.value("state", std::string());
+            auto& text = row.add(Kind::Label, "job-text-" + id,
+                                 job.value("kind", std::string("Job")) + " · " + state + " · " +
+                                     job.value("stage", std::string()) + " " +
+                                     std::to_string(int(job.value("progress", 0.0) * 100)) + "%");
+            text.layout.flex = 1;
+            auto& cancel = button(
+                row, "job-cancel-" + id, "Cancel",
+                [this, id] { call("faset_job_cancel", {{"id", id}}); }, 72);
+            cancel.enabled = state == "queued" || state == "running";
+            auto& review = button(
+                row, "job-review-" + id, "Review removals", [this] { active_bottom = "conflicts"; },
+                135);
+            review.visible = job.value("kind", std::string()) == "import" && state == "conflict";
+        }
         if (keep.empty()) {
             label(jobs, "jobs-empty", "No active import, build or export jobs.");
             keep.insert("jobs-empty");
@@ -1788,8 +1903,8 @@ struct EditorUI::Impl {
                                    : "Project switching is unavailable while MCP is connected";
         auto* switching = ui.find("project-switch-dialog");
         switching->visible = project_switch_warning;
-        switching->layout.x = std::max(0.f, (float(renderer.width()) - 500) * .5f);
-        switching->layout.y = std::max(0.f, (float(renderer.height()) - 220) * .5f);
+        switching->layout.x = std::max(0.f, (logical_width() - 500) * .5f);
+        switching->layout.y = std::max(0.f, (logical_height() - 220) * .5f);
         for (const auto* id : {"menu-duplicate", "menu-delete"})
             ui.find(id)->visible = edit;
         for (const auto* id : {"help-one", "help-two", "help-three"})
@@ -1805,7 +1920,7 @@ struct EditorUI::Impl {
                                            : 5;
         auto& command = *ui.find("palette");
         command.visible = palette;
-        command.layout.x = std::max(0.f, (float(renderer.width()) - 570) / 2);
+        command.layout.x = std::max(0.f, (logical_width() - 570) / 2);
         command.layout.y = 90;
         auto& list = *ui.find("palette-list");
         std::set<std::string> keep;
@@ -1855,10 +1970,9 @@ struct EditorUI::Impl {
                     if (++visited > 4000)
                         break;
                     if (entry.is_regular_file() &&
-                        entry.path().filename().string().ends_with(".scene.json"))
-                        saved.insert(
-                            std::filesystem::relative(entry.path(), session.config().project_root)
-                                .generic_string());
+                        path_to_utf8(entry.path().filename()).ends_with(".scene.json"))
+                        saved.insert(generic_path_to_utf8(std::filesystem::relative(
+                            entry.path(), session.config().project_root)));
                 }
             }
         } catch (const std::exception& error) {
@@ -1867,7 +1981,8 @@ struct EditorUI::Impl {
         std::size_t index = 0;
         for (const auto& path : saved) {
             try {
-                const auto scene = read_json(project_path(session.config().project_root, path));
+                const auto scene =
+                    read_json(project_path(session.config().project_root, path_from_utf8(path)));
                 if (scene.value("format", "") != "faset.scene" || scene.value("version", 0) != 1)
                     continue;
             } catch (...) {
@@ -1914,10 +2029,10 @@ struct EditorUI::Impl {
     void refresh_project_settings() {
         auto* panel = ui.find("project-settings-panel");
         panel->visible = project_settings_open;
-        panel->layout.width = std::min(610.f, std::max(340.f, float(renderer.width()) - 40));
-        panel->layout.height = std::min(550.f, std::max(300.f, float(renderer.height()) - 40));
-        panel->layout.x = std::max(0.f, (float(renderer.width()) - panel->layout.width) * .5f);
-        panel->layout.y = std::max(0.f, (float(renderer.height()) - panel->layout.height) * .5f);
+        panel->layout.width = std::min(610.f, std::max(340.f, logical_width() - 40));
+        panel->layout.height = std::min(550.f, std::max(300.f, logical_height() - 40));
+        panel->layout.x = std::max(0.f, (logical_width() - panel->layout.width) * .5f);
+        panel->layout.y = std::max(0.f, (logical_height() - panel->layout.height) * .5f);
         ui.find("project-settings-2d")->selected = project_settings_dimension == 2;
         ui.find("project-settings-3d")->selected = project_settings_dimension == 3;
         ui.find("project-settings-error")->text = project_settings_error;
@@ -1928,7 +2043,7 @@ struct EditorUI::Impl {
     void refresh_simulation() {
         auto& panel = *ui.find("simulation-panel");
         panel.visible = simulation_open;
-        panel.layout.x = std::max(0.f, (float(renderer.width()) - 470) / 2);
+        panel.layout.x = std::max(0.f, (logical_width() - 470) / 2);
         panel.layout.y = 90;
         if (!simulation_open)
             return;
@@ -1986,7 +2101,7 @@ struct EditorUI::Impl {
     void refresh_recovery() {
         auto& panel = *ui.find("recovery-panel");
         panel.visible = !recovery.empty();
-        panel.layout.x = std::max(0.f, (float(renderer.width()) - 470) / 2);
+        panel.layout.x = std::max(0.f, (logical_width() - 470) / 2);
         panel.layout.y = 100;
         std::set<std::string> keep;
         label(panel, "recovery-title", "Unsaved authoring recovery");
@@ -2152,11 +2267,16 @@ struct EditorUI::Impl {
                 const render::Color colors[3] = {
                     {.88f, .35f, .34f, 1}, {.38f, .75f, .49f, 1}, {.4f, .58f, .92f, 1}};
                 for (int axis = 0; axis < (is2d ? 2 : 3); ++axis) {
-                    line(gizmo_screen[0], gizmo_screen[axis + 1], colors[axis], 2);
+                    line(gizmo_screen[0], gizmo_screen[axis + 1], colors[axis], 2 * ui_scale);
                     const auto end = gizmo_screen[axis + 1];
                     if (viewport.contains(end[0], end[1]))
-                        rendered.ui_quads.push_back(
-                            {end[0] - 4, end[1] - 4, 8, 8, colors[axis], {}, {0, 0, 1, 1}});
+                        rendered.ui_quads.push_back({end[0] - 4 * ui_scale,
+                                                     end[1] - 4 * ui_scale,
+                                                     8 * ui_scale,
+                                                     8 * ui_scale,
+                                                     colors[axis],
+                                                     {},
+                                                     {0, 0, 1, 1}});
                 }
             }
         }
@@ -2196,12 +2316,12 @@ struct EditorUI::Impl {
         const auto* c = component(*e, "faset.transform");
         if (!c || c->value("version", 1) != 1)
             return false;
-        float best = 8;
+        float best = 8 * ui_scale;
         int axis = -1;
         for (int i = 0; i < (current.at("scene").value("dimension", 3) == 2 ? 2 : 3); ++i) {
             auto a = gizmo_screen[0], b = gizmo_screen[i + 1];
             const auto dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy;
-            if (l < 16)
+            if (l < 16 * ui_scale * ui_scale)
                 continue;
             const auto t = std::clamp(((x - a[0]) * dx + (y - a[1]) * dy) / l, 0.f, 1.f);
             const auto d = std::hypot(x - a[0] - t * dx, y - a[1] - t * dy);
@@ -2282,8 +2402,8 @@ struct EditorUI::Impl {
             if (camera_drag) {
                 const bool is2d = current.at("scene").value("dimension", 3) == 2;
                 if (camera_drag == 3 && !is2d) {
-                    yaw -= dx * .008f;
-                    pitch = std::clamp(pitch + dy * .008f, -1.5f, 1.5f);
+                    yaw -= dx / ui_scale * .008f;
+                    pitch = std::clamp(pitch + dy / ui_scale * .008f, -1.5f, 1.5f);
                 } else {
                     const auto right = Vec3{std::cos(yaw), 0, -std::sin(yaw)};
                     const auto up =
@@ -2367,7 +2487,7 @@ struct EditorUI::Impl {
                 }
             }
             if (event.type == Type::MouseDown && !menu.empty() &&
-                !ui.find("menu-popup")->rect.contains(event.x, event.y) && event.y > 36)
+                !ui.find("menu-popup")->rect.contains(event.x, event.y) && event.y > 36 * ui_scale)
                 menu.clear();
             if (event.type == Type::MouseMove || event.type == Type::MouseDown) {
                 mouse_x = event.x;
@@ -2427,15 +2547,31 @@ struct EditorUI::Impl {
         }
     }
     void frame(const std::vector<render::Event>& events_) {
+        const auto next_scale = std::clamp(renderer.display_scale(), .5f, 4.f);
+        const bool geometry_changed = next_scale != ui_scale || layout_width != renderer.width() ||
+                                      layout_height != renderer.height();
+        if (next_scale != ui_scale) {
+            camera_drag = 0;
+            if (gizmo_axis >= 0) {
+                const auto field = gizmo_mode == "Move"     ? "position"
+                                   : gizmo_mode == "Rotate" ? "rotation"
+                                                            : "scale";
+                preview_fields.erase(gizmo_component + "/" + field);
+                gizmo_axis = -1;
+            }
+        }
+        ui_scale = next_scale;
+        layout_width = renderer.width();
+        layout_height = renderer.height();
         session.poll();
         poll_presentation();
         refresh();
-        ui.layout(float(renderer.width()), float(renderer.height()));
-        if (rendered.scene_rect[2] == 0)
+        ui.layout(float(renderer.width()), float(renderer.height()), ui_scale);
+        if (rendered.scene_rect[2] == 0 || geometry_changed)
             build_snapshot();
         events(events_);
         refresh();
-        ui.layout(float(renderer.width()), float(renderer.height()));
+        ui.layout(float(renderer.width()), float(renderer.height()), ui_scale);
         build_snapshot();
     }
 };

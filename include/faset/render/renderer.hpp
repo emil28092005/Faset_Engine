@@ -32,20 +32,23 @@ struct Mesh {
 std::shared_ptr<const Mesh> cube_mesh();
 struct Texture;
 struct DrawItem {
-    std::shared_ptr<const Mesh> mesh;
+    std::shared_ptr<const Mesh> mesh{};
     Mat4 model{identity};
     Color color{1, 1, 1, 1};
     float roughness{0.65f};
     float metallic{0.0f};
     bool cast_shadow{true};
-    std::shared_ptr<const Texture> texture;
+    std::shared_ptr<const Texture> texture{};
 };
 struct Sprite {
     Vec3 position{};
     Vec2 size{1, 1};
     Color color{1, 1, 1, 1};
     float rotation{};
-    std::shared_ptr<const Texture> texture;
+    std::shared_ptr<const Texture> texture{};
+    // Higher layers draw later. Within a layer, projected depth is sorted back to front;
+    // equal-depth sprites retain their submission order.
+    int layer{};
 };
 struct Texture {
     std::uint32_t width{}, height{};
@@ -56,7 +59,7 @@ struct Texture {
 struct Quad {
     float x{}, y{}, width{}, height{};
     Color color{1, 1, 1, 1};
-    std::shared_ptr<const Texture> texture;
+    std::shared_ptr<const Texture> texture{};
     std::array<float, 4> uv_rect{0, 0, 1, 1};
 };
 struct Text {
@@ -88,7 +91,7 @@ struct RendererConfig {
     bool headless{false};
     bool validation{true};
     // Optional isolated shader bundle, useful for editor preview and shader reload tests.
-    std::filesystem::path shader_directory;
+    std::filesystem::path shader_directory{};
 };
 struct Event {
     enum class Type {
@@ -141,6 +144,8 @@ class Renderer {
     std::vector<std::uint8_t> pixels() const;
     std::uint32_t width() const;
     std::uint32_t height() const;
+    // Effective UI scale in drawable pixels; updates when the window changes display.
+    float display_scale() const;
     bool should_close() const;
     const FrameStats& stats() const;
     void set_title(const std::string&);

@@ -1,10 +1,13 @@
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <faset/render/renderer.hpp>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <thread>
 
 namespace {
@@ -66,6 +69,12 @@ int main(int argc, char** argv) {
         unsigned frame{};
         auto draw = [&] {
             renderer.poll_events();
+            const float native_scale = SDL_GetWindowDisplayScale(window);
+            require(std::isfinite(renderer.display_scale()) && renderer.display_scale() > 0.f,
+                    "Renderer UI display scale must be finite and positive");
+            if (std::isfinite(native_scale) && native_scale > 0.f)
+                require(std::abs(renderer.display_scale() - native_scale) < 0.001f,
+                        "Renderer UI display scale must follow SDL's live window scale");
             const unsigned channel = frame++ % 2;
             scene.ui_quads[0].color = channel ? Color{0, 1, 0, 1} : Color{1, 0, 0, 1};
             renderer.render(scene);
@@ -108,6 +117,61 @@ int main(int argc, char** argv) {
             draw();
             SDL_Delay(10);
         }
+        {
+            // Do not replace an image/rich clipboard with its text projection.
+            // Plain text is restored without ever printing the saved contents.
+            std::size_t mime_count{};
+            auto** mime_types = SDL_GetClipboardMimeTypes(&mime_count);
+            bool plain_text_only = true;
+            for (std::size_t i = 0; i < mime_count; ++i) {
+                const std::string type = mime_types[i];
+                if (!type.starts_with("text/plain") && type != "UTF8_STRING" && type != "TEXT" &&
+                    type != "STRING" && type != "COMPOUND_TEXT" && type != "TARGETS" &&
+                    type != "TIMESTAMP" && type != "MULTIPLE")
+                    plain_text_only = false;
+            }
+            SDL_free(mime_types);
+            if (plain_text_only) {
+                char* saved = SDL_GetClipboardText();
+                require(saved != nullptr, "Read clipboard before reversible fixture");
+                struct ClipboardRestore {
+                    std::string saved;
+                    bool active{true};
+                    ~ClipboardRestore() {
+                        if (active)
+                            SDL_SetClipboardText(saved.c_str());
+                    }
+                } restore{saved};
+                SDL_free(saved);
+                const std::string fixture = "Faset clipboard Café 世界";
+                renderer.set_clipboard(fixture);
+                require(renderer.clipboard() == fixture, "Native Unicode clipboard roundtrip");
+                require(SDL_SetClipboardText(restore.saved.c_str()), "Restore saved clipboard");
+                restore.active = false;
+                std::cout << "clipboard=unicode_roundtrip_passed\n";
+            } else {
+                std::cout << "clipboard=skipped_to_preserve_non_text_payload\n";
+            }
+        }
+        renderer.set_text_input(true);
+        require(SDL_TextInputActive(window), "Native SDL text input is active");
+        renderer.set_text_input_area(31.5f, 22.5f, 160.5f, 24.5f);
+        int logical_width{}, logical_height{}, pixel_width{}, pixel_height{}, cursor{};
+        SDL_GetWindowSize(window, &logical_width, &logical_height);
+        SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
+        require(logical_width > 0 && logical_height > 0 && pixel_width > 0 && pixel_height > 0,
+                "Text input area has usable native window dimensions");
+        SDL_Rect native_area{};
+        require(SDL_GetTextInputArea(window, &native_area, &cursor), "Read native text input area");
+        const float sx = float(logical_width) / pixel_width,
+                    sy = float(logical_height) / pixel_height;
+        require(native_area.x == int(31.5f * sx) && native_area.y == int(22.5f * sy) &&
+                    native_area.w == std::max(1, int(160.5f * sx)) &&
+                    native_area.h == std::max(1, int(24.5f * sy)) && cursor == 0,
+                "Drawable-pixel input area must reach SDL in logical window units");
+        renderer.set_text_input(false);
+        require(!SDL_TextInputActive(window), "Native SDL text input stops");
+        std::cout << "text_input_area=coordinate_conversion_passed\n";
         require(SDL_MinimizeWindow(window), "Request minimizing the owned fixture window");
         if (!await([&] { return SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED; }, 2000)) {
             std::cout << "SKIP: window system declined the minimize request\n";

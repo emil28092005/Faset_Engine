@@ -141,3 +141,68 @@ building its pinned software driver. A review also identified Windows Unicode pa
 boundaries that must be corrected before cross-platform acceptance. Clean offline
 build verification, final performance baselines and the final acceptance record
 remain open; no MVP tag has been created.
+
+### Checks after checkpoint 3
+
+- Public commit: `d834cfad67cd81d8c4998b90c16791361ca8c0f8`.
+- Linux and Windows headless CI plus strict manual passed in GitHub run
+  [35295534027](https://github.com/emil28092005/Faset_Engine/actions/runs/35295534027).
+- A clean committed source snapshot built all native targets with external networking
+  disabled; all 19 CPU tests passed. The recorded build/test phase took 174.03 s.
+  [Offline evidence](validation/offline-linux-2026-09-18.json) distinguishes prepared
+  system tools from source/dependency inputs. GPU/window checks remain separate.
+- The first full Windows graphics job compiled the whole Editor successfully, then
+  failed creating a Vulkan instance with its CI software driver. Its CPU SceneView
+  test also reported a texture-loading error. These are acceptance failures under
+  investigation, not verified Windows graphics/export support.
+
+## Checkpoint 4 — portability and acceptance hardening
+
+Implemented after concrete regression findings:
+
+- UTF-8 project, resource, plugin, CLI and subprocess boundaries. Windows native paths
+  stay wide internally; Editor/Player/SchemaExporter normalize `wmain` arguments.
+  File reads, hashes and atomic writes use extended native paths. All Faset Windows
+  executables declare long-path support; CI enables the documented developer policy.
+- Normal Stop requests Player shutdown before bounded termination fallback. Real
+  `onDestroy` execution was observed, and a dedicated Player fixture verifies that
+  callback diagnostics also reach logs during shutdown. Custom component versions
+  are checked against the linked gameplay schema, including data-only components.
+- POSIX subprocess cleanup keeps the exited leader's PID reserved while terminating
+  its owned process group, then reaps it. A regression verifies that a descendant
+  ignoring SIGTERM cannot survive normal leader exit or cancellation, without losing
+  the leader's stdout tail or signaling a reused process-group ID.
+- Transparent sprites use stable layer/depth ordering without depth writes, avoiding
+  invisible sprites hiding objects behind them. GPU regressions cover alpha layering,
+  shader/capture paths longer than 300 characters, and window capture after resize.
+- Editor/launcher DPI scaling, logical-unit layout persistence and safe cancellation
+  of unfinished drags on scale changes. Retained UI tests cover 1×/2× text rasterization,
+  clipping, hit testing and text-input rectangles.
+- Manual import-removal review with exact IDs/names and explicit acceptance. Both the
+  reviewed candidate and active generation are checked before publishing, so stale
+  confirmation cannot apply a different import. The GUI regression exercises rejection,
+  fresh review and successful acceptance through actual widget events.
+- Extended template workflow now saves through UI controls and opens a new Session,
+  comparing IDs, nested origins, local additions and resolved values.
+- Blender verification now updates two instances in one live Editor/SceneView, preserves
+  placement, tint, physics and opaque gameplay fields, and retains both visible meshes
+  after a removal conflict. [Blender evidence](validation/blender-live-linux-2026-09-18.json).
+
+Observed Linux integration: **32 passed, 1 skipped, 0 failed** in the 33-test suite.
+The skip is native Wayland programmatic restore, which the compositor declined;
+the same lifecycle scenario passed under XWayland. ASan/UBSan passed **17/17** tests.
+Strict MkDocs passed. [Recovery evidence](validation/editor-recovery-linux-2026-09-18.json)
+records actual Editor termination and failed save/import/build/Player scenarios.
+[Release baseline](validation/linux-release-2026-09-18/README.md) records the two
+relocated Unicode-path packages and 240-frame profiles with their scope and hashes.
+
+Windows execution of these fixes remains a separate gate. The previous fast CPU run
+isolated a 264-character cooked path failure; the new native-path fixes must pass on
+Windows before that issue is considered closed there. Native OS IME composition and
+moving between physical monitors still have less coverage than deterministic widget
+and platform-boundary tests. No MVP tag has been created.
+
+The final build-service review also reproduced a publication defect: an invalid
+custom-field default can pass the build stage's shallow schema check before the
+Editor rejects it. Full schema validation before publishing `last_build.json` is the
+next bounded correction; checkpoint 4 does not claim this gate is already complete.

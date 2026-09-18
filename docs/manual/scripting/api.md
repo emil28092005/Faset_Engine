@@ -4,7 +4,7 @@ Include `<faset/runtime/Runtime.hpp>` and use namespace `faset::runtime`. This i
 
 ## Register behavior
 
-`void Runtime::registerBehavior(std::string componentType, Behavior behavior)` registers callbacks before scene loading. An empty or duplicate type, registration during a callback, and registration after entities have loaded are rejected.
+`void Runtime::registerBehavior(std::string componentType, Behavior behavior)` registers callbacks before scene loading. An empty or duplicate type and registration while entities are present or a callback is running are rejected. An empty or cleared world can register additional types.
 
 `Behavior::Callback` is `std::function<void(Runtime&, EntityHandle, double)>`. Assign it to any of `onStart`, `fixedUpdate`, `update`, `lateUpdate`, and `onDestroy`. Unassigned members do nothing. `Behavior::onCollision` instead accepts `(Runtime&, EntityHandle, const CollisionEvent&)`.
 
@@ -62,6 +62,13 @@ Immediate validation errors throw. Deferred failures are recorded in diagnostics
 ## Drive a world or a test
 
 `Runtime(RuntimeConfig = {})` constructs the controller. `load(const nlohmann::json&)` validates and prepares a scene, creates its entities, then calls initial callbacks. Invalid scene data leaves the preceding world intact. `clear()` destroys the current entities and invalidates their session handles.
+
+Direct callers can include `<faset/runtime/schema.hpp>` and call
+`validate_scene_schemas(scene, gameplaySchema)` before `load`. The Player does this
+automatically: each custom TypeId/version must match its linked schema. Generic
+`Runtime` accepts opaque custom data with positive versions, including data-only
+components; built-ins use version 1. This helper verifies identity/version, without
+automatic migrations or authoring-style custom-field constraint validation.
 
 `FrameStats advance(double elapsedSeconds, InputState = {})` advances fixed ticks, frame callbacks, interpolation, and late callbacks. `singleStep(InputState = {})` advances one fixed tick. `setPaused(bool)` clears accumulated time and resets presentation history; `paused()` reports this local state. Do not call load/clear/advance recursively from a callback.
 

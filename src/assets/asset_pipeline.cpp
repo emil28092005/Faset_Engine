@@ -1,6 +1,7 @@
 #include <cgltf.h>
 #include <faset/assets/asset_pipeline.hpp>
 #include <faset/core/hash.hpp>
+#include <faset/core/io.hpp>
 // Import validation owns a private decoder; Player's decoder remains a separate
 // binary boundary.
 #define STB_IMAGE_IMPLEMENTATION
@@ -63,33 +64,33 @@ void valid_id(const std::string& id) {
         throw std::runtime_error("Invalid AssetId");
 }
 std::vector<std::byte> read_bytes(const fs::path& path) {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    std::ifstream file(faset::native_io_path(path), std::ios::binary | std::ios::ate);
     if (!file)
-        throw std::runtime_error("Cannot read: " + path.string());
+        throw std::runtime_error("Cannot read: " + faset::path_to_utf8(path));
     const auto length = file.tellg();
     if (length < 0 || static_cast<std::uint64_t>(length) > 1024ull * 1024 * 1024)
-        throw std::runtime_error("Input exceeds 1 GiB limit: " + path.string());
+        throw std::runtime_error("Input exceeds 1 GiB limit: " + faset::path_to_utf8(path));
     std::vector<std::byte> data(static_cast<std::size_t>(length));
     file.seekg(0);
     if (!data.empty() &&
         !file.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size())))
-        throw std::runtime_error("Short read: " + path.string());
+        throw std::runtime_error("Short read: " + faset::path_to_utf8(path));
     return data;
 }
 void write_bytes(const fs::path& path, const std::vector<std::byte>& data) {
     fs::create_directories(path.parent_path());
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    std::ofstream out(faset::native_io_path(path), std::ios::binary | std::ios::trunc);
     if (!out || (!data.empty() && !out.write(reinterpret_cast<const char*>(data.data()),
                                              static_cast<std::streamsize>(data.size()))))
-        throw std::runtime_error("Cannot write: " + path.string());
+        throw std::runtime_error("Cannot write: " + faset::path_to_utf8(path));
     out.close();
     if (!out)
-        throw std::runtime_error("Cannot close: " + path.string());
+        throw std::runtime_error("Cannot close: " + faset::path_to_utf8(path));
 }
 Json read_json(const fs::path& path) {
-    std::ifstream in(path);
+    std::ifstream in(faset::native_io_path(path));
     if (!in)
-        throw std::runtime_error("Cannot read JSON: " + path.string());
+        throw std::runtime_error("Cannot read JSON: " + faset::path_to_utf8(path));
     return Json::parse(in);
 }
 void write_json(const fs::path& path, const Json& value) {
@@ -105,9 +106,10 @@ void atomic_json(const fs::path& path, const Json& value) {
     try {
         write_json(temporary, value);
 #ifdef _WIN32
-        if (!MoveFileExW(temporary.c_str(), path.c_str(),
+        if (!MoveFileExW(faset::native_io_path(temporary).c_str(),
+                         faset::native_io_path(path).c_str(),
                          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            throw std::runtime_error("Atomic replace failed: " + path.string());
+            throw std::runtime_error("Atomic replace failed: " + faset::path_to_utf8(path));
 #else
         fs::rename(temporary, path);
 #endif
@@ -177,7 +179,7 @@ std::vector<std::byte> decode_data_uri(const std::string& uri) {
 fs::path external_path(const fs::path& source, const std::string& uri) {
     if (uri.find("://") != std::string::npos)
         throw std::runtime_error("Network URI is not an import dependency: " + uri);
-    const fs::path relative = uri_decode(uri);
+    const fs::path relative = faset::path_from_utf8(uri_decode(uri));
     if (relative.is_absolute())
         throw std::runtime_error("glTF URI must be relative");
     return (source.parent_path() / relative).lexically_normal();
@@ -306,13 +308,15 @@ void validate_generation(const fs::path& directory, const Json& manifest) {
     if (manifest.at("schema_version") != 1)
         throw std::runtime_error("Unsupported asset manifest version");
     for (const auto& file : manifest.at("files")) {
-        const fs::path relative = file.at("path").get<std::string>();
-        if (relative.is_absolute() || relative.string().find("..") != std::string::npos)
+        const fs::path relative = faset::path_from_utf8(file.at("path").get<std::string>());
+        if (relative.is_absolute() ||
+            faset::generic_path_to_utf8(relative).find("..") != std::string::npos)
             throw std::runtime_error("Invalid cooked file path");
         auto bytes = read_bytes(directory / relative);
         if (bytes.size() != file.at("size").get<std::size_t>() ||
             hash_bytes(bytes) != file.at("sha256").get<std::string>())
-            throw std::runtime_error("Corrupt cooked file: " + relative.string());
+            throw std::runtime_error("Corrupt cooked file: " +
+                                     faset::generic_path_to_utf8(relative));
     }
 }
 Json material_json(const Material& m) {
@@ -387,8 +391,9 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
             valid_id(bundle_asset_id);
             bool found_payload = false;
             for (const auto& file : bundle.at("files")) {
-                const auto relative = fs::path(file.at("path").get<std::string>());
-                if (relative.is_absolute() || relative.string().find("..") != std::string::npos)
+                const auto relative = faset::path_from_utf8(file.at("path").get<std::string>());
+                if (relative.is_absolute() ||
+                    faset::generic_path_to_utf8(relative).find("..") != std::string::npos)
                     throw std::runtime_error("Invalid bundle payload path");
                 const auto candidate = logical_source.parent_path() / relative;
                 const auto bytes = read_bytes(candidate);
@@ -407,7 +412,8 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
         }
         const auto source_bytes = source == logical_source ? logical_bytes : payload_snapshot;
         const auto source_hash = hash_bytes(source_bytes);
-        const auto sidecar = fs::path(logical_source.string() + ".faset-import.json");
+        auto sidecar = logical_source;
+        sidecar += ".faset-import.json";
         Json metadata = fs::exists(sidecar) ? read_json(sidecar) : Json::object();
         if (!metadata.is_object() ||
             (!metadata.empty() && metadata.value("schema_version", 0) != 1))
@@ -431,14 +437,15 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
         Json previous =
             fs::exists(asset_root / "current.json") ? current_manifest(result.asset_id) : Json();
         if (!previous.is_null()) {
-            const auto previous_source = fs::path(previous.at("source").get<std::string>());
+            const auto previous_source =
+                faset::path_from_utf8(previous.at("source").get<std::string>());
             if (previous_source != logical_source && fs::exists(previous_source))
                 throw std::runtime_error("Duplicate AssetId: previous source still exists");
         }
         Dependencies dependencies;
         CookedAsset asset;
         asset.asset_id = result.asset_id;
-        auto extension = source.extension().string();
+        auto extension = faset::path_to_utf8(source.extension());
         std::transform(extension.begin(), extension.end(), extension.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         const bool standalone_image =
@@ -514,7 +521,7 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
                     data->buffers[i].data_free_method = cgltf_data_free_method_none;
                 }
             }
-            if (cgltf_load_buffers(&options, data.get(), source.string().c_str()) !=
+            if (cgltf_load_buffers(&options, data.get(), faset::path_to_utf8(source).c_str()) !=
                 cgltf_result_success)
                 throw std::runtime_error("Cannot load glTF buffers");
             if (cgltf_validate(data.get()) != cgltf_result_success)
@@ -710,8 +717,8 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
         Json manifest{{"schema_version", 1},
                       {"asset_id", result.asset_id},
                       {"generation", result.generation},
-                      {"source", logical_source.string()},
-                      {"payload_source", source.string()},
+                      {"source", faset::path_to_utf8(logical_source)},
+                      {"payload_source", faset::path_to_utf8(source)},
                       {"source_sha256", source_hash},
                       {"importer", recipe_version},
                       {"settings", settings},
@@ -772,6 +779,19 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
                 if (!published_ids.contains(old.get<std::string>()))
                     result.removed_output_ids.push_back(old.get<std::string>());
         result.manifest = manifest;
+        result.previous_generation =
+            previous.is_null() ? "" : previous.at("generation").get<std::string>();
+        if ((!request.expected_generation.empty() &&
+             request.expected_generation != result.generation) ||
+            (!request.expected_active_generation.empty() &&
+             request.expected_active_generation != result.previous_generation)) {
+            result.status = ImportStatus::conflict;
+            result.diagnostics.push_back(
+                "Import changed since review; reimport and review the current removed outputs. "
+                "Active generation preserved");
+            fs::remove_all(stage);
+            return result;
+        }
         if (!result.removed_output_ids.empty() && !request.allow_removed_outputs) {
             result.status = ImportStatus::conflict;
             result.diagnostics.push_back(
@@ -808,7 +828,7 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
             throw Cancelled{};
         atomic_json(asset_root / "current.json", {{"schema_version", 1},
                                                   {"generation", result.generation},
-                                                  {"source", logical_source.string()}});
+                                                  {"source", faset::path_to_utf8(logical_source)}});
         result.status = ImportStatus::succeeded;
         job.report(1, "complete");
     } catch (const Cancelled&) {
@@ -826,15 +846,15 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
 }
 Json AssetPipeline::overrides(const std::string& id) const {
     const auto source = current_manifest(id).at("source").get<std::string>();
-    const auto path = fs::path(source + ".faset-overrides.json");
+    const auto path = faset::path_from_utf8(source + ".faset-overrides.json");
     return fs::exists(path) ? read_json(path) : Json::object();
 }
 void AssetPipeline::set_overrides(const std::string& id, const Json& values) {
     if (!values.is_object())
         throw std::runtime_error("Overrides must be an object keyed by stable output IDs");
     std::lock_guard lock(writer_mutex);
-    atomic_json(
-        fs::path(current_manifest(id).at("source").get<std::string>() + ".faset-overrides.json"),
-        values);
+    atomic_json(faset::path_from_utf8(current_manifest(id).at("source").get<std::string>() +
+                                      ".faset-overrides.json"),
+                values);
 }
 } // namespace faset::assets

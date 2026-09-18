@@ -6,8 +6,8 @@
 namespace faset::player {
 nlohmann::json readScene(const std::filesystem::path& path) {
     if (!std::filesystem::is_regular_file(path))
-        throw std::runtime_error("Scene file does not exist: " + path.string());
-    if (std::filesystem::file_size(path) > 256 * 1024 * 1024)
+        throw std::runtime_error("Scene file does not exist: " + faset::path_to_utf8(path));
+    if (std::filesystem::file_size(faset::native_io_path(path)) > 256 * 1024 * 1024)
         throw std::runtime_error("Scene exceeds the 256 MiB reader limit");
     const auto bytes = faset::read_text(path);
     if (bytes.size() >= 8 && std::memcmp(bytes.data(), "FASETSCN", 8) == 0) {

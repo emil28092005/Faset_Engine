@@ -74,7 +74,7 @@ std::set<std::string> asset_references(const Json& scene) {
 void copy_required_file(const fs::path& source, const fs::path& target) {
     if (!fs::is_regular_file(source) || fs::is_symlink(source))
         throw std::runtime_error("Required package file missing or not a regular file: " +
-                                 source.string());
+                                 path_to_utf8(source));
     fs::create_directories(target.parent_path());
     fs::copy_file(source, target, fs::copy_options::overwrite_existing);
 }
@@ -248,9 +248,9 @@ struct BuildService::Impl {
         fs::create_directories(native_directory);
         std::vector<std::string> arguments = {config.cmake,
                                               "-S",
-                                              config.engine_root.string(),
+                                              path_to_utf8(config.engine_root),
                                               "-B",
-                                              native_directory.string(),
+                                              path_to_utf8(native_directory),
                                               "-G",
                                               config.generator,
                                               "-DCMAKE_BUILD_TYPE=" + configuration,
@@ -260,7 +260,7 @@ struct BuildService::Impl {
                                               "-DFASET_BUILD_RUNTIME=ON",
                                               "-DFASET_BUILD_ASSETS=ON",
                                               "-DFASET_GAMEPLAY_SOURCE_DIR=" +
-                                                  (config.project_root / "Scripts").string()};
+                                                  path_to_utf8(config.project_root / "Scripts")};
         bool compiler_overridden = false;
         for (const auto& arg : config.configure_arguments)
             if (arg.starts_with("-DCMAKE_CXX_COMPILER="))
@@ -268,11 +268,11 @@ struct BuildService::Impl {
         if (!compiler_overridden) {
 #ifdef _WIN32
             auto compiler = find_executable("clang-cl");
-            arguments.push_back("-DCMAKE_C_COMPILER=" + compiler.string());
-            arguments.push_back("-DCMAKE_CXX_COMPILER=" + compiler.string());
+            arguments.push_back("-DCMAKE_C_COMPILER=" + path_to_utf8(compiler));
+            arguments.push_back("-DCMAKE_CXX_COMPILER=" + path_to_utf8(compiler));
 #else
-            arguments.push_back("-DCMAKE_C_COMPILER=" + find_executable("clang").string());
-            arguments.push_back("-DCMAKE_CXX_COMPILER=" + find_executable("clang++").string());
+            arguments.push_back("-DCMAKE_C_COMPILER=" + path_to_utf8(find_executable("clang")));
+            arguments.push_back("-DCMAKE_CXX_COMPILER=" + path_to_utf8(find_executable("clang++")));
 #endif
         }
         arguments.insert(arguments.end(), config.configure_arguments.begin(),
@@ -281,7 +281,7 @@ struct BuildService::Impl {
         run(job, std::move(arguments), config.project_root);
         checkpoint(job, "Compiling and linking Player", .25);
         run(job,
-            {config.cmake, "--build", native_directory.string(), "--config", configuration,
+            {config.cmake, "--build", path_to_utf8(native_directory), "--config", configuration,
              "--parallel", "4", "--target", "faset_player", "faset_schema_exporter"},
             config.project_root);
         checkpoint(job, "Exporting gameplay schema", .58);
@@ -292,7 +292,8 @@ struct BuildService::Impl {
         fs::create_directories(staging);
         try {
             const auto schema_file = staging / "schema.json";
-            run(job, {exporter.string(), "--output", schema_file.string()}, config.project_root);
+            run(job, {path_to_utf8(exporter), "--output", path_to_utf8(schema_file)},
+                config.project_root);
             auto schema = read_json(schema_file);
             if (schema.value("format", "") != "faset.schema" || schema.value("version", 0) != 1 ||
                 !schema.contains("types") || !schema.at("types").is_array())
@@ -324,11 +325,11 @@ struct BuildService::Impl {
             atomic_write_json(config.cache_root / "last_build.json",
                               {{"generation", job.status.id}, {"fingerprint", fingerprint}});
             return {{"generation", job.status.id},
-                    {"directory", generation.string()},
-                    {"build_directory", native_directory.string()},
+                    {"directory", path_to_utf8(generation)},
+                    {"build_directory", path_to_utf8(native_directory)},
                     {"configuration", configuration},
-                    {"player", (generation / ("faset_player" + executable_suffix())).string()},
-                    {"schema", (generation / "schema.json").string()},
+                    {"player", path_to_utf8(generation / ("faset_player" + executable_suffix()))},
+                    {"schema", path_to_utf8(generation / "schema.json")},
                     {"fingerprint", fingerprint}};
         } catch (...) {
             std::error_code error;
@@ -346,7 +347,7 @@ struct BuildService::Impl {
              {executable.parent_path(), native_directory, native_directory / configuration})
             if (fs::is_directory(root))
                 for (const auto& entry : fs::directory_iterator(root)) {
-                    auto extension = entry.path().extension().string();
+                    auto extension = path_to_utf8(entry.path().extension());
                     for (auto& c : extension)
                         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
                     if (entry.is_regular_file() && extension == ".dll")
@@ -356,7 +357,8 @@ struct BuildService::Impl {
         (void)job;
 #else
         const auto output =
-            run(job, {find_executable("ldd").string(), executable.string()}, config.project_root);
+            run(job, {path_to_utf8(find_executable("ldd")), path_to_utf8(executable)},
+                config.project_root);
         if (output.find("not found") != std::string::npos)
             throw std::runtime_error("Player has unresolved shared library dependencies");
         // SDL/physics/gameplay are linked statically. glibc/libstdc++/Vulkan are the host baseline.
@@ -427,8 +429,8 @@ struct BuildService::Impl {
                 fs::rename(staging, directory);
             atomic_write_json(config.cache_root / "last_cook.json", {{"generation", digest}});
             return {{"generation", digest},
-                    {"scene", (directory / "scene.fscene").string()},
-                    {"directory", directory.string()}};
+                    {"scene", path_to_utf8(directory / "scene.fscene")},
+                    {"directory", path_to_utf8(directory)}};
         } catch (...) {
             std::error_code error;
             fs::remove_all(staging, error);
@@ -451,13 +453,14 @@ struct BuildService::Impl {
                 for (const auto& entry : fs::directory_iterator(source)) {
                     if (!entry.is_regular_file())
                         continue;
-                    auto filename = entry.path().filename().string();
+                    auto filename = path_to_utf8(entry.path().filename());
                     std::string upper = filename;
                     for (auto& c : upper)
                         c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
                     if (upper.starts_with("LICENSE") || upper.starts_with("COPYING") ||
                         upper.starts_with("NOTICE")) {
-                        copy_required_file(entry.path(), destination / name / filename);
+                        copy_required_file(entry.path(),
+                                           destination / name / entry.path().filename());
                         copied = true;
                     }
                 }
@@ -487,7 +490,7 @@ struct BuildService::Impl {
                                                                         "generations" / generation);
             auto target = destination / "assets" / id / "generations" / generation;
             for (const auto& file : manifest.at("files")) {
-                auto relative = fs::path(file.at("path").get<std::string>());
+                auto relative = path_from_utf8(file.at("path").get<std::string>());
                 copy_required_file(project_path(source_directory, relative),
                                    project_path(target, relative));
             }
@@ -508,7 +511,8 @@ struct BuildService::Impl {
         for (const auto& id : asset_references(job.scene))
             job.asset_manifests[id] = source.current_manifest(id);
         const auto built = build(job, true);
-        validate_component_types(job.scene, read_json(built.at("schema").get<std::string>()));
+        validate_component_types(job.scene,
+                                 read_json(path_from_utf8(built.at("schema").get<std::string>())));
         auto output = fs::absolute(job.output);
         if (output.empty())
             throw std::runtime_error("An export destination is required");
@@ -519,7 +523,7 @@ struct BuildService::Impl {
         try {
             checkpoint(job, "Cooking export snapshot", .72);
             write_cooked_scene(staging / "scene.fscene", job.scene);
-            auto build_directory = fs::path(built.at("directory").get<std::string>());
+            auto build_directory = path_from_utf8(built.at("directory").get<std::string>());
             copy_required_file(build_directory / ("faset_player" + executable_suffix()),
                                staging / ("faset_player" + executable_suffix()));
             for (const auto* shader : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv",
@@ -528,7 +532,7 @@ struct BuildService::Impl {
                 copy_required_file(build_directory / "shaders" / shader,
                                    staging / "shaders" / shader);
             for (const auto& entry : fs::directory_iterator(build_directory)) {
-                auto extension = entry.path().extension().string();
+                auto extension = path_to_utf8(entry.path().extension());
                 for (auto& c : extension)
                     c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
                 if (entry.is_regular_file() && extension == ".dll")
@@ -536,7 +540,8 @@ struct BuildService::Impl {
             }
             checkpoint(job, "Packaging assets and notices", .80);
             package_assets(job, staging);
-            package_notices(staging / "Notices", built.at("build_directory").get<std::string>());
+            package_notices(staging / "Notices",
+                            path_from_utf8(built.at("build_directory").get<std::string>()));
             atomic_write(
                 staging / "README.txt",
                 "Run faset_player" + executable_suffix() +
@@ -553,8 +558,9 @@ struct BuildService::Impl {
             checkpoint(job, "Validating packaged Player", .90);
             auto validation_output =
                 run(job,
-                    {(staging / ("faset_player" + executable_suffix())).string(), "--validate",
-                     "--scene", (staging / "scene.fscene").string(), "--assets", staging.string()},
+                    {path_to_utf8(staging / ("faset_player" + executable_suffix())), "--validate",
+                     "--scene", path_to_utf8(staging / "scene.fscene"), "--assets",
+                     path_to_utf8(staging)},
                     staging);
             Json files = Json::array();
             for (const auto& entry : fs::recursive_directory_iterator(staging)) {
@@ -562,7 +568,7 @@ struct BuildService::Impl {
                     throw std::runtime_error("Export contains a symlink");
                 if (entry.is_regular_file())
                     files.push_back(
-                        {{"path", entry.path().lexically_relative(staging).generic_string()},
+                        {{"path", generic_path_to_utf8(entry.path().lexically_relative(staging))},
                          {"sha256", sha256_file(entry.path())},
                          {"size", entry.file_size()}});
             }
@@ -613,15 +619,16 @@ struct BuildService::Impl {
                                {"version", 1},
                                {"generation", job.status.id},
                                {"directory", "generations/" + job.status.id}});
-            return {{"directory", generation.string()},
-                    {"executable", (generation / ("faset_player" + executable_suffix())).string()},
-                    {"manifest", (generation / "manifest.json").string()},
-                    {"generation", job.status.id},
-                    {"build", built},
-                    {"schema", built.at("schema")},
-                    {"player", built.at("player")},
-                    {"build_directory", built.at("build_directory")},
-                    {"configuration", built.at("configuration")}};
+            return {
+                {"directory", path_to_utf8(generation)},
+                {"executable", path_to_utf8(generation / ("faset_player" + executable_suffix()))},
+                {"manifest", path_to_utf8(generation / "manifest.json")},
+                {"generation", job.status.id},
+                {"build", built},
+                {"schema", built.at("schema")},
+                {"player", built.at("player")},
+                {"build_directory", built.at("build_directory")},
+                {"configuration", built.at("configuration")}};
         } catch (...) {
             std::error_code error;
             fs::remove_all(staging, error);

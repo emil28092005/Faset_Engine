@@ -1,8 +1,45 @@
+#include <cstdlib>
 #include <faset/core/io.hpp>
 #include <faset/editor/project_launcher.hpp>
 #include <iostream>
 using namespace faset;
 namespace {
+class ScopedPathEnvironment {
+  public:
+#ifdef _WIN32
+    ScopedPathEnvironment(const wchar_t* name, const std::filesystem::path& value) : name_(name) {
+        if (const auto* previous = _wgetenv(name))
+            old_ = previous;
+        if (_wputenv_s(name, value.c_str()) != 0)
+            throw std::runtime_error("Cannot set test environment");
+    }
+    ~ScopedPathEnvironment() {
+        _wputenv_s(name_.c_str(), old_.c_str());
+    }
+
+  private:
+    std::wstring name_, old_;
+#else
+    ScopedPathEnvironment(const char* name, const std::filesystem::path& value) : name_(name) {
+        if (const auto* previous = std::getenv(name)) {
+            old_ = previous;
+            existed_ = true;
+        }
+        if (setenv(name, value.c_str(), 1) != 0)
+            throw std::runtime_error("Cannot set test environment");
+    }
+    ~ScopedPathEnvironment() {
+        if (existed_)
+            setenv(name_.c_str(), old_.c_str(), 1);
+        else
+            unsetenv(name_.c_str());
+    }
+
+  private:
+    std::string name_, old_;
+    bool existed_ = false;
+#endif
+};
 void check(bool value, const std::string& message) {
     if (!value)
         throw std::runtime_error(message);
@@ -41,19 +78,23 @@ void text(editor::ProjectLauncher& launcher, const std::string& id, const std::s
 }
 } // namespace
 int main() {
-    const auto root = std::filesystem::temp_directory_path() / ("faset-launcher-ui-" + new_id());
+    const auto root =
+        std::filesystem::temp_directory_path() / path_from_utf8("faset-проекты-" + new_id());
     try {
-        const auto existing = root / "Existing project";
+        const auto existing = root / path_from_utf8("Существующий проект");
+        const auto new_project = root / path_from_utf8("Новая игра");
         atomic_write_json(existing / "project.faset.json", {{"format", "faset.project"},
                                                             {"version", 1},
                                                             {"name", "Existing project"},
                                                             {"dimension", 2}});
         const auto recents = root / "recent-projects.json";
-        atomic_write_json(recents, Json::array({existing.string(), (root / "Missing").string(),
-                                                existing.string()}));
+        atomic_write_json(recents,
+                          Json::array({path_to_utf8(existing), path_to_utf8(root / "Missing"),
+                                       path_to_utf8(existing)}));
         render::Renderer renderer({1100, 720, "Project launcher acceptance", true, true});
         {
-            editor::ProjectLauncher launcher(renderer, FASET_TEST_ENGINE, {}, recents);
+            editor::ProjectLauncher launcher(renderer, path_from_utf8(FASET_TEST_ENGINE), {},
+                                             recents);
             launcher.frame({});
             check(launcher.widgets().find("launcher-create")->selected,
                   "No initial path starts Create");
@@ -61,11 +102,11 @@ int main() {
                       !launcher.widgets().find("launcher-recent-1"),
                   "Recent list includes real valid unique projects only");
             text(launcher, "launcher-name", "Тестовый проект");
-            text(launcher, "launcher-path", existing.string());
+            text(launcher, "launcher-path", path_to_utf8(existing));
             click(launcher, "launcher-submit");
             check(!launcher.selection() && !launcher.widgets().find("launcher-error")->text.empty(),
                   "Create must reject nonempty existing project");
-            text(launcher, "launcher-path", (root / "New Game").string());
+            text(launcher, "launcher-path", path_to_utf8(new_project));
             click(launcher, "launcher-2d");
             check(launcher.widgets().find("launcher-2d")->selected, "2D project selection");
             renderer.render(launcher.snapshot());
@@ -73,35 +114,36 @@ int main() {
             launcher.frame({key("Return", true)});
             check(launcher.selection() && launcher.selection()->create &&
                       launcher.selection()->dimension == 2 &&
-                      launcher.selection()->name == "Тестовый проект",
+                      launcher.selection()->name == "Тестовый проект" &&
+                      launcher.selection()->path == new_project,
                   "Create through keyboard returns typed selection");
-            check(!std::filesystem::exists(root / "New Game"),
+            check(!std::filesystem::exists(new_project),
                   "Launcher does not create a partial project before Session scaffold");
         }
         {
-            editor::ProjectLauncher launcher(renderer, FASET_TEST_ENGINE, root / "Missing",
-                                             recents);
+            editor::ProjectLauncher launcher(renderer, path_from_utf8(FASET_TEST_ENGINE),
+                                             root / "Missing", recents);
             launcher.frame({});
             click(launcher, "launcher-submit");
             check(!launcher.selection() && !launcher.widgets().find("launcher-error")->text.empty(),
                   "Open validates missing directory");
             click(launcher, "launcher-recent-0");
-            check(launcher.widgets().find("launcher-path")->text == existing.string(),
+            check(launcher.widgets().find("launcher-path")->text == path_to_utf8(existing),
                   "Recent selection fills actual path");
             click(launcher, "launcher-browse");
             check(launcher.widgets().find("launcher-browser")->visible,
                   "Native retained directory browser opens");
-            text(launcher, "browser-path", (root / "Absent folder").string());
+            text(launcher, "browser-path", path_to_utf8(root / "Absent folder"));
             launcher.frame({key("Return", true)});
             check(launcher.widgets().find("launcher-browser")->visible &&
                       !launcher.widgets().find("browser-choose")->enabled,
                   "Invalid typed directory cannot silently select prior directory");
-            text(launcher, "browser-path", existing.string());
+            text(launcher, "browser-path", path_to_utf8(existing));
             click(launcher, "browser-up");
-            check(launcher.widgets().find("browser-path")->text == root.string(),
+            check(launcher.widgets().find("browser-path")->text == path_to_utf8(root),
                   "Folder browser Up navigation");
             click(launcher, "browser-entry-0");
-            check(launcher.widgets().find("browser-path")->text == existing.string(),
+            check(launcher.widgets().find("browser-path")->text == path_to_utf8(existing),
                   "Directory list navigation");
             renderer.render(launcher.snapshot());
             renderer.capture(root / "launcher-browser.ppm");
@@ -115,10 +157,55 @@ int main() {
                   "Open reads project metadata");
         }
         {
+            // Exercise the path returned by Create after the caller has created its
+            // project, then reopen it through the launcher's UTF-8 text boundary.
+            atomic_write_json(new_project / "project.faset.json", {{"format", "faset.project"},
+                                                                   {"version", 1},
+                                                                   {"name", "Тестовый проект"},
+                                                                   {"dimension", 2}});
+            editor::ProjectLauncher launcher(renderer, path_from_utf8(FASET_TEST_ENGINE), {},
+                                             recents);
+            launcher.frame({});
+            click(launcher, "launcher-open");
+            text(launcher, "launcher-path", path_to_utf8(new_project / "project.faset.json"));
+            launcher.frame({key("Return", true)});
+            check(launcher.selection() && launcher.selection()->path == new_project &&
+                      launcher.selection()->name == "Тестовый проект",
+                  "Unicode project directory survives typed manifest path and reopen");
+        }
+        {
+            const auto home = root / path_from_utf8("Дом пользователя");
+            const auto config = root / path_from_utf8("Настройки пользователя");
+            std::filesystem::create_directories(home);
+#ifdef _WIN32
+            ScopedPathEnvironment user_home(L"USERPROFILE", home), app_config(L"APPDATA", config);
+            const auto recent_file = config / "Faset/recent-projects.json";
+#else
+            ScopedPathEnvironment user_home("HOME", home), app_config("XDG_CONFIG_HOME", config);
+            const auto recent_file = config / "faset/recent-projects.json";
+#endif
+            editor::remember_project(existing);
+            check(read_json(recent_file).at(0) == path_to_utf8(existing),
+                  "Unicode config directory and recent project are serialized as UTF-8");
+            editor::ProjectLauncher launcher(renderer, path_from_utf8(FASET_TEST_ENGINE));
+            launcher.frame({});
+            check(launcher.widgets().find("launcher-path")->text ==
+                      path_to_utf8(home / "FasetProjects/MyGame"),
+                  "Unicode user home forms a native default project path");
+            check(launcher.widgets().find("launcher-recent-0"),
+                  "Default recents path reads the Unicode config directory");
+            click(launcher, "launcher-browse");
+            click(launcher, "browser-home");
+            check(launcher.widgets().find("browser-path")->text == path_to_utf8(home),
+                  "Home navigation preserves Unicode environment path");
+            launcher.frame({key("Escape")});
+        }
+        {
             const auto corrupt = root / "Corrupt";
             atomic_write_json(corrupt / "project.faset.json",
                               {{"format", "faset.project"}, {"version", 9}, {"name", "Future"}});
-            editor::ProjectLauncher launcher(renderer, FASET_TEST_ENGINE, corrupt, recents);
+            editor::ProjectLauncher launcher(renderer, path_from_utf8(FASET_TEST_ENGINE), corrupt,
+                                             recents);
             launcher.frame({});
             click(launcher, "launcher-submit");
             check(!launcher.selection() && !launcher.widgets().find("launcher-error")->text.empty(),
@@ -129,10 +216,10 @@ int main() {
         check(renderer.stats().validation_errors == 0, "Launcher Vulkan validation");
         std::cout
             << "Launcher Unicode/create/open/validation/recents/directory browser/keyboard passed. "
-            << root << '\n';
+            << path_to_utf8(root) << '\n';
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << e.what() << "\nRetained: " << root << '\n';
+        std::cerr << e.what() << "\nRetained: " << path_to_utf8(root) << '\n';
         return 1;
     }
 }

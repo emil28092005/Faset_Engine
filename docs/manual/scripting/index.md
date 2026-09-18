@@ -23,6 +23,13 @@ A gameplay directory contains `Gameplay.hpp` and `Gameplay.cpp`. It provides two
 
 The Player calls registration before loading a scene. The separate SchemaExporter calls `schema()` without creating a game world or running gameplay callbacks. The Editor reads the resulting declaration; it does not load the gameplay binary into the Editor process.
 
+Every custom component in a played scene must have a matching TypeId and exact
+positive version in the linked gameplay `schema()`. The Player checks this before
+loading the world, including `--validate`. A data-only custom component still needs
+a schema, even when it registers no callbacks. Built-in TypeIds are reserved. The
+Editor preserves missing or future component data for recovery, but the Player
+rejects it until the corresponding module/schema is available or the data is migrated.
+
 A scene object receives a behavior by containing a component whose `type` matches the string passed to `registerBehavior`. Registering a behavior does not attach it to every object. A component can contain data without having any callbacks.
 
 ## Data, poses, and state

@@ -202,7 +202,8 @@ struct PluginManager::Impl {
         module->owner = this;
         module->manifest = manifest;
         module->directory = directory;
-        const auto path = project_path(directory, manifest.at("library").get<std::string>());
+        const auto path =
+            project_path(directory, path_from_utf8(manifest.at("library").get<std::string>()));
         require(std::filesystem::is_regular_file(path), "plugin.library",
                 "Plugin library is missing");
 #ifdef _WIN32
@@ -307,8 +308,8 @@ void PluginManager::load(const std::filesystem::path& directory) {
     };
     for (const auto& entry : std::filesystem::recursive_directory_iterator(directory))
         if (entry.is_regular_file() &&
-            entry.path().filename().string().ends_with(".faset-plugin.json")) {
-            std::string id = entry.path().filename().string();
+            path_to_utf8(entry.path().filename()).ends_with(".faset-plugin.json")) {
+            std::string id = path_to_utf8(entry.path().filename());
             try {
                 const auto manifest = read_json(entry.path());
                 id = manifest.at("id");
@@ -324,7 +325,8 @@ void PluginManager::load(const std::filesystem::path& directory) {
                             manifest.at("build_fingerprint") == fingerprint(),
                         "plugin.compatibility",
                         "Plugin manifest does not match this Editor SDK; rebuild it");
-                project_path(entry.path().parent_path(), manifest.at("library").get<std::string>());
+                project_path(entry.path().parent_path(),
+                             path_from_utf8(manifest.at("library").get<std::string>()));
                 sources.emplace(id, Source{manifest, entry.path().parent_path()});
             } catch (const std::exception& error) {
                 failure(id, error.what());

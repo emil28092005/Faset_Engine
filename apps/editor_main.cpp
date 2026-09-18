@@ -47,11 +47,11 @@ void help() {
            "MCP uses JSON-RPC over stdio and only exposes authoring/editor services.\n";
 }
 } // namespace
-int main(int argc, char** argv) {
+int editor_main(int argc, char** argv) {
     using namespace faset;
     using namespace faset::editor;
     try {
-        std::filesystem::path project, engine = FASET_ENGINE_SOURCE, scene, capture;
+        std::filesystem::path project, engine = path_from_utf8(FASET_ENGINE_SOURCE), scene, capture;
         std::string new_name, command;
         int dimension = 3;
         bool mcp = false, gui = true, explicit_gui = false, wait = false;
@@ -67,15 +67,15 @@ int main(int argc, char** argv) {
                 return 0;
             }
             if (arg == "--project")
-                project = value();
+                project = path_from_utf8(value());
             else if (arg == "--engine")
-                engine = value();
+                engine = path_from_utf8(value());
             else if (arg == "--new")
                 new_name = value();
             else if (arg == "--dimension")
                 dimension = std::stoi(value());
             else if (arg == "--scene")
-                scene = value();
+                scene = path_from_utf8(value());
             else if (arg == "--mcp")
                 mcp = true;
             else if (arg == "--gui") {
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
                 frames = std::stoull(text);
                 require(frames > 0 && frames <= 10000000, "cli.frames", "Frame count out of range");
             } else if (arg == "--capture")
-                capture = value();
+                capture = path_from_utf8(value());
             else
                 throw Error("cli.option", "Unknown option: " + arg);
         }
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
                 remember_project(project);
 #endif
             if (scene.empty())
-                scene = settings.value("start_scene", std::string());
+                scene = path_from_utf8(settings.value("start_scene", std::string()));
             if (!scene.empty() &&
                 std::filesystem::exists(project_path(session.config().project_root, scene)))
                 session.authoring().open(scene);
@@ -203,3 +203,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    return faset::run_utf8_main(argc, argv, editor_main);
+}
+#else
+int main(int argc, char** argv) {
+    return editor_main(argc, argv);
+}
+#endif

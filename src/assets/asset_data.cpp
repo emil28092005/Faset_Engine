@@ -19,9 +19,9 @@ void valid_id(const std::string& id) {
         throw std::runtime_error("Invalid AssetId");
 }
 std::vector<std::byte> read_bytes(const fs::path& path) {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    std::ifstream file(faset::native_io_path(path), std::ios::binary | std::ios::ate);
     if (!file)
-        throw std::runtime_error("Cannot read cooked file: " + path.string());
+        throw std::runtime_error("Cannot read cooked file: " + faset::path_to_utf8(path));
     auto length = file.tellg();
     if (length < 0 || static_cast<std::uint64_t>(length) > 1024ull * 1024 * 1024)
         throw std::runtime_error("Cooked file exceeds 1 GiB limit");
@@ -42,7 +42,7 @@ Json read_json(const fs::path& path) {
 fs::path cooked_path(const fs::path& directory, const std::string& name) {
     if (name.empty())
         throw std::runtime_error("Empty cooked path");
-    return faset::project_path(directory, fs::path(name));
+    return faset::project_path(directory, faset::path_from_utf8(name));
 }
 void validate_generation(const fs::path& directory, const Json& manifest) {
     if (manifest.at("schema_version") != 1)
@@ -142,7 +142,7 @@ CookedAsset AssetStore::load_asset(const std::string& id) const {
     const auto m = read_json(directory / "manifest.json");
     validate_generation(directory, m);
     if (m.at("asset_id").get<std::string>() != id ||
-        m.at("generation").get<std::string>() != directory.filename().string())
+        m.at("generation").get<std::string>() != faset::path_to_utf8(directory.filename()))
         throw std::runtime_error("Cooked asset identity does not match its generation");
     CookedAsset asset;
     asset.asset_id = m.at("asset_id");

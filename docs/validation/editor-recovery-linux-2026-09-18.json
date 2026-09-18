@@ -1,0 +1,33 @@
+{
+  "format": "faset.editor-recovery-verification",
+  "version": 1,
+  "status": "passed",
+  "checks": [
+    "acknowledged unsaved edit survives killed Editor and explicit recovery",
+    "failed save preserves live authoring and last saved file",
+    "failed Player process is reported without changing authoring data",
+    "Undo repairs the scene, then Play and Stop leave authoring unchanged",
+    "failed C++ build keeps prior schema and reports stale status",
+    "fixed C++ rebuild restores current schema status",
+    "failed import preserves authoring"
+  ],
+  "logs": [
+    "build completed",
+    "Gameplay schema loaded",
+    "Play started in a separate Player process",
+    "Player failed: unsupported component version\n",
+    "Player exited with code 1",
+    "build completed",
+    "Gameplay schema loaded",
+    "Play started in a separate Player process",
+    "New round: collect the three gold cubes, then reach the green exit. E resets.\n{\"device\":\"NVIDIA GeForce RTX 2080 Ti\",\"dimension\":2,\"frames\":382,\"ticks\":103,\"validation_errors\":0}\n",
+    "Play stopped; authoring scene unchanged",
+    "build failed: Process exited with code 1; see job log; previous gameplay metadata remains available and is marked stale",
+    "build completed",
+    "Gameplay schema loaded",
+    "Asset import failed: Cannot read: /home/emil/Desktop/Faset_Engine/.cache/recovery-checkpoint3-v3/project/Assets/missing.glb\n"
+  ],
+  "engine_revision": "d834cfad67cd81d8c4998b90c16791361ca8c0f8",
+  "execution_context": "Linux development desktop; Editor and source from the clean offline checkout; disposable sample project",
+  "scope": "Crash recovery and last-good preservation. Graceful OnDestroy is verified separately by the later Player shutdown regression."
+}

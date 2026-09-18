@@ -23,8 +23,9 @@ resolution, validation activation, fixed ticks and timestep. A bounded run advan
 one synthetic fixed timestep per frame; it does not reproduce a real-time input
 session. Keep that distinction when comparing runs.
 
-Startup starts at `main()` and ends at the first completed frame. OS process loading
-before `main()` is excluded. Frame wall times exclude writing the final profile and
+Startup starts at the Player application entry after platform argument normalization
+and ends at the first completed frame. OS process loading and Windows `wmain` UTF-8
+argument conversion are excluded. Frame wall times exclude writing the final profile and
 capture files. Simulation and scene-snapshot times are separate from the renderer
 call. Renderer CPU wall duration includes GPU waits and readback; it is **not CPU
 utilization**. GPU timestamps measure the submitted graphics work and can be null

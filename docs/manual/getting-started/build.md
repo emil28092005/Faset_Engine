@@ -67,6 +67,21 @@ Use an x64 Visual Studio Developer shell with the Windows SDK, MSVC runtime libr
 LLVM `clang-cl`, Ninja, CMake, and the Vulkan SDK available. Then use the
 `windows-debug` or `windows-release` presets.
 
+Enable **Win32 long paths** on the Windows development machine before starting the
+build shell. Faset's executable manifest declares long-path support, and its direct
+file IO uses wide extended paths; external CMake/Ninja/compiler tools also need a
+compatible host policy for deeply nested build/cache directories. An administrator
+can enable the policy once in PowerShell:
+
+```powershell
+New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' `
+  -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force
+```
+
+Open a new build shell afterwards; Windows may require a restart for existing
+processes. See Microsoft's [long-path requirements](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation).
+Windows CI enables and records this developer profile explicitly.
+
 ```powershell
 py tools/fetch_slang.py
 cmake --preset windows-debug

@@ -14,11 +14,11 @@ void require(bool value, const char* message) {
         throw std::runtime_error(message);
 }
 int compile(const fs::path& source, const fs::path& output) {
-    Process process(
-        {{FASET_PYTHON_EXECUTABLE, FASET_SHADER_COMPILE_TOOL, "--compiler", FASET_TEST_SLANGC,
-          "--source", source.string(), "--entry", "fragmentMain", "--output", output.string()},
-         {},
-         {}});
+    Process process({{FASET_PYTHON_EXECUTABLE, FASET_SHADER_COMPILE_TOOL, "--compiler",
+                      FASET_TEST_SLANGC, "--source", path_to_utf8(source), "--entry",
+                      "fragmentMain", "--output", path_to_utf8(output)},
+                     {},
+                     {}});
     std::string diagnostics;
     while (true) {
         auto result = process.poll();
@@ -34,12 +34,13 @@ int compile(const fs::path& source, const fs::path& output) {
 }
 } // namespace
 int main() {
-    const auto temporary = fs::temp_directory_path() / ("faset-shader-reload-" + new_id());
+    const auto temporary =
+        fs::temp_directory_path() / path_from_utf8("Faset shader Café 世界 " + new_id());
     struct Cleanup {
         fs::path path;
         ~Cleanup() {
             std::error_code ignored;
-            fs::remove_all(path, ignored);
+            fs::remove_all(native_io_path(path), ignored);
         }
     } cleanup{temporary};
     try {
@@ -48,10 +49,10 @@ int main() {
         for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
-                fs::copy_file(fs::path(FASET_TEST_SHADER_DIRECTORY) / name, bundle / name);
+                fs::copy_file(path_from_utf8(FASET_TEST_SHADER_DIRECTORY) / name, bundle / name);
             }
         const auto source = temporary / "reload.slang";
-        const auto original_source = read_text(FASET_TEST_SHADER_SOURCE);
+        const auto original_source = read_text(path_from_utf8(FASET_TEST_SHADER_SOURCE));
         const auto original_spirv = read_text(bundle / "fragmentMain.spv");
         const auto original_reflection = read_text(bundle / "fragmentMain.reflection.json");
         const auto original_fingerprint = Json::parse(original_reflection).at("layout_fingerprint");
@@ -63,9 +64,39 @@ int main() {
         configuration.shader_directory = bundle;
         render::Renderer renderer(configuration);
         render::Snapshot scene;
-        scene.ui_quads.push_back({0, 0, 64, 64, {1, .8f, .4f, 1}});
+        scene.ui_quads.push_back({0, 0, 32, 64, {1, .8f, .4f, 1}});
+        scene.sprites.push_back({{.5f, 0, .5f}, {1, 2}, {.2f, 1, .4f, 1}});
         renderer.render(scene);
         auto expected = renderer.pixels();
+        // Cooked/exported generations can exceed MAX_PATH even for modest project
+        // names. Exercise the renderer's file boundaries without relying on the
+        // external shader compiler's own long-path policy.
+        const auto deep_bundle = temporary / std::string(96, 'a') / std::string(96, 'b') /
+                                 std::string(96, 'c') / "shaders";
+        require(deep_bundle.native().size() > 300,
+                "Shader file fixture must exceed the legacy Windows path limit");
+        fs::create_directories(native_io_path(deep_bundle));
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
+            for (const auto* extension : {".spv", ".reflection.json"}) {
+                const auto name = std::string(entry) + extension;
+                atomic_write(deep_bundle / name, read_text(bundle / name));
+            }
+        render::validate_shader_bundle(deep_bundle);
+        {
+            auto deep_configuration = configuration;
+            deep_configuration.shader_directory = deep_bundle;
+            render::Renderer deep_renderer(deep_configuration);
+            deep_renderer.render(scene);
+            require(deep_renderer.pixels() == expected,
+                    "Deep Unicode shader bundle must render the same pixels");
+            const auto capture = deep_bundle / path_from_utf8("Capture Café 世界.ppm");
+            deep_renderer.capture(capture);
+            const auto bytes = read_text(capture);
+            require(bytes.starts_with("P6\n64 64\n255\n") && bytes.size() == 13 + 64 * 64 * 3,
+                    "Deep Unicode capture must contain the complete rendered image");
+            require(deep_renderer.stats().validation_errors == 0,
+                    "Deep shader bundle has no Vulkan validation errors");
+        }
         require(renderer.stats().gpu_allocated_bytes > 1024 * 1024 &&
                     renderer.stats().texture_count >= 1,
                 "Frame profile reports live Vulkan allocations and textures");

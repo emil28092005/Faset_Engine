@@ -43,10 +43,13 @@ struct ImportRequest {
     Json settings = nullptr; // Null restores the sidecar recipe; an object replaces it.
     // Explicit conflict resolution; false keeps the previous generation active.
     bool allow_removed_outputs = false;
+    // Optional review guards: reject a changed candidate or active generation.
+    // Empty keeps the ordinary import API; the Editor sets both on explicit acceptance.
+    std::string expected_generation{}, expected_active_generation{};
 };
 struct ImportResult {
     ImportStatus status = ImportStatus::failed;
-    std::string asset_id, generation;
+    std::string asset_id, generation, previous_generation;
     std::vector<std::string> diagnostics;
     std::vector<std::string> removed_output_ids;
     Json manifest;

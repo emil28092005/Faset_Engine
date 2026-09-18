@@ -76,10 +76,10 @@ int run_editor_ui(Session& session, bool enable_mcp, std::uint64_t max_frames,
             auto encoded = png(renderer, region);
             const auto relative =
                 arguments.value("path", std::string(".faset/screenshots/editor.png"));
-            require(std::filesystem::path(relative).extension() == ".png", "capture.path",
+            require(path_from_utf8(relative).extension() == ".png", "capture.path",
                     "Editor screenshots must use a .png path");
             atomic_write(
-                project_path(session.config().project_root, relative),
+                project_path(session.config().project_root, path_from_utf8(relative)),
                 std::string_view(reinterpret_cast<const char*>(encoded.data()), encoded.size()));
             return Json{{"path", relative},
                         {"mimeType", "image/png"},

@@ -74,9 +74,17 @@ mesh datablocks remain shared. Repair deliberately duplicated material IDs in
 Blender's Custom Properties. Save the `.blend` again.
 
 Removing an exported output produces an import conflict. Faset keeps the old
-generation active. Inspect the diagnostics and update affected references before
-explicitly importing with `allow_removed_outputs: true`. This accepts removal;
-it does not automatically remap references. A normal GLB without persistent custom
+generation active. In **Jobs**, choose **Review removals** to open **Conflicts**.
+Review the removed stable IDs and their last-good names; **Copy removed IDs** helps
+locate references. Update affected references, then use **Accept reviewed removal**.
+If source data or the active generation has changed since review, the acceptance
+fails safely; use **Reimport / review again** and inspect the new result.
+
+The same explicit API action uses `allow_removed_outputs: true`, with
+`expected_generation` and `expected_active_generation` taken from the reviewed
+job's `result.generation` and `result.previous_generation`. Use the same source and
+settings. This accepts removal; it does not automatically remap references or delete
+scene components. A normal GLB without persistent custom
 IDs uses structural matching, which cannot guarantee identity after rename or
 restructuring.
 
@@ -118,3 +126,7 @@ For an end-to-end example, open `examples/projects/collect-3d`. Its exit arch in
 a `.blend`, reproducible Blender script and a published bundle. The repository's
 `tools/verify_blender_roundtrip.py` runs the actual Blender helper and Editor imports
 to check rename, geometry changes, removal conflicts and failure preservation.
+Pass `--ui-probe build/linux-debug/faset_blender_editor_probe` to also test two
+instances in one live editor session: both receive new geometry while preserving
+placement, tint, opaque gameplay fields and the authoring revision. This additional
+probe requires Vulkan and produces before/after captures.

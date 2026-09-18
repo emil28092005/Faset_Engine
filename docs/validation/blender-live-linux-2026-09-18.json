@@ -1,0 +1,23 @@
+{
+  "blender": "Blender 4.5.3 LTS",
+  "asset_id": "54c039e4-c19f-4365-a9f8-a38416ec6e3f",
+  "initial_generation": "499f254ce440ecb86118f2f6803f21013e763d35cfdba1c4356be7a457eec718",
+  "renamed_generation": "963e996b59ba11c2f9dd9eba51b89e7ae3f3dce6f177e4adaf5682479cb204a8",
+  "stable_output_ids": true,
+  "removed_output_conflict": true,
+  "failed_import_keeps_generation": true,
+  "authoring_preserved": true,
+  "live_editor": {
+    "conflict_keeps_visible_generation": true,
+    "instances": 2,
+    "live_geometry_updated": true,
+    "opaque_gameplay_preserved": true,
+    "physics_fields_preserved": true,
+    "placement_and_tint_preserved": true,
+    "status": "passed",
+    "validation_enabled": true,
+    "validation_errors": 0
+  },
+  "source_context": "Shared Linux checkpoint 4 working tree around 5ac4db4; not a clean-commit result",
+  "reproduce": "python3 tools/verify_blender_roundtrip.py --blender PATH --editor build/linux-debug/faset_editor --ui-probe build/linux-debug/faset_blender_editor_probe --output NEW_DIRECTORY"
+}

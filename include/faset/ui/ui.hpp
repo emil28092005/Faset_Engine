@@ -162,6 +162,9 @@ class Context {
     // edit state.
     void validate_layout(const Json&) const;
     void apply_layout(const Json&);
+    // Layout metrics are logical units; rectangles/events/IME areas are drawable
+    // pixels. Scale also selects the glyph raster size (supported range .5–4).
+    // Changing it preserves text/focus and cancels active pointer drags.
     void layout(float drawable_width, float drawable_height, float dpi_scale = 1);
     bool handle(const render::Event&);
     void draw(render::Snapshot&);

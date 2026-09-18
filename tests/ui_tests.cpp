@@ -1,4 +1,7 @@
+#include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <faset/core/io.hpp>
 #include <faset/ui/ui.hpp>
 #include <iostream>
 #include <stdexcept>
@@ -35,9 +38,85 @@ void click(ui::Context& context, const ui::Widget& widget) {
     context.handle(mouse(render::Event::Type::MouseDown, r.x + 5, r.y + 5));
     context.handle(mouse(render::Event::Type::MouseUp, r.x + 5, r.y + 5));
 }
+void display_scale_contract() {
+    ui::Context context(path_from_utf8(FASET_TEST_FONT));
+    auto& field = context.root().add(ui::Kind::TextField, "dpi-field", "Ж");
+    field.layout.width = 180;
+    field.layout.height = 32;
+    auto& number = context.root().add(ui::Kind::NumberField, "dpi-number");
+    number.layout.height = 32;
+    number.value = 4;
+    number.step = 1;
+    auto& button = context.root().add(ui::Kind::Button, "dpi-action", "Open");
+    button.layout.width = 180;
+    button.layout.height = 32;
+    int clicks = 0, commits = 0, number_commits = 0;
+    button.on_click = [&](ui::Widget&) { ++clicks; };
+    field.on_commit = [&](ui::Widget&) { ++commits; };
+    number.on_commit = [&](ui::Widget&) { ++number_commits; };
+    ui::Rect ime_area;
+    context.set_ime([](bool) {}, [&](ui::Rect rect) { ime_area = rect; });
+    context.layout(320, 240, 1);
+    const auto initial = field.rect;
+    render::Snapshot one;
+    context.draw(one);
+    const auto first_glyph = std::find_if(one.ui_quads.begin(), one.ui_quads.end(),
+                                          [](const auto& q) { return bool(q.texture); });
+    check(first_glyph != one.ui_quads.end(), "1x rasterized text missing");
+    const auto glyph_width = first_glyph->width, glyph_height = first_glyph->height;
+    const auto revision = context.font().texture()->revision;
+    check(context.focus("dpi-field"), "DPI field focus");
+    context.handle(key("A", true));
+    context.handle(text("Живая сцена"));
+    context.layout(640, 480, 2);
+    check(field.rect.width == initial.width * 2 && field.rect.height == initial.height * 2 &&
+              field.clip.width == initial.width * 2 && ime_area.width == field.rect.width,
+          "2x layout, clipping and IME rectangle use drawable pixels");
+    check(context.focused_id() == "dpi-field" && field.text == "Живая сцена" && commits == 0,
+          "Live display scale preserves focused edit without committing");
+    context.handle(key("Escape"));
+    render::Snapshot two;
+    context.draw(two);
+    const auto second_glyph = std::find_if(two.ui_quads.begin(), two.ui_quads.end(),
+                                           [](const auto& q) { return bool(q.texture); });
+    check(second_glyph != two.ui_quads.end() && second_glyph->width >= glyph_width * 1.8f &&
+              second_glyph->height >= glyph_height * 1.8f &&
+              context.font().texture()->revision > revision,
+          "2x display requests larger glyph rasterization");
+    check(std::abs(second_glyph->width - (second_glyph->uv_rect[2] - second_glyph->uv_rect[0]) *
+                                             second_glyph->texture->width) < .1f,
+          "High-DPI glyphs use one atlas texel per pixel, not stretched 1x bitmaps");
+    context.handle(mouse(render::Event::Type::MouseDown, button.rect.x + 300, button.rect.y + 40));
+    context.handle(mouse(render::Event::Type::MouseUp, button.rect.x + 300, button.rect.y + 40));
+    check(clicks == 1, "Hit testing reaches the second half of a scaled control");
+    const auto r = number.rect;
+    context.handle(mouse(render::Event::Type::MouseDown, r.x + 20, r.y + 20));
+    context.handle(mouse(render::Event::Type::MouseMove, r.x + 40, r.y + 20));
+    check(number.value == 14, "Numeric drag uses logical distance at 2x");
+    context.layout(320, 240, 1);
+    context.handle(mouse(render::Event::Type::MouseUp, 40, 52));
+    check(number.value == 4 && number_commits == 0,
+          "Monitor scale change cancels pointer drag without an accidental commit");
+    check(field.rect.width == initial.width && button.layout.width == 180,
+          "Returning to 1x preserves logical layout metrics");
+    ui::Context scroll(path_from_utf8(FASET_TEST_FONT));
+    auto& panel = scroll.root().add(ui::Kind::Column, "scroll");
+    panel.layout.height = 80;
+    panel.layout.scroll = true;
+    panel.layout.gap = 0;
+    for (int i = 0; i < 10; ++i)
+        panel.add(ui::Kind::Button, "row-" + std::to_string(i), "Row").layout.height = 30;
+    scroll.layout(200, 100, 1);
+    panel.scroll_y = 30;
+    scroll.layout(200, 100, 1);
+    scroll.layout(400, 200, 2);
+    check(panel.scroll_y == 60 && panel.children[1]->rect.y == panel.rect.y,
+          "DPI changes retain the logical scroll position");
+}
 } // namespace
 int main() {
     try {
+        display_scale_contract();
         ui::TextBuffer buffer("Привет");
         check(buffer.backspace() && buffer.text() == "Приве", "UTF-8 backspace split codepoint");
         check(buffer.undo() && buffer.text() == "Привет", "text undo");
@@ -53,7 +132,37 @@ int main() {
         check(buffer.text() == "верца", "UTF-8 delete");
         buffer.undo();
         check(buffer.text() == "Дверца", "undo delete");
-        ui::Context context(FASET_TEST_FONT);
+        const auto missing_font = std::filesystem::temp_directory_path() /
+                                  path_from_utf8("Недоступный шрифт-" + new_id() + ".ttf");
+        bool unicode_font_diagnostic = false;
+        try {
+            ui::FontAtlas missing(missing_font);
+        } catch (const std::exception& error) {
+            unicode_font_diagnostic =
+                std::string(error.what()).find(path_to_utf8(missing_font)) != std::string::npos;
+        }
+        check(unicode_font_diagnostic, "Font errors preserve the UTF-8 path");
+        const auto unicode_font_directory =
+            std::filesystem::temp_directory_path() / path_from_utf8("Faset шрифты-" + new_id()) /
+            std::string(80, 'a') / std::string(80, 'b') / std::string(80, 'c');
+        std::filesystem::create_directories(unicode_font_directory);
+        const auto unicode_font_path =
+            unicode_font_directory / path_from_utf8("Основной шрифт.ttf");
+        std::filesystem::copy_file(path_from_utf8(FASET_TEST_FONT), unicode_font_path);
+        {
+            ui::FontAtlas unicode_font(unicode_font_path);
+            check(std::filesystem::remove(unicode_font_path),
+                  "Unicode font file must be closed after loading");
+            check(unicode_font.measure("Живая сцена", 18) > 0,
+                  "Shaping uses retained font bytes after Unicode source file is removed");
+            render::Snapshot glyphs;
+            unicode_font.draw(glyphs, "Живая сцена", 0, 0, 18, {1, 1, 1, 1}, {0, 0, 400, 40});
+            check(!glyphs.ui_quads.empty() && unicode_font.texture()->revision > 1,
+                  "Rasterization remains valid after Unicode font source disappears");
+        }
+        std::filesystem::remove_all(
+            unicode_font_directory.parent_path().parent_path().parent_path());
+        ui::Context context(path_from_utf8(FASET_TEST_FONT));
         auto& root = context.root();
         root.layout.gap = 4;
         auto& name = root.add(ui::Kind::TextField, "name", "Door");
@@ -137,7 +246,7 @@ int main() {
         context.handle(key("Tab"));
         check(context.focused_id() == "name", "focus wraps predictably");
         check(ime_rectangles > 0, "IME rectangle never sent");
-        ui::Context split(FASET_TEST_FONT);
+        ui::Context split(path_from_utf8(FASET_TEST_FONT));
         auto& row = split.root().add(ui::Kind::Row, "row");
         row.layout.flex = 1;
         row.layout.gap = 0;
@@ -171,7 +280,7 @@ int main() {
         context.handle(key("Escape"));
         check(number.value == 19 && number_commits == 1 && cancellations == 1,
               "Escape must cancel numeric drag");
-        ui::Context scrolling(FASET_TEST_FONT);
+        ui::Context scrolling(path_from_utf8(FASET_TEST_FONT));
         auto& list = scrolling.root().add(ui::Kind::Panel, "list");
         list.layout.height = 80;
         list.layout.scroll = true;
@@ -211,7 +320,7 @@ int main() {
             rejected = true;
         }
         check(rejected && restored.to_json() == state, "invalid dock load mutated existing layout");
-        ui::Context declarative(FASET_TEST_FONT);
+        ui::Context declarative(path_from_utf8(FASET_TEST_FONT));
         declarative.apply_layout({{"id", "root"},
                                   {"kind", "column"},
                                   {"children", ui::Json::array({{{"id", "run"},

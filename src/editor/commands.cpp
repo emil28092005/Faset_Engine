@@ -68,9 +68,9 @@ Json Commands::call(const std::string& name, const Json& arguments) {
 Json Commands::resolved_scene(const std::string& id) const {
     const auto result = authoring::resolve_templates(
         authoring_.query(id).at("scene"), authoring_.schemas(), [&](const std::string& path) {
-            const auto relative = std::filesystem::path(path).lexically_normal();
+            const auto relative = path_from_utf8(path).lexically_normal();
             for (const auto& document : authoring_.documents())
-                if (document.at("path") == relative.generic_string())
+                if (document.at("path") == generic_path_to_utf8(relative))
                     return authoring_.query(document.at("id")).at("scene");
             return read_json(project_path(authoring_.root(), relative));
         });
@@ -92,7 +92,7 @@ Commands::Commands(authoring::AuthoringService& authoring) : authoring_(authorin
         "Open a scene relative to the project. Set recover=true to load its saved recovery "
         "journal.",
         object_schema({{"path", text}, {"recover", boolean}}, {"path"}), [&](const Json& args) {
-            return authoring_.open(args.at("path").get<std::string>(),
+            return authoring_.open(path_from_utf8(args.at("path").get<std::string>()),
                                    args.value("recover", false));
         });
     add(
@@ -104,7 +104,8 @@ Commands::Commands(authoring::AuthoringService& authoring) : authoring_(authorin
     add("faset_document_save",
         "Atomically save an authoring document. Refuses to overwrite an externally modified file.",
         object_schema({{"document", text}, {"path", text}}, {"document"}), [&](const Json& args) {
-            return authoring_.save(args.at("document"), args.value("path", std::string()));
+            return authoring_.save(args.at("document"),
+                                   path_from_utf8(args.value("path", std::string())));
         });
     add(
         "faset_schema",

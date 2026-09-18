@@ -1,0 +1,143 @@
+{
+  "asset_generations": {},
+  "build_fingerprint": "5b1996b0fe44eeaa01ee1fd581f9f063f8c84147128e896541d27207dbab9aaa",
+  "configuration": "Release",
+  "executable": "faset_player",
+  "files": [
+    {
+      "path": "scene.fscene",
+      "sha256": "811242b85ede88c6d7920eeda5b7f6ae189db4d9e17d568cdfd230f27ce629b6",
+      "size": 6496
+    },
+    {
+      "path": "faset_player",
+      "sha256": "ef12daa3a1e71ef9e9d933cfa0347249de86b5e8da3536e709a3899a731e4333",
+      "size": 5809704
+    },
+    {
+      "path": "shaders/vertexMain.spv",
+      "sha256": "1ad2631c35d654f48166321ae43d4165043e1b919b14f1dc61caf97b1ada0898",
+      "size": 1224
+    },
+    {
+      "path": "shaders/fragmentMain.spv",
+      "sha256": "f5c4f289917ecab5d00d543c053aac1d10e6cca311fd172daf06d315160a3505",
+      "size": 7436
+    },
+    {
+      "path": "shaders/shadowMain.spv",
+      "sha256": "7643b4d688492b5ee923b9606f0b0e70343ca05fa67673838206119a6f86d8d8",
+      "size": 784
+    },
+    {
+      "path": "shaders/vertexMain.reflection.json",
+      "sha256": "c584f3b957ebf194a292451362a98590f85ff3cfbfd8f917b1c1265039381777",
+      "size": 2639
+    },
+    {
+      "path": "shaders/fragmentMain.reflection.json",
+      "sha256": "72ebf8d32452830650416dc4717d89a4324e97ece7028dfb97c66803c8dce71f",
+      "size": 2649
+    },
+    {
+      "path": "shaders/shadowMain.reflection.json",
+      "sha256": "e3fd0889cd2f569d410f5d7558a4091d9f57f247a1dcf1788462f67525340819",
+      "size": 2645
+    },
+    {
+      "path": "Notices/sdl3/LICENSE.txt",
+      "sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+      "size": 884
+    },
+    {
+      "path": "Notices/entt/LICENSE",
+      "sha256": "0785027ce472d7c61f05fba664a1d3ba6639c1593ced351ad9e4bed868765d99",
+      "size": 1097
+    },
+    {
+      "path": "Notices/box2d/LICENSE",
+      "sha256": "68a3e676d7e94093b102d5cba0d4e04af812040d6f230c3db67a6664574e43d2",
+      "size": 1067
+    },
+    {
+      "path": "Notices/box3d/LICENSE",
+      "sha256": "da5e31a26bf3cfd5ba5c96d6823e480128c81e76c107ef9d3ee5d94789184b90",
+      "size": 1067
+    },
+    {
+      "path": "Notices/json/LICENSE.MIT",
+      "sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+      "size": 1076
+    },
+    {
+      "path": "Notices/stb/LICENSE",
+      "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63",
+      "size": 2510
+    },
+    {
+      "path": "Notices/dependencies.json",
+      "sha256": "a54639ad2d9ad13c2e5f1ec90d6775f5dfc493656789b78c7e44debe2a378fdc",
+      "size": 2206
+    },
+    {
+      "path": "Notices/Faset-NOTICE.txt",
+      "sha256": "30c2e7e80f5153b31ab57675e07246aef9165965d64e36022b426a26449ece3f",
+      "size": 204
+    },
+    {
+      "path": "README.txt",
+      "sha256": "4dc2f0271c69fe39017ff96aa2dfa00b625bec1401d924dc396193ce71c09f3e",
+      "size": 225
+    }
+  ],
+  "format": "faset.export",
+  "generation": "48ec8546-3750-463f-9c4c-f76c3b933256",
+  "platform": "linux",
+  "prerequisites": [
+    "Linux x86_64",
+    "Vulkan 1.3 driver",
+    "Compatible glibc and libstdc++ runtime"
+  ],
+  "renderer_profile": {
+    "api": "Vulkan 1.3",
+    "materials": [
+      "base-color factor and texture",
+      "metallic and roughness factors"
+    ],
+    "required_features": [
+      "dynamicRendering",
+      "synchronization2"
+    ],
+    "shadow_map": {
+      "resolution": 1024,
+      "world_extent": 40
+    },
+    "texture_sampling": "linear clamp, one mip level",
+    "unsupported_material_features": [
+      "normal maps",
+      "metallic-roughness maps",
+      "emissive and occlusion maps",
+      "alpha mode selection",
+      "unlit mode",
+      "per-material face culling"
+    ]
+  },
+  "scene_hash": "05ab2c3e5b152ab25867976c47635961f440f41d8cd0408732eb2d8d5b7800a8",
+  "simulation": {
+    "fixed_delta": 0.016666666666666666,
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ],
+    "max_catch_up_ticks": 4,
+    "physics_substeps": 4
+  },
+  "units": {
+    "angle": "radian",
+    "coordinates": "right-handed Y-up",
+    "distance": "metre"
+  },
+  "validation_log": "{\"dimension\":2,\"validated\":true}\n",
+  "version": 1
+}

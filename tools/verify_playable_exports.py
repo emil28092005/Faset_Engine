@@ -109,6 +109,8 @@ def verify_capture(path: Path) -> dict:
 
 
 def main() -> int:
+    # Keep captured CI logs portable even when the Windows console uses a legacy code page.
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--editor", type=Path, required=True)
@@ -127,9 +129,11 @@ def main() -> int:
     require(not standalone.exists() or not any(standalone.iterdir()),
             "Standalone root must be new/empty")
     standalone.mkdir(parents=True, exist_ok=True)
-    evidence, projects = output / "evidence", output / "projects"
+    evidence, projects = output / "evidence", output / "Faset Café 世界"
     evidence.mkdir()
     projects.mkdir()
+    standalone_projects = standalone / "Faset Café 世界"
+    standalone_projects.mkdir()
     report = {"format": "faset.playable-export-verification", "version": 1,
               "started_utc": datetime.now(timezone.utc).isoformat(), "platform": sys.platform,
               "engine": str(engine), "editor": str(editor), "standalone_root": str(standalone),
@@ -162,7 +166,7 @@ def main() -> int:
             manifest = verify_package(generation)
             require(dimension != 3 or bool(manifest["asset_generations"]),
                     "3D game did not package its imported Blender asset")
-            relocated = standalone / name
+            relocated = standalone_projects / name
             shutil.copytree(generation, relocated)
             verify_package(relocated)
             shutil.copy2(relocated / "manifest.json", evidence / f"{name}-manifest.json")

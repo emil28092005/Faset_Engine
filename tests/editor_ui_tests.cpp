@@ -44,7 +44,8 @@ void text(editor::EditorUI& ui, const std::string& id, const std::string& value,
     ui.frame(events);
 }
 int main() {
-    auto root = std::filesystem::temp_directory_path() / ("faset-ui-authoring-" + new_id());
+    auto root =
+        std::filesystem::temp_directory_path() / path_from_utf8("faset-ui-проект-" + new_id());
     try {
         std::filesystem::create_directories(root);
         atomic_write_json(root / "project.faset.json", {{"format", "faset.project"},
@@ -53,15 +54,16 @@ int main() {
                                                         {"dimension", 3}});
 #if defined(FASET_TEST_PLUGIN_DIRECTORY)
         std::filesystem::create_directories(root / "Plugins");
-        for (const auto& file : std::filesystem::directory_iterator(FASET_TEST_PLUGIN_DIRECTORY))
+        for (const auto& file :
+             std::filesystem::directory_iterator(path_from_utf8(FASET_TEST_PLUGIN_DIRECTORY)))
             if (file.is_regular_file())
                 std::filesystem::copy_file(file.path(), root / "Plugins" / file.path().filename());
 #endif
-        editor::Session session({root, FASET_TEST_ENGINE, root});
+        editor::Session session({root, path_from_utf8(FASET_TEST_ENGINE), root});
         render::Renderer renderer({1280, 800, "Faset editor test", true, true});
         editor::EditorUI ui(session, renderer,
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/ui/dark.json");
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/dark.json");
         ui.frame({});
         click(ui, "add-cube");
         auto state = session.authoring().query(ui.current_document());
@@ -179,7 +181,7 @@ int main() {
         click(ui, "tab-assets");
 #endif
         std::filesystem::create_directories(root / "Assets");
-        const auto image_path = root / "Assets/TwoPixels.png";
+        const auto image_path = root / path_from_utf8("Assets/Два пикселя.png");
         {
             std::ofstream stream(image_path, std::ios::binary);
             const auto& png = faset::test_images::png_red_green;
@@ -188,8 +190,8 @@ int main() {
         }
         const auto import_job =
             session.commands()
-                .call("faset_import",
-                      {{"path", "Assets/TwoPixels.png"}, {"settings", {{"pixels_per_unit", 1.0}}}})
+                .call("faset_import", {{"path", "Assets/Два пикселя.png"},
+                                       {"settings", {{"pixels_per_unit", 1.0}}}})
                 .at("job")
                 .get<std::string>();
         Json imported;
@@ -206,6 +208,8 @@ int main() {
         const auto image_id = imported.at("result").at("asset_id").get<std::string>();
         auto* image_row = ui.widgets().find("asset-" + image_id);
         check(image_row, "Imported image in asset browser");
+        check(image_row->text.find("Два пикселя") != std::string::npos,
+              "Asset browser displays Unicode source filename");
         const auto asset_rect = image_row->rect.intersection(image_row->clip);
         const auto viewport_rect = ui.widgets().find("viewport")->rect;
         down.x = asset_rect.x + 100;
@@ -253,7 +257,7 @@ int main() {
         std::cout << "Editor UI: actual events create/select/rename/typed "
                      "fields/Undo/Redo/conflict/one drag transaction passed. "
                      "Screenshot: "
-                  << (root / "editor-ui.ppm") << '\n';
+                  << path_to_utf8(root / "editor-ui.ppm") << '\n';
         return 0;
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';

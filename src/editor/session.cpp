@@ -34,7 +34,7 @@ struct Session::ImportTask {
     std::shared_ptr<assets::ImportJob> job = std::make_shared<assets::ImportJob>();
     mutable std::mutex mutex;
     std::string state = "queued", error;
-    Json result = Json::object();
+    Json result = Json::object(), request = Json::object();
     Json json() const {
         std::lock_guard lock(mutex);
         const auto progress = job->progress();
@@ -44,6 +44,7 @@ struct Session::ImportTask {
                 {"stage", progress.stage},
                 {"progress", progress.fraction},
                 {"error", error},
+                {"request", request},
                 {"result", result}};
     }
 };
@@ -97,13 +98,13 @@ Json Session::project() const {
                     "Project start_scene must be a relative path");
             const auto scene = value.at("start_scene").get<std::string>();
             if (!scene.empty())
-                project_path(config_.project_root, scene);
+                project_path(config_.project_root, path_from_utf8(scene));
         }
         return value;
     }
     return {{"format", "faset.project"},
             {"version", 1},
-            {"name", config_.project_root.filename().string()},
+            {"name", path_to_utf8(config_.project_root.filename())},
             {"dimension", 3}};
 }
 void Session::scaffold(const std::string& name, int dimension) {
@@ -117,12 +118,12 @@ Json Session::assets_list() const {
         for (const auto& entry : std::filesystem::directory_iterator(directory))
             if (entry.is_directory()) {
                 try {
-                    const auto id = entry.path().filename().string();
+                    const auto id = path_to_utf8(entry.path().filename());
                     const auto manifest = assets_.current_manifest(id);
                     list.push_back({{"id", id}, {"manifest", manifest}});
                 } catch (const std::exception& error) {
                     list.push_back(
-                        {{"id", entry.path().filename().string()}, {"error", error.what()}});
+                        {{"id", path_to_utf8(entry.path().filename())}, {"error", error.what()}});
                 }
             }
     return {{"assets", list}};
@@ -137,8 +138,8 @@ std::string Session::source_signature() const {
     std::sort(files.begin(), files.end());
     std::string contents;
     for (const auto& file : files)
-        contents +=
-            file.lexically_relative(directory).generic_string() + ":" + sha256_file(file) + "\n";
+        contents += generic_path_to_utf8(file.lexically_relative(directory)) + ":" +
+                    sha256_file(file) + "\n";
     return sha256(contents);
 }
 Json Session::schema_status() const {
@@ -181,8 +182,8 @@ void Session::launch_player(Json scene, const std::filesystem::path& executable)
     control_sequence_ = 0;
     ProcessOptions options;
     options.arguments = {
-        executable.string(),           "--scene",   snapshot.string(),     "--assets",
-        assets_.cache_root().string(), "--control", control_path_.string()};
+        path_to_utf8(executable),           "--scene",   path_to_utf8(snapshot),     "--assets",
+        path_to_utf8(assets_.cache_root()), "--control", path_to_utf8(control_path_)};
     options.working_directory = config_.project_root;
     player_ = std::make_unique<Process>(options);
     log("Play started in a separate Player process");
@@ -194,10 +195,34 @@ void Session::stop_player() {
         pending_play_scene_ = nullptr;
     }
     if (player_) {
-        player_->cancel();
-        const auto result = player_->poll();
-        log(result.output);
+        // Allow the normal Player shutdown path (including gameplay OnDestroy) first.
+        // Keep Stop synchronous and bounded so starting a new Play cannot overlap this one.
+        bool finished = false;
+        try {
+            atomic_write_json(control_path_,
+                              {{"sequence", ++control_sequence_}, {"command", "stop"}});
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+            for (;;) {
+                const auto result = player_->poll();
+                log(result.output);
+                if (!result.running) {
+                    finished = true;
+                    break;
+                }
+                if (std::chrono::steady_clock::now() >= deadline)
+                    break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+        } catch (const std::exception& error) {
+            log(std::string("Graceful Player stop failed: ") + error.what());
+        }
+        if (!finished) {
+            log("Player did not finish graceful shutdown; terminating the process");
+            player_->cancel();
+            log(player_->poll().output);
+        }
         player_.reset();
+        control_path_.clear();
         log("Play stopped; authoring scene unchanged");
     }
 }
@@ -224,7 +249,7 @@ void Session::poll() {
             log(value.kind + " completed");
             if (value.result.contains("schema"))
                 try {
-                    load_schema(value.result.at("schema").get<std::string>());
+                    load_schema(path_from_utf8(value.result.at("schema").get<std::string>()));
                     // This signature represents the sources submitted with this job, not later
                     // edits.
                     if (value.result.contains("source_signature"))
@@ -245,10 +270,9 @@ void Session::poll() {
             if (value.state == "succeeded" && schema_valid)
                 try {
                     const auto executable =
-                        value.result.value("player", (builds_.config().build_directory /
-                                                      executable_name("faset_player"))
-                                                         .string());
-                    launch_player(pending_play_scene_, executable);
+                        value.result.value("player", path_to_utf8(builds_.config().build_directory /
+                                                                  executable_name("faset_player")));
+                    launch_player(pending_play_scene_, path_from_utf8(executable));
                 } catch (const std::exception& error) {
                     log(std::string("Play failed: ") + error.what());
                 }
@@ -332,7 +356,8 @@ void Session::register_commands() {
                 else {
                     require(field.is_string() && !field.get<std::string>().empty(),
                             "project.start_scene", "Choose a saved scene inside the project");
-                    const auto file = project_path(config_.project_root, field.get<std::string>());
+                    const auto file = project_path(config_.project_root,
+                                                   path_from_utf8(field.get<std::string>()));
                     require(std::filesystem::is_regular_file(file), "project.start_scene",
                             "Save the start scene before selecting it in Project settings");
                     const auto scene = read_json(file);
@@ -358,15 +383,25 @@ void Session::register_commands() {
         "a cancellable job ID; failure retains the last successful generation.",
         schema({{"path", text},
                 {"settings", {{"type", "object"}}},
-                {"allow_removed_outputs", boolean}},
+                {"allow_removed_outputs", boolean},
+                {"expected_generation", text},
+                {"expected_active_generation", text}},
                {"path"}),
         [&](const Json& args) {
             assets::ImportRequest request;
-            request.source = project_path(config_.project_root, args.at("path").get<std::string>());
+            request.source = project_path(config_.project_root,
+                                          path_from_utf8(args.at("path").get<std::string>()));
             request.settings = args.value("settings", Json(nullptr));
             request.allow_removed_outputs = args.value("allow_removed_outputs", false);
+            request.expected_generation = args.value("expected_generation", std::string());
+            request.expected_active_generation =
+                args.value("expected_active_generation", std::string());
             auto task = std::make_shared<ImportTask>();
             task->id = "import-" + new_id();
+            task->request = {{"path", generic_path_to_utf8(std::filesystem::relative(
+                                          request.source, config_.project_root))},
+                             {"settings", request.settings},
+                             {"allow_removed_outputs", request.allow_removed_outputs}};
             imports_[task->id] = task;
             workers_.emplace_back([this, task, request] {
                 {
@@ -382,6 +417,8 @@ void Session::register_commands() {
                                                                                      : "failed";
                     task->result = {{"asset_id", result.asset_id},
                                     {"generation", result.generation},
+                                    {"previous_generation", result.previous_generation},
+                                    {"removed_output_ids", result.removed_output_ids},
                                     {"diagnostics", result.diagnostics},
                                     {"cache_hit", result.cache_hit},
                                     {"manifest", result.manifest}};
@@ -417,7 +454,8 @@ void Session::register_commands() {
                       const auto signature = source_signature();
                       const auto id = builds_.start_export(
                           resolved_or_throw(commands_, args.at("document")),
-                          project_path(config_.project_root, args.at("output").get<std::string>()));
+                          project_path(config_.project_root,
+                                       path_from_utf8(args.at("output").get<std::string>())));
                       submitted_sources_[id] = signature;
                       return Json{{"job", id}};
                   });

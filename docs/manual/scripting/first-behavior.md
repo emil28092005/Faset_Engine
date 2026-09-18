@@ -42,7 +42,7 @@ Read the callback from top to bottom:
 4. `transform` gives a pose copy. Multiplying metres per second by seconds gives a displacement in metres.
 5. `setTransform` publishes the changed non-physical pose.
 
-The `[](...) { ... }` expression is a C++ lambda: a function stored in `Behavior::update`. Empty brackets mean it captures no local variables. `registerBehavior` takes ownership of the callback object. Register before calling `load`; registration after a world has loaded is rejected.
+The `[](...) { ... }` expression is a C++ lambda: a function stored in `Behavior::update`. Empty brackets mean it captures no local variables. `registerBehavior` takes ownership of the callback object. Register before calling `load`; registration while entities exist or a callback is running is rejected.
 
 The `schema()` function describes editable configuration. It does not create a runtime object. `tutorial.move_x` is the stable `TypeId`; `speed` is a stable `FieldId` within that type. Keep these IDs when changing a display label. Changing a field's meaning or units needs an explicit data migration, not just a new label.
 
@@ -56,7 +56,10 @@ The example scene is a complete, loadable document:
 
 The sprite is visible because it has `faset.sprite`. It moves because it also has `tutorial.move_x`. The configuration field is `speed`; the type string must match the registration exactly. `rotation` uses radians, and the default coordinate system is Y-up.
 
-After your project's schema is exported and loaded by the Editor, the type can be described through the same authoring schema used by the Inspector. The direct Player command above is useful before building an Editor workflow around your component.
+After **Build C++** succeeds in the Editor, choose **Add component** in the Inspector
+and select the registered type. Its schema supplies editable fields, defaults and
+constraints. The direct Player command above is useful for testing the same behavior
+independently of an editor session.
 
 ## Make a change and verify it
 

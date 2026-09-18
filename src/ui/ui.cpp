@@ -739,9 +739,26 @@ void Context::apply_layout(const Json& document) {
     apply(root(), definition);
 }
 void Context::layout(float width, float height, float scale) {
+    if (!std::isfinite(width) || !std::isfinite(height) || !std::isfinite(scale) || scale <= 0)
+        throw std::invalid_argument("UI dimensions and display scale must be finite and valid");
+    scale = std::clamp(scale, .5f, 4.f);
+    if (impl_->scale != scale) {
+        // Pointer captures use the old drawable coordinate system. Keep edits,
+        // but cancel a drag rather than committing a jump after a monitor change.
+        impl_->cancel_capture();
+        const auto ratio = scale / impl_->scale;
+        std::function<void(Widget&)> rescale = [&](Widget& widget) {
+            widget.scroll_y *= ratio;
+            for (auto& child : widget.children)
+                rescale(*child);
+        };
+        rescale(root());
+        for (auto& [id, edit] : impl_->edits)
+            edit.scroll *= ratio;
+    }
     impl_->width = std::max(0.f, width);
     impl_->height = std::max(0.f, height);
-    impl_->scale = std::clamp(scale, .5f, 4.f);
+    impl_->scale = scale;
     std::set<std::string> ids;
     std::function<void(Widget&)> check = [&](Widget& w) {
         if (w.id.empty() || !ids.insert(w.id).second)

@@ -14,7 +14,7 @@ using ui::Kind;
 using ui::Widget;
 fs::path user_home() {
 #ifdef _WIN32
-    if (const auto* value = std::getenv("USERPROFILE"))
+    if (const auto* value = _wgetenv(L"USERPROFILE"); value && *value)
         return fs::path(value);
 #else
     if (const auto* value = std::getenv("HOME"))
@@ -24,7 +24,7 @@ fs::path user_home() {
 }
 fs::path recent_path() {
 #ifdef _WIN32
-    if (const auto* value = std::getenv("APPDATA"))
+    if (const auto* value = _wgetenv(L"APPDATA"); value && *value)
         return fs::path(value) / "Faset/recent-projects.json";
 #else
     if (const auto* value = std::getenv("XDG_CONFIG_HOME"); value && *value)
@@ -44,19 +44,15 @@ fs::path normalize(std::string text) {
         throw std::runtime_error("Enter a project directory.");
     if (text.find_first_of("\r\n\t") != std::string::npos || text.find('\0') != std::string::npos)
         throw std::runtime_error("A directory must fit on one line.");
-    fs::path path = fs::u8path(text);
+    fs::path path = path_from_utf8(text);
     if (text == "~")
         path = user_home();
     else if (text.starts_with("~/") || text.starts_with("~\\"))
-        path = user_home() / fs::u8path(text.substr(2));
+        path = user_home() / path_from_utf8(text.substr(2));
     path = fs::weakly_canonical(fs::absolute(path));
     if (path.filename() == "project.faset.json")
         path = path.parent_path();
     return path;
-}
-std::string utf8(const fs::path& path) {
-    const auto value = path.u8string();
-    return std::string(reinterpret_cast<const char*>(value.data()), value.size());
 }
 ProjectSelection open_project(const fs::path& path) {
     if (!fs::is_directory(path))
@@ -87,12 +83,12 @@ Json recent_records(const fs::path& file) {
     }
 }
 void remember(const fs::path& project, const fs::path& store) {
-    const auto selected = open_project(normalize(utf8(project)));
+    const auto selected = open_project(normalize(path_to_utf8(project)));
     auto records = recent_records(store);
     std::erase_if(records.get_ref<Json::array_t&>(), [&](const Json& record) {
-        return !record.is_string() || record.get<std::string>() == utf8(selected.path);
+        return !record.is_string() || record.get<std::string>() == path_to_utf8(selected.path);
     });
-    records.insert(records.begin(), utf8(selected.path));
+    records.insert(records.begin(), path_to_utf8(selected.path));
     while (records.size() > 12)
         records.erase(records.end() - 1);
     atomic_write_json(store, records);
@@ -115,6 +111,13 @@ struct ProjectLauncher::Impl {
     render::Renderer& renderer;
     ui::Context ui;
     render::Snapshot frame_data;
+    float ui_scale = 1;
+    float logical_width() const {
+        return float(renderer.width()) / ui_scale;
+    }
+    float logical_height() const {
+        return float(renderer.height()) / ui_scale;
+    }
     fs::path recents_file, browse_path;
     std::optional<fs::path> pending_browse;
     std::optional<ProjectSelection> selected;
@@ -136,7 +139,7 @@ struct ProjectLauncher::Impl {
             [this](bool enabled) { renderer.set_text_input(enabled); },
             [this](ui::Rect r) { renderer.set_text_input_area(r.x, r.y, r.width, r.height); });
         const auto start = initial.empty() ? user_home() / "FasetProjects/MyGame" : initial;
-        ui.update_text("launcher-path", utf8(start));
+        ui.update_text("launcher-path", path_to_utf8(start));
         create = initial.empty();
         ui.find("launcher-open")->on_click = [this](Widget&) { set_mode(false); };
         ui.find("launcher-create")->on_click = [this](Widget&) { set_mode(true); };
@@ -151,7 +154,7 @@ struct ProjectLauncher::Impl {
         build_browser();
         load_recents();
         refresh();
-        ui.layout(float(renderer.width()), float(renderer.height()));
+        ui.layout(float(renderer.width()), float(renderer.height()), ui_scale);
         ui.focus(create ? "launcher-name" : "launcher-path");
     }
     void set_mode(bool value) {
@@ -175,9 +178,9 @@ struct ProjectLauncher::Impl {
                 const auto id = "launcher-recent-" + std::to_string(i++);
                 auto& item = list.add(Kind::TreeRow, id, selection.name);
                 item.layout.height = 40;
-                item.tooltip = utf8(selection.path);
+                item.tooltip = path_to_utf8(selection.path);
                 item.on_click = [this, path = selection.path](Widget&) {
-                    ui.update_text("launcher-path", utf8(path), true);
+                    ui.update_text("launcher-path", path_to_utf8(path), true);
                     set_mode(false);
                 };
             } catch (...) {
@@ -250,7 +253,7 @@ struct ProjectLauncher::Impl {
         actions.layout.height = 36;
         button(actions, "browser-choose", "Choose directory", [this] {
             if (browser_valid) {
-                ui.update_text("launcher-path", utf8(browse_path), true);
+                ui.update_text("launcher-path", path_to_utf8(browse_path), true);
                 close_browser();
             }
         }).layout.width = 180;
@@ -277,11 +280,11 @@ struct ProjectLauncher::Impl {
             auto& list = *ui.find("browser-list");
             list.children.clear();
             list.scroll_y = 0;
-            ui.update_text("browser-path", utf8(browse_path), true);
+            ui.update_text("browser-path", path_to_utf8(browse_path), true);
             std::size_t index = 0;
             for (const auto& child : children) {
                 auto& row = list.add(Kind::TreeRow, "browser-entry-" + std::to_string(index++),
-                                     "[Folder]  " + utf8(child.filename()));
+                                     "[Folder]  " + path_to_utf8(child.filename()));
                 row.layout.height = 34;
                 row.on_click = [this, child](Widget&) {
                     ui.clear_focus();
@@ -327,6 +330,7 @@ struct ProjectLauncher::Impl {
         }
     }
     void refresh() {
+        ui_scale = std::clamp(renderer.display_scale(), .5f, 4.f);
         ui.find("launcher-open")->selected = !create;
         ui.find("launcher-create")->selected = create;
         ui.find("launcher-2d")->selected = dimension == 2;
@@ -344,17 +348,17 @@ struct ProjectLauncher::Impl {
         ui.find("launcher-body")->enabled = !browsing;
         auto* dialog = ui.find("launcher-browser");
         dialog->visible = browsing;
-        dialog->layout.width = std::max(320.f, std::min(760.f, float(renderer.width()) - 40));
-        dialog->layout.height = std::max(300.f, std::min(540.f, float(renderer.height()) - 40));
-        dialog->layout.x = (float(renderer.width()) - dialog->layout.width) * .5f;
-        dialog->layout.y = (float(renderer.height()) - dialog->layout.height) * .5f;
+        dialog->layout.width = std::max(320.f, std::min(760.f, logical_width() - 40));
+        dialog->layout.height = std::max(300.f, std::min(540.f, logical_height() - 40));
+        dialog->layout.x = (logical_width() - dialog->layout.width) * .5f;
+        dialog->layout.y = (logical_height() - dialog->layout.height) * .5f;
         ui.find("launcher-sidebar")->layout.width =
-            std::clamp(float(renderer.width()) * .24f, 180.f, 235.f);
-        ui.find("launcher-main")->layout.padding = renderer.width() < 850 ? 16 : 32;
+            std::clamp(logical_width() * .24f, 180.f, 235.f);
+        ui.find("launcher-main")->layout.padding = logical_width() < 850 ? 16 : 32;
     }
     void frame(const std::vector<render::Event>& events) {
         refresh();
-        ui.layout(float(renderer.width()), float(renderer.height()));
+        ui.layout(float(renderer.width()), float(renderer.height()), ui_scale);
         for (const auto& event : events) {
             if (event.type == render::Event::Type::Quit)
                 cancelled = true;
@@ -371,7 +375,7 @@ struct ProjectLauncher::Impl {
                     ui.clear_focus();
                     navigate_pending();
                     if (!ui.editing() && browser_valid) {
-                        ui.update_text("launcher-path", utf8(browse_path), true);
+                        ui.update_text("launcher-path", path_to_utf8(browse_path), true);
                         close_browser();
                     }
                 } else
@@ -384,10 +388,10 @@ struct ProjectLauncher::Impl {
             ui.handle(event);
             navigate_pending();
             refresh();
-            ui.layout(float(renderer.width()), float(renderer.height()));
+            ui.layout(float(renderer.width()), float(renderer.height()), ui_scale);
         }
         refresh();
-        ui.layout(float(renderer.width()), float(renderer.height()));
+        ui.layout(float(renderer.width()), float(renderer.height()), ui_scale);
         frame_data = {};
         frame_data.clear_color = ui.theme().background;
         ui.draw(frame_data);

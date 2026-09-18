@@ -8,10 +8,11 @@
 
 namespace faset {
 struct ProcessOptions {
-    // First element is the executable. Arguments are passed directly, never through a shell.
+    // UTF-8 text; the first element is the executable (use path_to_utf8 for paths).
+    // Arguments are passed directly, never through a shell.
     std::vector<std::string> arguments;
     std::filesystem::path working_directory;
-    std::map<std::string, std::string> environment;
+    std::map<std::string, std::string> environment; // UTF-8 names and values.
 };
 struct ProcessPoll {
     bool running{};

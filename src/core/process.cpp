@@ -131,6 +131,41 @@ struct Process::Impl {
             ::close(output);
 #endif
     }
+#ifndef _WIN32
+    bool collect_exit() {
+        // WNOWAIT keeps the exited leader's PID reserved until its owned group has
+        // been stopped. Never signal a PGID after reaping the leader: it may be reused.
+        siginfo_t information{};
+        int result;
+        do {
+            result =
+                ::waitid(P_PID, static_cast<id_t>(pid), &information, WEXITED | WNOHANG | WNOWAIT);
+        } while (result < 0 && errno == EINTR);
+        if (result < 0) {
+            if (errno == ECHILD) {
+                running = false;
+                pid = -1;
+            }
+            throw std::runtime_error("Cannot collect child process");
+        }
+        if (information.si_pid == 0)
+            return false;
+        ::kill(-pid, SIGKILL);
+        int status{};
+        pid_t reaped;
+        do {
+            reaped = ::waitpid(pid, &status, 0);
+        } while (reaped < 0 && errno == EINTR);
+        running = false;
+        pid = -1;
+        if (reaped < 0)
+            throw std::runtime_error("Cannot reap child process");
+        exit_code = WIFEXITED(status)     ? WEXITSTATUS(status)
+                    : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
+                                          : 1;
+        return true;
+    }
+#endif
     ProcessPoll poll() {
         std::string text;
         char buffer[8192];
@@ -171,20 +206,8 @@ struct Process::Impl {
                 break;
             }
         }
-        if (running) {
-            int status{};
-            pid_t result;
-            do {
-                result = ::waitpid(pid, &status, WNOHANG);
-            } while (result < 0 && errno == EINTR);
-            if (result == pid) {
-                running = false;
-                exit_code = WIFEXITED(status)     ? WEXITSTATUS(status)
-                            : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
-                                                  : 1;
-            } else if (result < 0)
-                throw std::runtime_error("Cannot collect child process");
-        }
+        if (running)
+            collect_exit();
 #endif
         if (!running) {
 #ifdef _WIN32
@@ -234,18 +257,8 @@ struct Process::Impl {
         ::kill(-pid, SIGTERM);
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
         while (std::chrono::steady_clock::now() < deadline) {
-            int status{};
-            auto result = ::waitpid(pid, &status, WNOHANG);
-            if (result == pid) {
-                running = false;
-                exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
-                ::kill(-pid, SIGKILL);
+            if (collect_exit())
                 return;
-            }
-            if (result < 0 && errno != EINTR) {
-                running = false;
-                return;
-            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         ::kill(-pid, SIGKILL);
@@ -253,6 +266,7 @@ struct Process::Impl {
         while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {
         }
         running = false;
+        pid = -1;
         exit_code = 130;
 #endif
     }

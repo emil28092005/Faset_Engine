@@ -21,6 +21,12 @@ jobs:
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x64
+      - name: Enable the documented Windows long-path developer profile
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'
+          Write-Output "Previous LongPathsEnabled: $((Get-ItemProperty -Path $key).LongPathsEnabled)"
+          New-ItemProperty -Path $key -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force
       - name: Identify pinned Vulkan source cache
         id: vulkan-identity
         run: python tools/ci/prepare_windows_vulkan.py --cache-key

@@ -10,6 +10,12 @@ Each ordinary callback receives `(Runtime& game, EntityHandle self, double delta
 
 `onDestroy` runs while that object's handle and allowed component data are still valid. Clean up subscriptions or external C++ state there. After removal, `valid(oldHandle)` returns false. Removing a behavior component also runs that component's `onDestroy`. Clearing or replacing a scene runs destruction callbacks; a new scene uses a new session identity.
 
+Normal Player shutdown and the Editor's **Stop** request also run destruction callbacks.
+Stop gives the Player a bounded grace period to finish. An unresponsive native callback
+can force the Editor to terminate the process; no application can guarantee cleanup
+callbacks after forced termination or a crash. Such fallback is reported in Console.
+Exceptions caught from callbacks, including shutdown callbacks, appear in Player logs.
+
 Registering a callback does not make captured pointers safe. A lambda that stores a reference to a stack variable in `registerGameplay` will outlive that variable. The [timed-despawn example](examples.md#spawn-and-destroy-on-safe-boundaries) uses shared ownership for captured state and removes each object's entry on destruction.
 
 ## One fixed tick
@@ -58,4 +64,4 @@ The Player reads this optional object from the scene document. The settings are 
 }
 ```
 
-This is an excerpt, not a complete scene. The tutorial scenes contain complete examples. `fixed_delta` is seconds, gravity is metres per second squared, and substeps are solver subdivisions inside one fixed tick. These do not create additional gameplay callbacks. Invalid configuration is rejected before the Player starts. Editing these JSON settings is implemented; an Editor settings panel should only be relied on where the current UI exposes it.
+This is an excerpt, not a complete scene. The tutorial scenes contain complete examples. `fixed_delta` is seconds, gravity is metres per second squared, and substeps are solver subdivisions inside one fixed tick. These do not create additional gameplay callbacks. Invalid configuration is rejected before the Player starts. The Editor's **Simulation** dialog edits these scene settings through normal Undo transactions; **Project settings** edits the project's name, dimension and start scene separately.

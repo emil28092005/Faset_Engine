@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <faset/core/io.hpp>
 #include <faset/render/render_graph.hpp>
 #include <faset/render/renderer.hpp>
 #include <fstream>
@@ -88,7 +89,7 @@ struct Renderer::Impl {
     VkDescriptorPool descriptor_pool{};
     VkSampler shadow_sampler{}, color_sampler{};
     VkPipelineLayout pipeline_layout{};
-    VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{};
+    VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{}, sprite_pipeline{};
     struct GpuTexture {
         Image image;
         VkDescriptorSet descriptor{};
@@ -150,6 +151,8 @@ struct Renderer::Impl {
                 vkDestroyPipeline(device, ui_pipeline, nullptr);
             if (shadow_pipeline)
                 vkDestroyPipeline(device, shadow_pipeline, nullptr);
+            if (sprite_pipeline)
+                vkDestroyPipeline(device, sprite_pipeline, nullptr);
             if (pipeline_layout)
                 vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
             if (descriptor_pool)
@@ -207,7 +210,8 @@ struct Renderer::Impl {
                        VkMemoryPropertyFlags properties, VkMemoryPropertyFlags preferred = 0) {
         Buffer b{};
         b.size = bytes;
-        VkBufferCreateInfo info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        VkBufferCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         info.size = bytes;
         info.usage = usage;
         info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -215,7 +219,8 @@ struct Renderer::Impl {
         try {
             VkMemoryRequirements req{};
             vkGetBufferMemoryRequirements(device, b.handle, &req);
-            VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+            VkMemoryAllocateInfo alloc{};
+            alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
             alloc.allocationSize = req.size;
             alloc.memoryTypeIndex = memory_type(req.memoryTypeBits, properties, preferred);
             check(vkAllocateMemory(device, &alloc, nullptr, &b.memory), "Allocate buffer memory");
@@ -230,7 +235,8 @@ struct Renderer::Impl {
     Image make_image(std::uint32_t w, std::uint32_t h, VkFormat format, VkImageUsageFlags usage,
                      VkImageAspectFlags aspect) {
         Image image{};
-        VkImageCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+        VkImageCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         info.imageType = VK_IMAGE_TYPE_2D;
         info.format = format;
         info.extent = {w, h, 1};
@@ -244,7 +250,8 @@ struct Renderer::Impl {
         try {
             VkMemoryRequirements req{};
             vkGetImageMemoryRequirements(device, image.handle, &req);
-            VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+            VkMemoryAllocateInfo alloc{};
+            alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
             alloc.allocationSize = req.size;
             alloc.memoryTypeIndex =
                 memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -252,7 +259,8 @@ struct Renderer::Impl {
                   "Allocate image memory");
             image.allocation_size = req.size;
             check(vkBindImageMemory(device, image.handle, image.memory, 0), "Bind image memory");
-            VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+            VkImageViewCreateInfo view{};
+            view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             view.image = image.handle;
             view.viewType = VK_IMAGE_VIEW_TYPE_2D;
             view.format = format;
@@ -267,7 +275,8 @@ struct Renderer::Impl {
     void transition(VkCommandBuffer cmd, VkImage image, VkImageLayout& before, VkImageLayout after,
                     VkImageAspectFlags aspect) {
         // Conservative dependencies make the first single-queue backend auditable.
-        VkImageMemoryBarrier2 barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+        VkImageMemoryBarrier2 barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = before == VK_IMAGE_LAYOUT_UNDEFINED
                                    ? VK_PIPELINE_STAGE_2_NONE
                                    : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -280,7 +289,8 @@ struct Renderer::Impl {
         barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.image = image;
         barrier.subresourceRange = {aspect, 0, 1, 0, 1};
-        VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+        VkDependencyInfo dependency{};
+        dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
         dependency.imageMemoryBarrierCount = 1;
         dependency.pImageMemoryBarriers = &barrier;
         vkCmdPipelineBarrier2(cmd, &dependency);
@@ -292,20 +302,23 @@ struct Renderer::Impl {
     }
     void begin() {
         check(vkResetCommandBuffer(command, 0), "Reset command buffer");
-        VkCommandBufferBeginInfo info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        VkCommandBufferBeginInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         check(vkBeginCommandBuffer(command, &info), "Begin command buffer");
     }
     void submit(bool present = false) {
         check(vkEndCommandBuffer(command), "End command buffer");
         check(vkResetFences(device, 1, &fence), "Reset fence");
-        VkCommandBufferSubmitInfo cmd{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
+        VkCommandBufferSubmitInfo cmd{};
+        cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
         cmd.commandBuffer = command;
-        VkSubmitInfo2 info{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
+        VkSubmitInfo2 info{};
+        info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
         info.commandBufferInfoCount = 1;
         info.pCommandBufferInfos = &cmd;
-        VkSemaphoreSubmitInfo wait{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO},
-            signal{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
+        VkSemaphoreSubmitInfo wait{}, signal{};
+        wait.sType = signal.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
         if (present) {
             wait.semaphore = acquired;
             wait.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -354,11 +367,12 @@ struct Renderer::Impl {
             std::cerr << "[Faset] Vulkan validation layer not installed; diagnostics disabled.\n";
         if (validation)
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
+        VkApplicationInfo app{};
+        app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app.pApplicationName = "Faset Engine";
         app.apiVersion = VK_API_VERSION_1_3;
-        VkDebugUtilsMessengerCreateInfoEXT debug_info{
-            VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+        VkDebugUtilsMessengerCreateInfoEXT debug_info{};
+        debug_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         debug_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                                      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         debug_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
@@ -367,7 +381,8 @@ struct Renderer::Impl {
         debug_info.pfnUserCallback = debug;
         debug_info.pUserData = this;
         const char* validation_name = "VK_LAYER_KHRONOS_validation";
-        VkInstanceCreateInfo info{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+        VkInstanceCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         info.pApplicationInfo = &app;
         info.enabledExtensionCount = static_cast<std::uint32_t>(extensions.size());
         info.ppEnabledExtensionNames = extensions.data();
@@ -395,9 +410,10 @@ struct Renderer::Impl {
             vkGetPhysicalDeviceProperties(gpu, &properties);
             if (properties.apiVersion < VK_API_VERSION_1_3)
                 continue;
-            VkPhysicalDeviceVulkan13Features f13{
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-            VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            VkPhysicalDeviceVulkan13Features f13{};
+            f13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+            VkPhysicalDeviceFeatures2 features{};
+            features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
             features.pNext = &f13;
             vkGetPhysicalDeviceFeatures2(gpu, &features);
             if (!f13.synchronization2 || !f13.dynamicRendering)
@@ -436,14 +452,17 @@ struct Renderer::Impl {
             throw std::runtime_error("No Vulkan 1.3 device supports dynamic rendering, "
                                      "synchronization2 and required color/depth formats");
         float priority = 1;
-        VkDeviceQueueCreateInfo qi{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
+        VkDeviceQueueCreateInfo qi{};
+        qi.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         qi.queueFamilyIndex = queue_family;
         qi.queueCount = 1;
         qi.pQueuePriorities = &priority;
-        VkPhysicalDeviceVulkan13Features f13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+        VkPhysicalDeviceVulkan13Features f13{};
+        f13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
         f13.synchronization2 = VK_TRUE;
         f13.dynamicRendering = VK_TRUE;
-        VkDeviceCreateInfo di{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+        VkDeviceCreateInfo di{};
+        di.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         di.pNext = &f13;
         di.queueCreateInfoCount = 1;
         di.pQueueCreateInfos = &qi;
@@ -454,23 +473,28 @@ struct Renderer::Impl {
         }
         check(vkCreateDevice(physical, &di, nullptr, &device), "Create Vulkan device");
         vkGetDeviceQueue(device, queue_family, 0, &queue);
-        VkCommandPoolCreateInfo pi{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+        VkCommandPoolCreateInfo pi{};
+        pi.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         pi.queueFamilyIndex = queue_family;
         pi.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         check(vkCreateCommandPool(device, &pi, nullptr, &pool), "Create command pool");
-        VkCommandBufferAllocateInfo ai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        VkCommandBufferAllocateInfo ai{};
+        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         ai.commandPool = pool;
         ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         ai.commandBufferCount = 1;
         check(vkAllocateCommandBuffers(device, &ai, &command), "Allocate command buffer");
-        VkFenceCreateInfo fi{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        VkFenceCreateInfo fi{};
+        fi.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fi.flags = VK_FENCE_CREATE_SIGNALED_BIT;
         check(vkCreateFence(device, &fi, nullptr, &fence), "Create frame fence");
-        VkSemaphoreCreateInfo si{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        VkSemaphoreCreateInfo si{};
+        si.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         check(vkCreateSemaphore(device, &si, nullptr, &acquired), "Create acquire semaphore");
         check(vkCreateSemaphore(device, &si, nullptr, &present_ready), "Create present semaphore");
         if (timestamp_bits) {
-            VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+            VkQueryPoolCreateInfo query{};
+            query.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
             query.queryType = VK_QUERY_TYPE_TIMESTAMP;
             query.queryCount = 2;
             check(vkCreateQueryPool(device, &query, nullptr, &timestamp_pool),
@@ -545,7 +569,8 @@ struct Renderer::Impl {
         count = caps.minImageCount + 1;
         if (caps.maxImageCount)
             count = std::min(count, caps.maxImageCount);
-        VkSwapchainCreateInfoKHR info{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
+        VkSwapchainCreateInfoKHR info{};
+        info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         info.surface = surface;
         info.minImageCount = count;
         info.imageFormat = chosen.format;
@@ -595,21 +620,24 @@ struct Renderer::Impl {
             bindings[i].descriptorCount = 1;
             bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         }
-        VkDescriptorSetLayoutCreateInfo li{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        VkDescriptorSetLayoutCreateInfo li{};
+        li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         li.bindingCount = 4;
         li.pBindings = bindings.data();
         check(vkCreateDescriptorSetLayout(device, &li, nullptr, &descriptor_layout),
               "Create descriptor layout");
         VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2048},
                                         {VK_DESCRIPTOR_TYPE_SAMPLER, 2048}};
-        VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+        VkDescriptorPoolCreateInfo pi{};
+        pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         pi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
         pi.maxSets = 1024;
         pi.poolSizeCount = 2;
         pi.pPoolSizes = sizes;
         check(vkCreateDescriptorPool(device, &pi, nullptr, &descriptor_pool),
               "Create descriptor pool");
-        VkSamplerCreateInfo si{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        VkSamplerCreateInfo si{};
+        si.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         si.magFilter = si.minFilter = VK_FILTER_NEAREST;
         si.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
         si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -658,7 +686,8 @@ struct Renderer::Impl {
                        VK_IMAGE_ASPECT_COLOR_BIT);
             submit();
             destroy(staging);
-            VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+            VkDescriptorSetAllocateInfo ai{};
+            ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
             ai.descriptorPool = descriptor_pool;
             ai.descriptorSetCount = 1;
             ai.pSetLayouts = &descriptor_layout;
@@ -671,7 +700,7 @@ struct Renderer::Impl {
                 {color_sampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED}};
             std::array<VkWriteDescriptorSet, 4> writes{};
             for (std::uint32_t i = 0; i < 4; ++i) {
-                writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+                writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[i].dstSet = texture.descriptor;
                 writes[i].dstBinding = i;
                 writes[i].descriptorCount = 1;
@@ -700,16 +729,17 @@ struct Renderer::Impl {
         std::vector<std::filesystem::path> roots;
         const char* base = SDL_GetBasePath();
         if (base)
-            roots.emplace_back(std::filesystem::path(base) / "shaders");
+            roots.emplace_back(faset::path_from_utf8(base) / "shaders");
         roots.emplace_back(std::filesystem::current_path() / "shaders");
-        roots.emplace_back(FASET_SHADER_DIRECTORY);
+        roots.emplace_back(faset::path_from_utf8(FASET_SHADER_DIRECTORY));
         for (const auto& root : roots)
-            if (std::filesystem::is_regular_file(root / "vertexMain.spv"))
+            if (std::filesystem::is_regular_file(faset::native_io_path(root / "vertexMain.spv")))
                 return root;
         throw std::runtime_error("Compiled Slang shader bundle is missing");
     }
     VkShaderModule shader(const detail::ShaderCode& code) {
-        VkShaderModuleCreateInfo ci{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        VkShaderModuleCreateInfo ci{};
+        ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         ci.codeSize = code.words.size() * sizeof(std::uint32_t);
         ci.pCode = code.words.data();
         VkShaderModule result{};
@@ -724,7 +754,8 @@ struct Renderer::Impl {
                     "Shader layout changed; the current pipeline was preserved");
         VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                  sizeof(Push)};
-        VkPipelineLayoutCreateInfo li{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        VkPipelineLayoutCreateInfo li{};
+        li.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         li.setLayoutCount = 1;
         li.pSetLayouts = &descriptor_layout;
         li.pushConstantRangeCount = 1;
@@ -736,14 +767,14 @@ struct Renderer::Impl {
             vertex = shader(shaders[0]);
             fragment = shader(shaders[1]);
             shadow_vertex = shader(shaders[2]);
-            for (int mode = 0; mode < 3; ++mode) {
-                bool shadow_pass = mode == 2, ui = mode == 1;
+            for (int mode = 0; mode < 4; ++mode) {
+                bool shadow_pass = mode == 2, ui = mode == 1, sprite = mode == 3;
                 VkPipelineShaderStageCreateInfo stages[2]{};
-                stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+                stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
                 stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
                 stages[0].module = shadow_pass ? shadow_vertex : vertex;
                 stages[0].pName = "main";
-                stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+                stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
                 stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
                 stages[1].module = fragment;
                 stages[1].pName = "main";
@@ -756,20 +787,20 @@ struct Renderer::Impl {
                     {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuVertex, color)},
                     {4, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GpuVertex, material)},
                     {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GpuVertex, uv)}};
-                VkPipelineVertexInputStateCreateInfo vi{
-                    VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+                VkPipelineVertexInputStateCreateInfo vi{};
+                vi.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
                 vi.vertexBindingDescriptionCount = 1;
                 vi.pVertexBindingDescriptions = &binding;
                 vi.vertexAttributeDescriptionCount = shadow_pass ? 1 : 6;
                 vi.pVertexAttributeDescriptions = shadow_pass ? attrs + 1 : attrs;
-                VkPipelineInputAssemblyStateCreateInfo ia{
-                    VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+                VkPipelineInputAssemblyStateCreateInfo ia{};
+                ia.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
                 ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-                VkPipelineViewportStateCreateInfo vp{
-                    VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+                VkPipelineViewportStateCreateInfo vp{};
+                vp.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
                 vp.viewportCount = vp.scissorCount = 1;
-                VkPipelineRasterizationStateCreateInfo rs{
-                    VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+                VkPipelineRasterizationStateCreateInfo rs{};
+                rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
                 rs.polygonMode = VK_POLYGON_MODE_FILL;
                 rs.cullMode = VK_CULL_MODE_NONE;
                 rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -777,13 +808,13 @@ struct Renderer::Impl {
                 rs.depthBiasEnable = shadow_pass;
                 rs.depthBiasConstantFactor = 1.25f;
                 rs.depthBiasSlopeFactor = 1.75f;
-                VkPipelineMultisampleStateCreateInfo ms{
-                    VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+                VkPipelineMultisampleStateCreateInfo ms{};
+                ms.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
                 ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-                VkPipelineDepthStencilStateCreateInfo ds{
-                    VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+                VkPipelineDepthStencilStateCreateInfo ds{};
+                ds.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
                 ds.depthTestEnable = !ui;
-                ds.depthWriteEnable = !ui;
+                ds.depthWriteEnable = !ui && !sprite;
                 ds.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
                 VkPipelineColorBlendAttachmentState blend{};
                 blend.colorWriteMask = 15;
@@ -794,22 +825,23 @@ struct Renderer::Impl {
                 blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
                 blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
                 blend.alphaBlendOp = VK_BLEND_OP_ADD;
-                VkPipelineColorBlendStateCreateInfo cb{
-                    VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+                VkPipelineColorBlendStateCreateInfo cb{};
+                cb.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
                 cb.attachmentCount = shadow_pass ? 0 : 1;
                 cb.pAttachments = &blend;
                 VkDynamicState states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-                VkPipelineDynamicStateCreateInfo dynamic{
-                    VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+                VkPipelineDynamicStateCreateInfo dynamic{};
+                dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
                 dynamic.dynamicStateCount = 2;
                 dynamic.pDynamicStates = states;
                 VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-                VkPipelineRenderingCreateInfo rendering{
-                    VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+                VkPipelineRenderingCreateInfo rendering{};
+                rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
                 rendering.colorAttachmentCount = shadow_pass ? 0 : 1;
                 rendering.pColorAttachmentFormats = &format;
                 rendering.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
-                VkGraphicsPipelineCreateInfo pi{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+                VkGraphicsPipelineCreateInfo pi{};
+                pi.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
                 pi.pNext = &rendering;
                 pi.stageCount = shadow_pass ? 1 : 2;
                 pi.pStages = stages;
@@ -822,7 +854,10 @@ struct Renderer::Impl {
                 pi.pColorBlendState = &cb;
                 pi.pDynamicState = &dynamic;
                 pi.layout = pipeline_layout;
-                auto* output = shadow_pass ? &shadow_pipeline : ui ? &ui_pipeline : &pipeline;
+                auto* output = shadow_pass ? &shadow_pipeline
+                               : ui        ? &ui_pipeline
+                               : sprite    ? &sprite_pipeline
+                                           : &pipeline;
                 check(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, output),
                       "Create graphics pipeline");
             }
@@ -999,7 +1034,7 @@ struct Renderer::Impl {
             if (sprite.texture)
                 upload_texture(sprite.texture);
         std::vector<GpuVertex> data;
-        std::vector<Batch> scene_batches, shadow_batches, ui_batches;
+        std::vector<Batch> scene_batches, shadow_batches, sprite_batches, ui_batches;
         for (const auto& item : snapshot.draws) {
             if (!item.mesh)
                 continue;
@@ -1031,7 +1066,29 @@ struct Renderer::Impl {
             else
                 scene_batches.push_back(batch);
         }
+        struct OrderedSprite {
+            const Sprite* sprite;
+            float depth;
+        };
+        std::vector<OrderedSprite> ordered_sprites;
+        ordered_sprites.reserve(snapshot.sprites.size());
         for (const auto& sprite : snapshot.sprites) {
+            const auto clip =
+                point(snapshot.view_projection,
+                      {sprite.position[0], sprite.position[1], sprite.position[2], 1});
+            const auto depth =
+                clip[3] != 0 ? clip[2] / clip[3] : std::numeric_limits<float>::infinity();
+            ordered_sprites.push_back(
+                {&sprite, std::isfinite(depth) ? depth : std::numeric_limits<float>::infinity()});
+        }
+        std::stable_sort(ordered_sprites.begin(), ordered_sprites.end(),
+                         [](const auto& a, const auto& b) {
+                             if (a.sprite->layer != b.sprite->layer)
+                                 return a.sprite->layer < b.sprite->layer;
+                             return a.depth > b.depth;
+                         });
+        for (const auto& ordered : ordered_sprites) {
+            const auto& sprite = *ordered.sprite;
             auto first = static_cast<std::uint32_t>(data.size());
             float c = std::cos(sprite.rotation), s = std::sin(sprite.rotation);
             for (auto i : {0, 1, 2, 0, 2, 3}) {
@@ -1048,7 +1105,7 @@ struct Renderer::Impl {
                 vertex.material[0] = sprite.texture && sprite.texture->srgb ? 1.f : 0.f;
                 data.push_back(vertex);
             }
-            scene_batches.push_back(
+            sprite_batches.push_back(
                 {first, 6, sprite.texture ? sprite.texture.get() : white.get()});
         }
         for (const auto& q : snapshot.ui_quads) {
@@ -1131,13 +1188,15 @@ struct Renderer::Impl {
         graph.add("ShadowMap", {}, {"shadow"}, [&] {
             transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_DEPTH_BIT);
-            VkRenderingAttachmentInfo attachment{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+            VkRenderingAttachmentInfo attachment{};
+            attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             attachment.imageView = shadow.view;
             attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             attachment.clearValue.depthStencil = {1, 0};
-            VkRenderingInfo rendering{VK_STRUCTURE_TYPE_RENDERING_INFO};
+            VkRenderingInfo rendering{};
+            rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
             rendering.renderArea = {{0, 0}, {shadow_size, shadow_size}};
             rendering.layerCount = 1;
             rendering.pDepthAttachment = &attachment;
@@ -1160,20 +1219,23 @@ struct Renderer::Impl {
                        VK_IMAGE_ASPECT_COLOR_BIT);
             transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_DEPTH_BIT);
-            VkRenderingAttachmentInfo ca{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+            VkRenderingAttachmentInfo ca{};
+            ca.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             ca.imageView = color.view;
             ca.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             ca.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             ca.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             std::copy(snapshot.clear_color.begin(), snapshot.clear_color.end(),
                       ca.clearValue.color.float32);
-            VkRenderingAttachmentInfo da{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+            VkRenderingAttachmentInfo da{};
+            da.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             da.imageView = depth.view;
             da.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             da.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             da.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             da.clearValue.depthStencil = {1, 0};
-            VkRenderingInfo rendering{VK_STRUCTURE_TYPE_RENDERING_INFO};
+            VkRenderingInfo rendering{};
+            rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
             rendering.renderArea = {{0, 0}, {width, height}};
             rendering.layerCount = 1;
             rendering.colorAttachmentCount = 1;
@@ -1199,6 +1261,14 @@ struct Renderer::Impl {
             vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1,
                                     &white_descriptor, 0, nullptr);
             for (auto batch : scene_batches) {
+                auto descriptor = textures.at(batch.texture).descriptor;
+                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
+                                        0, 1, &descriptor, 0, nullptr);
+                vkCmdDraw(command, batch.count, 1, batch.first, 0);
+                ++statistics.draw_calls;
+            }
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, sprite_pipeline);
+            for (auto batch : sprite_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
                 vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
                                         0, 1, &descriptor, 0, nullptr);
@@ -1262,7 +1332,8 @@ struct Renderer::Impl {
             statistics.gpu_ms = double(delta) * timestamp_period / 1000000.0;
         }
         if (swap_index) {
-            VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+            VkPresentInfoKHR present{};
+            present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present.waitSemaphoreCount = 1;
             present.pWaitSemaphores = &present_ready;
             present.swapchainCount = 1;
@@ -1313,10 +1384,12 @@ bool Renderer::reload_shaders(std::string& error) {
     auto previous = r.pipeline;
     auto previous_ui = r.ui_pipeline;
     auto previous_shadow = r.shadow_pipeline;
+    auto previous_sprite = r.sprite_pipeline;
     r.pipeline_layout = {};
     r.pipeline = {};
     r.ui_pipeline = {};
     r.shadow_pipeline = {};
+    r.sprite_pipeline = {};
     try {
         r.make_pipelines();
     } catch (const std::exception& exception) {
@@ -1326,18 +1399,22 @@ bool Renderer::reload_shaders(std::string& error) {
             vkDestroyPipeline(r.device, r.ui_pipeline, nullptr);
         if (r.shadow_pipeline)
             vkDestroyPipeline(r.device, r.shadow_pipeline, nullptr);
+        if (r.sprite_pipeline)
+            vkDestroyPipeline(r.device, r.sprite_pipeline, nullptr);
         if (r.pipeline_layout)
             vkDestroyPipelineLayout(r.device, r.pipeline_layout, nullptr);
         r.pipeline_layout = previous_layout;
         r.pipeline = previous;
         r.ui_pipeline = previous_ui;
         r.shadow_pipeline = previous_shadow;
+        r.sprite_pipeline = previous_sprite;
         error = exception.what();
         return false;
     }
     vkDestroyPipeline(r.device, previous, nullptr);
     vkDestroyPipeline(r.device, previous_ui, nullptr);
     vkDestroyPipeline(r.device, previous_shadow, nullptr);
+    vkDestroyPipeline(r.device, previous_sprite, nullptr);
     vkDestroyPipelineLayout(r.device, previous_layout, nullptr);
     error.clear();
     return true;
@@ -1360,6 +1437,10 @@ std::uint32_t Renderer::width() const {
 std::uint32_t Renderer::height() const {
     return impl_->height;
 }
+float Renderer::display_scale() const {
+    const float scale = impl_->window ? SDL_GetWindowDisplayScale(impl_->window) : 1.f;
+    return std::isfinite(scale) && scale > 0.f ? scale : 1.f;
+}
 bool Renderer::should_close() const {
     return impl_->close;
 }
@@ -1372,9 +1453,9 @@ std::vector<std::uint8_t> Renderer::pixels() const {
 void Renderer::capture(const std::filesystem::path& path) {
     if (impl_->last_pixels.empty())
         throw std::runtime_error("Cannot capture before a completed frame");
-    std::ofstream out(path, std::ios::binary);
+    std::ofstream out(faset::native_io_path(path), std::ios::binary);
     if (!out)
-        throw std::runtime_error("Cannot write screenshot: " + path.string());
+        throw std::runtime_error("Cannot write screenshot: " + faset::path_to_utf8(path));
     out << "P6\n" << width() << ' ' << height() << "\n255\n";
     for (std::size_t i = 0; i < impl_->last_pixels.size(); i += 4)
         out.write(reinterpret_cast<const char*>(impl_->last_pixels.data() + i), 3);

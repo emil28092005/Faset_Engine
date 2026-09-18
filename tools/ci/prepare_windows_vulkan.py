@@ -89,12 +89,17 @@ def main() -> int:
     args = parser.parse_args()
     if args.cache_key:
         identity = cache_identity()
-        key = "windows-2025-vulkan-v2-" + identity
+        # Cache restoration can prefix-match the primary key. Keep SDK-only and
+        # full-driver keys in disjoint namespaces, never suffix variants.
+        key = "windows-2025-vulkan-full-v3-" + identity
+        sdk_key = "windows-2025-vulkan-sdk-v3-" + identity
         legacy = LEGACY_CACHE_KEY if identity == LEGACY_SOURCE_IDENTITY else ""
+        sdk_legacy = ("windows-2025-vulkan-v2-" + identity + "-loader-only"
+                      if identity == LEGACY_SOURCE_IDENTITY else "")
         print(key)
         if "GITHUB_OUTPUT" in os.environ:
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                output.write(f"key={key}\nlegacy={legacy}\n")
+                output.write(f"key={key}\nsdk_key={sdk_key}\nlegacy={legacy}\nsdk_legacy={sdk_legacy}\n")
         return 0
     if sys.platform != "win32":
         parser.error("Run this helper on Windows in a Visual Studio x64 developer environment")

@@ -43,11 +43,11 @@ void near(float a, float b, const char* message) {
 int main() {
     const auto root = std::filesystem::temp_directory_path() / ("faset-gizmo-ui-" + new_id());
     try {
-        editor::Session session({root, FASET_TEST_ENGINE, root});
+        editor::Session session({root, path_from_utf8(FASET_TEST_ENGINE), root});
         render::Renderer renderer({1280, 900, "Parented gizmo acceptance", true, true});
         editor::EditorUI ui(session, renderer,
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/ui/dark.json");
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/dark.json");
         ui.frame({});
         auto query = [&] { return session.authoring().query(ui.current_document()); };
         auto parent =
@@ -158,10 +158,10 @@ int main() {
         check(renderer.stats().validation_errors == 0, "Vulkan validation");
         std::cout << "Parented world Move/local Rotate/local Scale, multi-frame preview, Undo, "
                      "Escape and composed local rotation passed. "
-                  << root << '\n';
+                  << path_to_utf8(root) << '\n';
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << error.what() << "\nRetained: " << root << '\n';
+        std::cerr << error.what() << "\nRetained: " << path_to_utf8(root) << '\n';
         return 1;
     }
 }

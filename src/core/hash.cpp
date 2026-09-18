@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <faset/core/error.hpp>
 #include <faset/core/hash.hpp>
+#include <faset/core/io.hpp>
 #include <fstream>
 #include <vector>
 
@@ -101,8 +102,8 @@ std::string sha256(std::span<const std::byte> bytes) {
     return digest.finish();
 }
 std::string sha256_file(const std::filesystem::path& path) {
-    std::ifstream stream(path, std::ios::binary);
-    require(bool(stream), "io.open", "Cannot open file for hashing: " + path.string());
+    std::ifstream stream(native_io_path(path), std::ios::binary);
+    require(bool(stream), "io.open", "Cannot open file for hashing: " + path_to_utf8(path));
     Digest digest;
     std::array<char, 65536> buffer{};
     while (stream) {
@@ -110,7 +111,7 @@ std::string sha256_file(const std::filesystem::path& path) {
         digest.update(
             std::as_bytes(std::span(buffer.data(), static_cast<std::size_t>(stream.gcount()))));
     }
-    require(stream.eof(), "io.read", "Cannot read file for hashing: " + path.string());
+    require(stream.eof(), "io.read", "Cannot read file for hashing: " + path_to_utf8(path));
     return digest.finish();
 }
 } // namespace faset

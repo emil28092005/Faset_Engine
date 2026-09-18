@@ -28,6 +28,14 @@ MSVC-family builds use the dynamic CRT: `/MDd` in Debug, `/MD` otherwise. Physic
 Player, Editor and native plugins use compatible settings. Development and export
 have separate CMake directories, avoiding accidental Debug/Release mixing.
 
+Windows developer machines use the **Enable Win32 long paths** policy
+(`LongPathsEnabled=1`). Faset executables carry `longPathAware` manifests. Engine
+stream/hash/atomic-file boundaries also use wide extended paths, while serialized
+project paths remain ordinary UTF-8. This does not change the independent path
+support of CMake, Ninja, the compiler or Slang. CI records/enables the same host
+profile; the build guide explains setup. A temporary path longer than 260 characters
+exposed the original SceneView failure and now has dedicated regression coverage.
+
 ## Graphics profiles
 
 The baseline requires Vulkan 1.3 with dynamic rendering and synchronization2, a
@@ -69,3 +77,9 @@ and graphics driver; they do not need this development toolchain.
 An offline build is recorded only after a clean build directory is configured and
 built with network access disabled. A warm incremental build or archive checksum
 verification alone is not that acceptance check.
+
+Commit `d834cfad67cd81d8c4998b90c16791361ca8c0f8` passed this check on Linux: full
+native build and 19 CPU tests in a new user/network namespace with no external
+connectivity, using a `git archive` checkout and only prefetched inputs. See
+[`validation/offline-linux-2026-09-18.json`](validation/offline-linux-2026-09-18.json).
+Reproduce using `python3 tools/verify_offline_build.py --output .cache/offline-check`.

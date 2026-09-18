@@ -300,6 +300,7 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
             out.light_direction = direction(model, {-0.5f, -1, -0.3f});
         if (auto fields = properties(entity, "sprite"); !fields.is_null()) {
             render::Sprite sprite;
+            sprite.layer = fields.value("layer", 0);
             sprite.position = point(model, {0, 0, 0});
             auto size = vec<2>(fields, "size", {1, 1});
             float sx = std::hypot(model[0], model[1]), sy = std::hypot(model[4], model[5]);

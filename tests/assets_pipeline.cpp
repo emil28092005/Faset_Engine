@@ -3,6 +3,7 @@
 #include <chrono>
 #include <faset/assets/asset_pipeline.hpp>
 #include <faset/core/hash.hpp>
+#include <faset/core/io.hpp>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -102,13 +103,15 @@ void success(const ImportResult& result) {
 }
 } // namespace
 int main() {
-    const auto root = fs::temp_directory_path() /
-                      ("faset-assets-test-" +
-                       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root =
+        fs::temp_directory_path() /
+        faset::path_from_utf8(
+            "Faset Café 世界 assets " +
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
     try {
         AssetPipeline pipeline(root / "cache");
-        const auto source = root / "door.glb";
+        const auto source = root / faset::path_from_utf8("дверь 世界.glb");
         glb(source);
         auto first = pipeline.import_asset({source});
         success(first);
@@ -171,6 +174,19 @@ int main() {
         require(pipeline.overrides(first.asset_id) == custom, "conflict erased overrides");
         ImportRequest resolve{source};
         resolve.allow_removed_outputs = true;
+        resolve.expected_generation = removed.generation;
+        resolve.expected_active_generation = added.generation;
+        glb(source, "Renamed panel", true, false, .5f);
+        auto changed_since_review = pipeline.import_asset(resolve);
+        require(changed_since_review.status == ImportStatus::conflict &&
+                    pipeline.load_asset(first.asset_id).generation == added.generation,
+                "review approval must not publish a changed candidate");
+        glb(source, "Renamed panel", true, false, .25f);
+        resolve.expected_active_generation = first.generation;
+        require(pipeline.import_asset(resolve).status == ImportStatus::conflict &&
+                    pipeline.load_asset(first.asset_id).generation == added.generation,
+                "review approval must not replace a different active generation");
+        resolve.expected_active_generation = added.generation;
         auto resolved = pipeline.import_asset(resolve);
         success(resolved);
         require(pipeline.load_asset(first.asset_id).nodes.size() == 1,
@@ -207,14 +223,14 @@ int main() {
                 "ambiguous rename silently matched");
         auto duplicate = document("Duplicate", true, true);
         duplicate["nodes"][1]["extras"]["faset_id"] = "node-door";
-        duplicate["buffers"][0]["uri"] = "mesh.bin";
-        save(root / "mesh.bin", geometry(0));
+        duplicate["buffers"][0]["uri"] = "геометрия.bin";
+        save(root / faset::path_from_utf8("геометрия.bin"), geometry(0));
         save(root / "duplicate.gltf", duplicate.dump());
         require(pipeline.import_asset({root / "duplicate.gltf"}).status == ImportStatus::failed,
                 "duplicate source ID accepted");
         auto external = document("External", true, false);
-        external["buffers"][0]["uri"] = "mesh.bin";
-        external["images"] = Json::array({{{"uri", "pixel.png"}, {"mimeType", "image/png"}}});
+        external["buffers"][0]["uri"] = "геометрия.bin";
+        external["images"] = Json::array({{{"uri", "пиксель.png"}, {"mimeType", "image/png"}}});
         external["textures"] = Json::array({{{"source", 0}}});
         external["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"] = {{"index", 0}};
         // Real 1x1 PNG payload, transparent pixel; importer owns encoded bytes.
@@ -223,7 +239,7 @@ int main() {
             0,   0,   1,   0,  0,  0,  1,  8,   6,   0,  0,  0,  31, 21,  196, 137, 0,
             0,   0,   11,  73, 68, 65, 84, 120, 156, 99, 96, 0,  2,  0,   0,   5,   0,
             1,   165, 246, 69, 64, 0,  0,  0,   0,   73, 69, 78, 68, 174, 66,  96,  130};
-        save(root / "pixel.png", png);
+        save(root / faset::path_from_utf8("пиксель.png"), png);
         save(root / "external.gltf", external.dump());
         auto ext = pipeline.import_asset({root / "external.gltf"});
         success(ext);
@@ -231,7 +247,7 @@ int main() {
         require(ext_asset.textures.size() == 1 && ext_asset.textures[0].bytes.size() == png.size(),
                 "external image not extracted");
         require(ext_asset.materials[0].base_color_texture == 0, "material texture reference lost");
-        save(root / "mesh.bin", geometry(.3f));
+        save(root / faset::path_from_utf8("геометрия.bin"), geometry(.3f));
         auto dependent = pipeline.import_asset({root / "external.gltf"});
         success(dependent);
         require(dependent.generation != ext.generation, "buffer dependency not invalidated");
@@ -269,7 +285,7 @@ int main() {
         const auto dependency_active = pipeline.load_asset(ext.asset_id).generation;
         ImportJob mutate([&](const ImportProgress& progress) {
             if (progress.fraction == .5f)
-                save(root / "mesh.bin", geometry(.7f));
+                save(root / faset::path_from_utf8("геометрия.bin"), geometry(.7f));
         });
         require(pipeline.import_asset({root / "external.gltf"}, mutate).status ==
                     ImportStatus::failed,
@@ -277,7 +293,7 @@ int main() {
         require(pipeline.load_asset(ext.asset_id).generation == dependency_active,
                 "concurrent edit changed active");
         // Standalone images share the same identity, generation and failure guarantees.
-        const auto picture = root / "sprite.PNG";
+        const auto picture = root / faset::path_from_utf8("спрайт Café.PNG");
         save(picture, faset::test_images::png_red_green);
         ImportRequest image_request{picture};
         image_request.settings = {{"pixels_per_unit", 20.0}};
@@ -345,15 +361,16 @@ int main() {
         save(picture, faset::test_images::png_blue_white);
         const auto renamed = root / "renamed.PNG";
         fs::rename(picture, renamed);
-        fs::rename(picture.string() + ".faset-import.json",
-                   renamed.string() + ".faset-import.json");
-        fs::rename(picture.string() + ".faset-overrides.json",
-                   renamed.string() + ".faset-overrides.json");
+        fs::rename(faset::path_from_utf8(faset::path_to_utf8(picture) + ".faset-import.json"),
+                   faset::path_from_utf8(faset::path_to_utf8(renamed) + ".faset-import.json"));
+        fs::rename(faset::path_from_utf8(faset::path_to_utf8(picture) + ".faset-overrides.json"),
+                   faset::path_from_utf8(faset::path_to_utf8(renamed) + ".faset-overrides.json"));
         auto image_rename = pipeline.import_asset({renamed});
         success(image_rename);
         require(image_rename.cache_hit && image_rename.asset_id == image_first.asset_id,
                 "Image source rename with sidecar lost identity/cache");
-        require(pipeline.current_manifest(image_first.asset_id)["source"] == renamed.string(),
+        require(pipeline.current_manifest(image_first.asset_id)["source"] ==
+                    faset::path_to_utf8(renamed),
                 "Image rename retained old source pointer");
         require(pipeline.overrides(image_first.asset_id).contains(texture_id),
                 "Image rename/reimport lost overrides");

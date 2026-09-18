@@ -11,6 +11,12 @@
 #ifndef _WIN32
 #include <csignal>
 #endif
+#ifdef __linux__
+#include <cerrno>
+#include <sys/prctl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 using namespace faset;
 namespace fs = std::filesystem;
 void require(bool value, const char* message) {
@@ -38,7 +44,7 @@ int integration(const fs::path& root) {
     fs::create_directories(root);
     editor::BuildConfig config;
     config.project_root = root / "project";
-    config.engine_root = FASET_ENGINE_SOURCE;
+    config.engine_root = path_from_utf8(FASET_ENGINE_SOURCE);
     config.build_directory = root / "native-build";
     config.cache_root = root / "project" / ".faset" / "cache";
     editor::BuildService service(config);
@@ -114,18 +120,19 @@ int integration(const fs::path& root) {
                                         {"components", components}});
         auto result =
             wait(service.start_export(document, root / ("export-" + std::to_string(dimension))));
-        const auto directory = fs::path(result.result.at("directory").get<std::string>());
+        const auto directory = path_from_utf8(result.result.at("directory").get<std::string>());
         require(result.result.at("configuration") == "Release",
                 "Exports default to the Release profile");
-        require(fs::path(result.result.at("build_directory").get<std::string>()) ==
+        require(path_from_utf8(result.result.at("build_directory").get<std::string>()) ==
                     config.build_directory / "Release",
                 "Export has a separate CMake directory");
         require(read_json(directory / "manifest.json").at("configuration") == "Release",
                 "Export manifest records the actual profile");
-        Process player({{result.result.at("executable").get<std::string>(), "--headless",
-                         "--frames", "3", "--capture", (directory / "verification.ppm").string()},
-                        directory,
-                        {}});
+        Process player(
+            {{result.result.at("executable").get<std::string>(), "--headless", "--frames", "3",
+              "--capture", path_to_utf8(directory / "verification.ppm")},
+             directory,
+             {}});
         std::cout << collect(player);
         require(fs::file_size(directory / "verification.ppm") > 1000,
                 "Exported game rendered a frame");
@@ -139,12 +146,12 @@ int integration(const fs::path& root) {
     auto release_cache = read_text(config.build_directory / "Release" / "CMakeCache.txt");
     auto rebuilt = wait(service.start_build());
     require(rebuilt.result.at("configuration") == "Debug", "Development builds remain Debug");
-    require(fs::path(rebuilt.result.at("build_directory").get<std::string>()) ==
+    require(path_from_utf8(rebuilt.result.at("build_directory").get<std::string>()) ==
                 config.build_directory / "Debug",
             "Development CMake directory is isolated");
     require(read_text(config.build_directory / "Release" / "CMakeCache.txt") == release_cache,
             "Development build preserves the Release cache");
-    auto schema = read_json(rebuilt.result.at("schema").get<std::string>());
+    auto schema = read_json(path_from_utf8(rebuilt.result.at("schema").get<std::string>()));
     bool updated{};
     for (const auto& type : schema.at("types"))
         if (type.value("name", "") == "Custom Character")
@@ -162,13 +169,104 @@ int integration(const fs::path& root) {
                  "schema and failed-build recovery passed\n";
     return 0;
 }
-int main(int argc, char** argv) {
+#ifdef __linux__
+void descendant_cleanup(const fs::path& executable, const fs::path& directory) {
+    struct Subreaper {
+        int previous{};
+        Subreaper() {
+            require(::prctl(PR_GET_CHILD_SUBREAPER, &previous) == 0 &&
+                        ::prctl(PR_SET_CHILD_SUBREAPER, 1) == 0,
+                    "Install test-only descendant reaper");
+        }
+        ~Subreaper() {
+            ::prctl(PR_SET_CHILD_SUBREAPER, previous);
+        }
+    } subreaper;
+    for (bool cancel : {false, true}) {
+        Process process(
+            {{path_to_utf8(executable), cancel ? "--tree-sleep" : "--tree-exit"}, directory, {}});
+        std::string output;
+        bool stopped{};
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (std::chrono::steady_clock::now() < deadline) {
+            auto state = process.poll();
+            output += state.output;
+            if (cancel && output.find("leader-tail\n") != std::string::npos) {
+                process.cancel();
+                state = process.poll();
+                output += state.output;
+            }
+            if (!state.running) {
+                require(cancel || state.exit_code == 0, "Leader exit status remains intact");
+                stopped = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        require(stopped && output.find("leader-tail\n") != std::string::npos,
+                "Leader exit and buffered stdout tail are observed");
+        const auto descendant = static_cast<pid_t>(std::stol(output));
+        int status{};
+        pid_t reaped{};
+        const auto reap_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        do {
+            reaped = ::waitpid(descendant, &status, WNOHANG);
+            if (reaped != 0)
+                break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        } while (std::chrono::steady_clock::now() < reap_deadline);
+        const bool cleaned =
+            reaped == descendant && WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL;
+        if (reaped == 0) {
+            // Clean up the still-owned child even when this regression fails.
+            ::kill(descendant, SIGKILL);
+            while (::waitpid(descendant, &status, 0) < 0 && errno == EINTR) {
+            }
+        }
+        require(cleaned, "Leader completion terminates its SIGTERM-resistant descendant");
+        process.cancel(); // Completed ownership must not signal any stale process-group ID.
+    }
+}
+#endif
+int test_main(int argc, char** argv) {
+#ifdef __linux__
+    if (argc > 1 &&
+        (std::string(argv[1]) == "--tree-exit" || std::string(argv[1]) == "--tree-sleep")) {
+        int ready[2];
+        if (::pipe(ready) != 0)
+            return 2;
+        const auto descendant = ::fork();
+        if (descendant < 0)
+            return 3;
+        if (descendant == 0) {
+            ::close(ready[0]);
+            std::signal(SIGTERM, SIG_IGN);
+            const char byte = 'r';
+            if (::write(ready[1], &byte, 1) != 1)
+                ::_exit(4);
+            ::close(ready[1]);
+            while (true)
+                ::pause();
+        }
+        ::close(ready[1]);
+        char byte{};
+        const auto count = ::read(ready[0], &byte, 1);
+        ::close(ready[0]);
+        if (count != 1)
+            return 5;
+        std::cout << descendant << "\nleader-tail\n" << std::flush;
+        if (std::string(argv[1]) == "--tree-sleep")
+            while (true)
+                ::pause();
+        return 0;
+    }
+#endif
     if (argc > 1 && std::string(argv[1]) == "--child") {
         Json args = Json::array();
         for (int i = 2; i < argc; ++i)
             args.push_back(argv[i]);
         std::cout << Json{{"args", args},
-                          {"cwd", fs::current_path().string()},
+                          {"cwd", path_to_utf8(fs::current_path())},
                           {"env", std::getenv("FASET_PROCESS_TEST")
                                       ? std::getenv("FASET_PROCESS_TEST")
                                       : ""}}
@@ -188,32 +286,35 @@ int main(int argc, char** argv) {
     }
     if (argc == 3 && std::string(argv[1]) == "--integration") {
         try {
-            return integration(fs::absolute(argv[2]));
+            return integration(fs::absolute(path_from_utf8(argv[2])));
         } catch (const std::exception& error) {
             std::cerr << error.what() << '\n';
             return 1;
         }
     }
-    fs::path temporary = fs::temp_directory_path() / ("Faset build test " + new_id());
+    fs::path temporary = fs::temp_directory_path() / path_from_utf8("Faset Café 世界 " + new_id());
     try {
         fs::create_directories(temporary);
-        auto executable = fs::absolute(argv[0]);
-        Process child({{executable.string(), "--child", "space argument", "quote\"backslash\\",
-                        "$(touch not-executed); & |", ""},
+        const auto original_executable = fs::absolute(path_from_utf8(argv[0]));
+        const auto executable = temporary / original_executable.filename();
+        fs::copy_file(original_executable, executable);
+        Process child({{path_to_utf8(executable), "--child", "space argument", "quote\"backslash\\",
+                        "$(touch not-executed); & |", "", "Café 世界 Привет 😀"},
                        temporary,
                        {{"FASET_PROCESS_TEST", "value with spaces"}}});
         auto text = collect(child);
         auto result = Json::parse(text.substr(0, text.find('\n')));
-        require(result["args"] == Json::array({"space argument", "quote\"backslash\\",
-                                               "$(touch not-executed); & |", ""}),
+        require(result["args"] ==
+                    Json::array({"space argument", "quote\"backslash\\",
+                                 "$(touch not-executed); & |", "", "Café 世界 Привет 😀"}),
                 "Arguments must remain literal");
         require(result["env"] == "value with spaces", "Child environment override");
-        require(fs::equivalent(result["cwd"].get<std::string>(), temporary),
+        require(fs::equivalent(path_from_utf8(result["cwd"].get<std::string>()), temporary),
                 "Child working directory");
         require(text.find("stderr-sentinel") != std::string::npos && text.size() > 100000,
                 "Combined pipe output drained fully");
         require(!fs::exists(temporary / "not-executed"), "No shell execution");
-        Process sleeper({{executable.string(), "--sleep"}, temporary, {}});
+        Process sleeper({{path_to_utf8(executable), "--sleep"}, temporary, {}});
         bool ready{};
         while (!ready) {
             auto p = sleeper.poll();
@@ -226,9 +327,12 @@ int main(int argc, char** argv) {
         require(!sleeper.poll().running, "Cancellation must reap the process");
         require(std::chrono::steady_clock::now() - start < std::chrono::seconds(3),
                 "Cancellation must finish promptly");
+#ifdef __linux__
+        descendant_cleanup(executable, temporary);
+#endif
         editor::BuildConfig config;
         config.project_root = temporary / "project";
-        config.engine_root = FASET_ENGINE_SOURCE;
+        config.engine_root = path_from_utf8(FASET_ENGINE_SOURCE);
         editor::BuildService service(config);
         service.scaffold("Test project", 2);
         atomic_write(config.project_root / "Scripts" / "Gameplay.cpp", "// User code\n");
@@ -238,7 +342,7 @@ int main(int argc, char** argv) {
         auto id = service.start_cook(scene(2));
         auto cooked = service.wait(id);
         require(cooked.state == "succeeded", "Cook job succeeds");
-        auto bytes = read_text(cooked.result.at("scene").get<std::string>());
+        auto bytes = read_text(path_from_utf8(cooked.result.at("scene").get<std::string>()));
         require(bytes.substr(0, 8) == "FASETSCN" && bytes.size() > 20, "Cooked envelope magic");
         std::uint32_t version{};
         std::uint64_t size{};
@@ -287,3 +391,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    return faset::run_utf8_main(argc, argv, test_main);
+}
+#else
+int main(int argc, char** argv) {
+    return test_main(argc, argv);
+}
+#endif

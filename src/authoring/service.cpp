@@ -233,7 +233,7 @@ Json AuthoringService::summary(const State& value, bool include_data) const {
                    {"name", value.data.at("name")},
                    {"revision", value.revision},
                    {"dirty", sha256(value.data.dump()) != value.saved_hash},
-                   {"path", value.path.generic_string()},
+                   {"path", generic_path_to_utf8(value.path)},
                    {"can_undo", !value.undo.empty()},
                    {"can_redo", !value.redo.empty()}};
     if (include_data)
@@ -245,7 +245,7 @@ void AuthoringService::journal(const State& value) const {
                                               (value.data.at("id").get<std::string>() + ".json")),
                       {{"format", "faset.recovery"},
                        {"version", 1},
-                       {"path", value.path.generic_string()},
+                       {"path", generic_path_to_utf8(value.path)},
                        {"revision", value.revision},
                        {"saved_hash", value.saved_hash},
                        {"disk_hash", value.disk_hash},
@@ -468,7 +468,7 @@ void AuthoringService::apply(Json& scene, const Json& command) {
         }
         if (op == "template.source_set") {
             const auto source = command.at("source").get<std::string>();
-            project_path(root_, source);
+            project_path(root_, path_from_utf8(source));
             (*found)["source"] = source;
             return;
         }
@@ -593,7 +593,7 @@ Json AuthoringService::recover(const std::string& id,
     validate_scene(candidate.data, schemas_);
     require(candidate.data.at("id") == id, "recovery.id",
             "Recovery ID does not match its document");
-    candidate.path = record.at("path").get<std::string>();
+    candidate.path = path_from_utf8(record.at("path").get<std::string>());
     candidate.saved_hash = record.value("saved_hash", std::string());
     candidate.disk_hash = record.value("disk_hash", std::string());
     candidate.revision = record.value("revision", std::uint64_t(0));
@@ -642,7 +642,7 @@ Json AuthoringService::recovery_documents() const {
                                                 value.value("saved_hash", std::string())}});
             } catch (const std::exception&) {
                 result.push_back({{"error", "Invalid recovery record"},
-                                  {"file", entry.path().filename().string()}});
+                                  {"file", path_to_utf8(entry.path().filename())}});
             }
         }
     return result;

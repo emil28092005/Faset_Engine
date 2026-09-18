@@ -1,3 +1,4 @@
+#include <faset/core/io.hpp>
 #include <faset/ui/ui.hpp>
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -6,6 +7,7 @@
 #include <fstream>
 #include <hb-ft.h>
 #include <hb.h>
+#include <limits>
 #include <map>
 #include <stdexcept>
 
@@ -41,12 +43,16 @@ struct FontAtlas::Impl {
     std::map<std::pair<unsigned, unsigned>, Glyph> glyphs;
     unsigned x = 2, y = 2, row_height = 0, size = 0;
     explicit Impl(const std::filesystem::path& path) {
-        std::ifstream in(path, std::ios::binary | std::ios::ate);
+        // FreeType's Windows path backend uses CreateFileA. Read a native path
+        // ourselves and retain its bytes until hb_font/FT_Face are destroyed.
+        std::ifstream in(native_io_path(path), std::ios::binary | std::ios::ate);
         if (!in)
-            throw std::runtime_error("Cannot open UI font: " + path.string());
+            throw std::runtime_error("Cannot open UI font: " + path_to_utf8(path));
         auto length = in.tellg();
         if (length <= 0)
             throw std::runtime_error("Empty UI font");
+        if (length > std::numeric_limits<FT_Long>::max())
+            throw std::runtime_error("UI font exceeds FreeType's supported buffer size");
         font_bytes.resize(static_cast<std::size_t>(length));
         in.seekg(0);
         in.read(reinterpret_cast<char*>(font_bytes.data()), length);

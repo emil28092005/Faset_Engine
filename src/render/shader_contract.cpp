@@ -14,8 +14,10 @@ void require(bool value, const std::string& message) {
         throw std::runtime_error("Shader contract: " + message);
 }
 std::string read_bounded(const std::filesystem::path& path, std::uintmax_t maximum) {
-    require(std::filesystem::is_regular_file(path), "missing " + path.string());
-    require(std::filesystem::file_size(path) <= maximum, "oversized " + path.string());
+    const auto native = faset::native_io_path(path);
+    require(std::filesystem::is_regular_file(native), "missing " + faset::path_to_utf8(path));
+    require(std::filesystem::file_size(native) <= maximum,
+            "oversized " + faset::path_to_utf8(path));
     return faset::read_text(path);
 }
 void locations(const Json& fields, std::initializer_list<const char*> types, const char* label) {

@@ -39,15 +39,14 @@ int main() {
     try {
         const auto styles = root / "styles/dark.json",
                    layout_path = root / "styles/editor-layout.json";
-        auto theme = read_json(std::filesystem::path(FASET_TEST_ENGINE) / "assets/ui/dark.json");
-        auto layout =
-            read_json(std::filesystem::path(FASET_TEST_ENGINE) / "assets/ui/editor-layout.json");
+        auto theme = read_json(path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/dark.json");
+        auto layout = read_json(path_from_utf8(FASET_TEST_ENGINE) / "assets/ui/editor-layout.json");
         atomic_write_json(styles, theme);
         atomic_write_json(layout_path, layout);
-        editor::Session session({root / "project", FASET_TEST_ENGINE, root});
+        editor::Session session({root / "project", path_from_utf8(FASET_TEST_ENGINE), root});
         render::Renderer renderer({1280, 800, "Style reload acceptance", true, true});
         editor::EditorUI ui(session, renderer,
-                            std::filesystem::path(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
+                            path_from_utf8(FASET_TEST_ENGINE) / "assets/fonts/NotoSans.ttf",
                             styles);
         ui.frame({});
         click(ui, "add-cube");
@@ -118,10 +117,10 @@ int main() {
         check(renderer.stats().validation_errors == 0, "Reload Vulkan validation");
         std::cout << "Theme/layout live reload pixels+geometry, atomic rejection, focus+draft "
                      "preservation, callback and diagnostic dedup passed. "
-                  << root << '\n';
+                  << path_to_utf8(root) << '\n';
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << e.what() << "\nRetained: " << root << '\n';
+        std::cerr << e.what() << "\nRetained: " << path_to_utf8(root) << '\n';
         return 1;
     }
 }

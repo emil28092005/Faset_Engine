@@ -4,12 +4,21 @@
 
 int main() {
     using namespace faset;
-    const auto root = std::filesystem::temp_directory_path() / ("faset-session-" + new_id());
+    const auto root = std::filesystem::temp_directory_path() /
+                      path_from_utf8("Faset Café 世界 session " + new_id());
     try {
-        editor::Session session({root, FASET_TEST_ENGINE, {}});
+        editor::Session session({root, path_from_utf8(FASET_TEST_ENGINE), {}});
         session.scaffold("Settings", 3);
         auto document = session.authoring().create("Start", 3);
-        session.authoring().save(document.at("id"), "Scenes/main.scene.json");
+        session.commands().call("faset_document_save", {{"document", document.at("id")},
+                                                        {"path", "Scenes/Начало 世界.scene.json"}});
+        require(session.authoring().query(document.at("id")).at("path") ==
+                    "Scenes/Начало 世界.scene.json",
+                "test", "Saved path must round-trip as UTF-8");
+        require(std::filesystem::is_regular_file(root /
+                                                 path_from_utf8("Scenes/Начало 世界.scene.json")),
+                "test", "Unicode scene was saved under the wrong filename");
+        session.commands().call("faset_document_open", {{"path", "Scenes/Начало 世界.scene.json"}});
         auto& commands = session.commands();
         const auto initial = commands.call("faset_project_settings_get", Json::object());
         auto changed = commands.call("faset_project_settings_set",
@@ -17,7 +26,7 @@ int main() {
                                       {"settings",
                                        {{"name", "Проект 世界"},
                                         {"dimension", 2},
-                                        {"start_scene", "Scenes/main.scene.json"}}}});
+                                        {"start_scene", "Scenes/Начало 世界.scene.json"}}}});
         require(changed.at("settings").at("name") == "Проект 世界" &&
                     session.project().at("dimension") == 2,
                 "test", "Project settings were not saved");

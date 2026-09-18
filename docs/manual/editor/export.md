@@ -80,9 +80,12 @@ and package execution tests; that is separate from physical GPU-driver testing.
 
 ## Troubleshooting
 
-**Unknown component or schema version:** enable/register the missing runtime module
-and rebuild. The Editor preserves its data as opaque authoring fields, but export
-requires a matching runtime implementation.
+**Unknown component:** enable/register the missing runtime module and rebuild. A
+data-only custom component still needs a schema; it does not need callbacks.
+
+**Schema version mismatch:** match the linked gameplay schema to the document or
+apply an explicit data migration, then rebuild. The Editor preserves future or
+missing component data as opaque fields; export requires a matching schema.
 
 **Missing asset:** import the original source or Blender manifest again. Preserve its
 sidecar so the AssetId remains stable. A cache copied from another project is not a

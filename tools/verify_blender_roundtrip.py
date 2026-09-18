@@ -10,7 +10,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-def verify(blender, editor, output):
+def verify(blender, editor, output, ui_probe=None):
     fixture = output / "fixture"
     result = subprocess.run([str(blender), "--background", "--factory-startup", "--python-exit-code", "1",
         "--python", str(ROOT / "tests/blender/generate_fixture.py"), "--", str(ROOT), str(fixture)],
@@ -64,6 +64,12 @@ def verify(blender, editor, output):
               "renamed_generation": renamed["result"]["generation"],
               "stable_output_ids": True, "removed_output_conflict": True,
               "failed_import_keeps_generation": True, "authoring_preserved": True}
+    if ui_probe:
+        probe = subprocess.run([str(ui_probe), str(fixture), str(output / "live-editor")],
+                               capture_output=True, text=True, encoding="utf-8")
+        (output / "live-editor.log").write_text(probe.stdout + probe.stderr, encoding="utf-8")
+        probe.check_returncode()
+        report["live_editor"] = json.loads((output / "live-editor/probe.json").read_text())
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
@@ -73,10 +79,14 @@ if __name__ == "__main__":
     parser.add_argument("--blender", type=pathlib.Path, required=True)
     parser.add_argument("--editor", type=pathlib.Path, required=True)
     parser.add_argument("--output", type=pathlib.Path)
+    parser.add_argument("--ui-probe", type=pathlib.Path,
+                        help="faset_blender_editor_probe: verify two live viewport instances (Vulkan required)")
     args = parser.parse_args()
     if args.output:
         args.output.resolve().mkdir(parents=True, exist_ok=True)
-        verify(args.blender.resolve(), args.editor.resolve(), args.output.resolve())
+        verify(args.blender.resolve(), args.editor.resolve(), args.output.resolve(),
+               args.ui_probe.resolve() if args.ui_probe else None)
     else:
         with tempfile.TemporaryDirectory(prefix="faset-blender-") as temporary:
-            verify(args.blender.resolve(), args.editor.resolve(), pathlib.Path(temporary))
+            verify(args.blender.resolve(), args.editor.resolve(), pathlib.Path(temporary),
+                   args.ui_probe.resolve() if args.ui_probe else None)

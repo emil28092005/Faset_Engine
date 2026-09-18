@@ -1,5 +1,10 @@
 # Editor workspace
 
+The Editor follows the window's display scale. Text is rasterized at that scale;
+panel dimensions are saved in logical units so the layout remains usable when
+moving between displays. A scale change preserves focused text and cancels an
+unfinished numeric, divider or gizmo drag without committing an edit.
+
 The Editor edits saved scene data and previews it in a Vulkan viewport. **Play**
 opens a separate Player process. Gameplay movement and spawned objects stay in that
 process; stopping it leaves the authoring scene unchanged.

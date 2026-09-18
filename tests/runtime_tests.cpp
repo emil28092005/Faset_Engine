@@ -1,6 +1,7 @@
 #include "Gameplay.hpp"
 #include <cmath>
 #include <faset/runtime/Runtime.hpp>
+#include <faset/runtime/schema.hpp>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -174,6 +175,107 @@ void clockAndValidation() {
     auto schema = faset::gameplay::schema();
     check(schema.size() == 2, "sample has explicit metadata without world");
 }
+void componentSchemaVersions() {
+    auto doc = scene();
+    auto object = entity("versioned");
+    auto custom =
+        component("test.versioned", {{"value", 42}, {"future_payload", {"kept", "opaque"}}});
+    custom["version"] = 2;
+    object["components"].push_back(custom);
+    auto data = component("test.data", {{"description", "no behavior required"}});
+    data["version"] = 3;
+    object["components"].push_back(data);
+    doc["entities"].push_back(object);
+    const auto source_before = doc;
+    const auto metadata =
+        Json::array({{{"id", "test.versioned"}, {"version", 2}, {"fields", Json::object()}},
+                     {{"id", "test.data"}, {"version", 3}, {"fields", Json::object()}}});
+    validate_scene_schemas(doc, metadata);
+    validate_scene_schemas(doc, Json{{"types", metadata}});
+    check(doc == source_before, "schema validation must not migrate or mutate source");
+    int starts = 0;
+    Runtime world;
+    Behavior versioned;
+    versioned.onStart = [&](Runtime& runtime, EntityHandle handle, double) {
+        ++starts;
+        check(runtime.fields(handle, "test.versioned") == custom["fields"],
+              "versioned behavior receives exact opaque fields");
+    };
+    world.registerBehavior("test.versioned", versioned);
+    validate_scene_schemas(doc, metadata);
+    check(starts == 0, "schema validation does not invoke gameplay");
+    world.load(doc);
+    const auto handle = world.find("versioned");
+    check(starts == 1 && world.fields(handle, "test.data") == data["fields"],
+          "Runtime accepts positive custom versions including data-only components");
+    auto added = component("test.added", {{"value", "deferred"}});
+    added["version"] = 4;
+    world.addComponent(handle, added);
+    world.singleStep();
+    check(world.fields(handle, "test.added") == added["fields"],
+          "deferred custom component accepts its positive version");
+    for (const auto& invalid_version : Json::array({0, -1, 1.5, "2", true, nullptr})) {
+        auto invalid = doc;
+        invalid["entities"][0]["components"][1]["version"] = invalid_version;
+        rejects([&] { world.load(invalid); }, "custom version must be a positive integer");
+        rejects([&] { validate_scene_schemas(invalid, metadata); },
+                "schema gate rejects malformed component version");
+        check(world.valid(handle), "invalid version preserves running world");
+    }
+    for (const std::string builtin :
+         {"faset.transform", "faset.sprite", "faset.mesh", "faset.camera", "faset.light",
+          "faset.rigid_body_2d", "faset.rigid_body_3d"}) {
+        auto invalid = scene();
+        auto native = component(builtin);
+        native["version"] = 2;
+        invalid["entities"].push_back({{"id", "native"}, {"components", Json::array({native})}});
+        rejects([&] { world.load(invalid); },
+                "all builtin components retain strict native version 1");
+        rejects([&] { validate_scene_schemas(invalid, metadata); },
+                "schema gate rejects builtin v2");
+        check(world.valid(handle), "invalid builtin load preserves running world");
+    }
+    auto bad_add = component("faset.camera");
+    bad_add["version"] = 2;
+    world.addComponent(handle, bad_add);
+    world.singleStep();
+    rejects([&] { world.fields(handle, "faset.camera"); },
+            "invalid deferred builtin version cannot enter the world");
+    rejects([&] { validate_scene_schemas(doc, Json::array()); },
+            "Player schema gate rejects missing gameplay module metadata");
+    auto mismatched = metadata;
+    mismatched[0]["version"] = 1;
+    rejects([&] { validate_scene_schemas(doc, mismatched); },
+            "Player schema gate rejects gameplay version mismatch");
+    auto unknown = doc;
+    unknown["entities"][0]["components"][1]["type"] = "test.missing";
+    unknown["entities"][0]["components"][1]["version"] = 1;
+    rejects([&] { validate_scene_schemas(unknown, metadata); },
+            "Unknown custom v1 must not silently run in Player");
+    auto duplicate = metadata;
+    duplicate.push_back(metadata[0]);
+    rejects([&] { validate_scene_schemas(doc, duplicate); },
+            "Ambiguous duplicate metadata TypeIds rejected");
+    for (int version : {1, 2}) {
+        auto overridden_native = metadata;
+        overridden_native.push_back({{"id", "faset.transform"}, {"version", version}});
+        rejects([&] { validate_scene_schemas(doc, overridden_native); },
+                "Gameplay cannot redeclare native TypeIds, even at native version 1");
+    }
+    auto invalid_schema = metadata;
+    invalid_schema[0]["version"] = "2";
+    rejects([&] { validate_scene_schemas(doc, invalid_schema); },
+            "Schema versions also require positive integers");
+    rejects([&] { validate_scene_schemas(doc, Json::object()); },
+            "Malformed schema manifest rejected");
+    auto legacy = scene();
+    legacy["entities"].push_back(entity("legacy"));
+    legacy["entities"][0]["components"][0].erase("version");
+    validate_scene_schemas(legacy, Json::array());
+    world.load(legacy);
+    check(bool(world.find("legacy")),
+          "Omitted component version retains development scene v1 compatibility");
+}
 void structuralFailuresAndCallbacks() {
     Runtime world;
     auto doc = scene();
@@ -315,6 +417,7 @@ int main() {
         run("Box3D", [] { physics(3); });
         run("Lifecycle", lifecycle);
         run("Clock/validation", clockAndValidation);
+        run("Component schema versions", componentSchemaVersions);
         run("Structural failures", structuralFailuresAndCallbacks);
         run("Sample gameplay", sampleGameplay);
         run("Grounded jump", groundedJump);
