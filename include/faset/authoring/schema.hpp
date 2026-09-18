@@ -56,5 +56,8 @@ template <class T> class TypeRegistration {
     Json schema_;
 };
 SchemaRegistry builtin_schemas();
+// Validate a gameplay schema array/types manifest, reserving native TypeIds and
+// rejecting repeated gameplay TypeIds. The result includes built-in schemas.
+SchemaRegistry gameplay_schemas(const Json& manifest);
 void validate_field(const Json& value, const Json& descriptor);
 } // namespace faset::authoring

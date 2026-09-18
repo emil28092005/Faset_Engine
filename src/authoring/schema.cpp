@@ -1,6 +1,7 @@
 #include <array>
 #include <cmath>
 #include <faset/authoring/schema.hpp>
+#include <limits>
 #include <set>
 
 namespace faset::authoring {
@@ -52,13 +53,25 @@ void SchemaRegistry::register_schema(const Json& value) {
     Json normalized = value;
     const auto id = value.at("id").get<std::string>();
     require(!id.empty(), "schema.invalid", "TypeId cannot be empty");
-    require(value.value("version", 1) > 0, "schema.invalid", "Schema version must be positive");
+    if (value.contains("version")) {
+        const auto& version = value.at("version");
+        require(version.is_number_integer() && version > 0 &&
+                    version <= std::numeric_limits<int>::max(),
+                "schema.invalid", "Schema version must be a positive supported integer");
+    }
     for (auto& [key, field] : normalized["fields"].items()) {
         require(field.is_object() && field.contains("default"), "schema.invalid",
                 "Each field requires a typed default");
         require(field.value("id", key) == key, "schema.field_id",
                 "Field map keys must be stable FieldIds");
         field["id"] = key;
+        for (const auto* limit : {"min", "max"})
+            if (field.contains(limit))
+                require(field.at(limit).is_number() && std::isfinite(field.at(limit).get<double>()),
+                        "schema.invalid", "Field limits must be finite numbers");
+        if (field.contains("enum"))
+            require(field.at("enum").is_array(), "schema.invalid",
+                    "Field enum choices must be an array");
         validate_field(field["default"], field);
     }
     if (auto found = schemas_.find(id); found != schemas_.end())
@@ -72,6 +85,22 @@ void SchemaRegistry::register_schemas(const Json& values) {
     for (const auto& schema : array)
         candidate.register_schema(schema);
     *this = std::move(candidate);
+}
+SchemaRegistry gameplay_schemas(const Json& manifest) {
+    require(manifest.is_array() || (manifest.is_object() && manifest.contains("types") &&
+                                    manifest.at("types").is_array()),
+            "schema.invalid", "Gameplay schemas require an array or a types manifest");
+    const auto& types = manifest.is_array() ? manifest : manifest.at("types");
+    auto result = builtin_schemas();
+    for (const auto& schema : types) {
+        require(schema.is_object() && schema.contains("id") && schema.at("id").is_string(),
+                "schema.invalid", "Gameplay schema requires a TypeId");
+        const auto id = schema.at("id").get<std::string>();
+        require(!result.contains(id), "schema.duplicate_type",
+                "Gameplay schema duplicates a builtin or gameplay TypeId: " + id);
+        result.register_schema(schema);
+    }
+    return result;
 }
 bool SchemaRegistry::contains(const std::string& type) const {
     return schemas_.contains(type);

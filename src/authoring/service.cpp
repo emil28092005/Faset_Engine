@@ -311,9 +311,7 @@ void AuthoringService::register_schemas(const Json& manifest) {
 }
 void AuthoringService::replace_external_schemas(const Json& manifest) {
     std::lock_guard lock(mutex_);
-    auto candidate = builtin_schemas();
-    candidate.register_schemas(manifest);
-    schemas_ = std::move(candidate);
+    schemas_ = gameplay_schemas(manifest);
 }
 void AuthoringService::apply(Json& scene, const Json& command) {
     require(command.is_object() && command.contains("op") && command["op"].is_string(),

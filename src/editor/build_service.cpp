@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <deque>
 #include <faset/assets/asset_data.hpp>
+#include <faset/authoring/schema.hpp>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
@@ -33,23 +34,14 @@ void validate_scene(const Json& scene) {
         throw std::runtime_error("Scene dimension must be 2 or 3");
 }
 void validate_component_types(const Json& scene, const Json& schema) {
-    std::map<std::string, int> versions;
-    for (const auto* type : {"faset.transform", "faset.sprite", "faset.mesh", "faset.camera",
-                             "faset.light", "faset.rigid_body_2d", "faset.rigid_body_3d"})
-        versions[type] = 1;
-    for (const auto& type : schema.value("types", Json::array())) {
-        auto id = type.at("id").get<std::string>();
-        if (versions.contains(id))
-            throw std::runtime_error("Gameplay schema duplicates a component type: " + id);
-        versions[id] = type.value("version", 1);
-    }
+    const auto registry =
+        schema.is_null() ? authoring::builtin_schemas() : authoring::gameplay_schemas(schema);
     for (const auto& entity : scene.at("entities"))
         for (const auto& component : entity.value("components", Json::array())) {
             const auto id = component.at("type").get<std::string>();
-            auto found = versions.find(id);
-            if (found == versions.end())
+            if (!registry.contains(id))
                 throw std::runtime_error("Cannot cook unresolved component type: " + id);
-            if (component.value("version", 1) != found->second)
+            if (component.value("version", 1) != registry.schema(id).value("version", 1))
                 throw std::runtime_error("Migrate component '" + id +
                                          "' to the current gameplay schema before cooking");
         }
@@ -298,6 +290,9 @@ struct BuildService::Impl {
             if (schema.value("format", "") != "faset.schema" || schema.value("version", 0) != 1 ||
                 !schema.contains("types") || !schema.at("types").is_array())
                 throw std::runtime_error("SchemaExporter returned an invalid manifest");
+            // Validate the complete metadata before publishing either the schema or
+            // its Player generation. Session uses this same authoring contract.
+            (void)authoring::gameplay_schemas(schema);
             std::string fingerprint = sha256_file(player) + sha256_file(exporter) +
                                       read_text(native_directory / "CMakeCache.txt");
             for (const auto& file : {"Gameplay.cpp", "Gameplay.hpp"})
@@ -393,7 +388,7 @@ struct BuildService::Impl {
         checkpoint(job, "Validating scene and assets", .1);
         validate_scene(job.scene);
         validate_assets(job.scene);
-        Json schema = Json::object();
+        Json schema;
         if (fs::exists(config.cache_root / "last_build.json")) {
             auto pointer = read_json(config.cache_root / "last_build.json");
             auto schema_path = project_path(
@@ -403,7 +398,9 @@ struct BuildService::Impl {
         }
         validate_component_types(job.scene, schema);
         auto source_hash = sha256(job.scene.dump());
-        auto schema_fingerprint = schema.value("build_fingerprint", std::string("builtin-v1"));
+        auto schema_fingerprint =
+            schema.is_null() ? std::string("builtin-v1")
+                             : schema.value("build_fingerprint", std::string("builtin-v1"));
         auto digest = sha256(source_hash + schema_fingerprint);
         auto directory = config.cache_root / "cooked" / digest;
         auto staging = config.cache_root / "cooked" / (".staging-" + job.status.id);
