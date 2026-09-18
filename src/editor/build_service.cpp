@@ -306,7 +306,9 @@ struct BuildService::Impl {
             atomic_write_json(schema_file, schema);
             copy_required_file(player, staging / ("faset_player" + executable_suffix()));
             copy_required_file(exporter, staging / ("faset_schema_exporter" + executable_suffix()));
-            for (const auto* file : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv"})
+            for (const auto* file : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv",
+                                     "vertexMain.reflection.json", "fragmentMain.reflection.json",
+                                     "shadowMain.reflection.json"})
                 copy_required_file(native_directory / "shaders" / file, staging / "shaders" / file);
             copy_runtime_libraries(job, player, staging, native_directory, configuration);
             Json manifest{{"format", "faset.build"},
@@ -520,7 +522,9 @@ struct BuildService::Impl {
             auto build_directory = fs::path(built.at("directory").get<std::string>());
             copy_required_file(build_directory / ("faset_player" + executable_suffix()),
                                staging / ("faset_player" + executable_suffix()));
-            for (const auto* shader : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv"})
+            for (const auto* shader : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv",
+                                       "vertexMain.reflection.json", "fragmentMain.reflection.json",
+                                       "shadowMain.reflection.json"})
                 copy_required_file(build_directory / "shaders" / shader,
                                    staging / "shaders" / shader);
             for (const auto& entry : fs::directory_iterator(build_directory)) {

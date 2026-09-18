@@ -46,6 +46,8 @@ class Session {
     void register_commands();
     Json assets_list() const;
     Json jobs() const;
+    std::string source_signature() const;
+    Json schema_status() const;
     Json job(const std::string& id) const;
     void load_schema(const std::filesystem::path& path);
     void launch_player(Json scene, const std::filesystem::path& executable);
@@ -65,5 +67,9 @@ class Session {
     std::string pending_play_job_;
     Json pending_play_scene_;
     std::unique_ptr<PluginManager> plugins_;
+    std::map<std::string, std::string> submitted_sources_;
+    std::string schema_source_signature_;
+    bool schema_loaded_ = false;
+    std::string schema_error_;
 };
 } // namespace faset::editor

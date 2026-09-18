@@ -79,11 +79,16 @@ struct Snapshot {
     std::vector<Quad> ui_quads;
     std::vector<Text> ui_text;
 };
+// CPU-only validation used before publishing a game or creating Vulkan pipelines.
+void validate_shader_bundle(const std::filesystem::path& directory);
+
 struct RendererConfig {
     std::uint32_t width{1280}, height{720};
     std::string title{"Faset Engine"};
     bool headless{false};
     bool validation{true};
+    // Optional isolated shader bundle, useful for editor preview and shader reload tests.
+    std::filesystem::path shader_directory;
 };
 struct Event {
     enum class Type {
@@ -110,8 +115,12 @@ struct Event {
 };
 struct FrameStats {
     std::uint64_t frame{};
+    bool validation_enabled{};
+    // Live VkDeviceMemory allocation sizes, including alignment; excludes driver internals.
+    std::uint64_t gpu_allocated_bytes{};
+    std::uint32_t texture_count{};
     std::uint32_t vertices{}, draw_calls{}, culled_meshes{}, validation_errors{};
-    double cpu_ms{}, gpu_ms{};
+    double cpu_ms{}, gpu_ms{}, readback_cpu_ms{};
     std::string device;
 };
 class Renderer {

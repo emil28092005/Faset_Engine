@@ -24,6 +24,11 @@ class SceneView {
     SceneView& operator=(const SceneView&) = delete;
     render::Snapshot build(const nlohmann::json& flatSceneOrRuntimeSnapshot, float aspect,
                            CameraSettings camera = {});
+    // Append box outlines from explicitly supplied physics poses/settings. The
+    // Player supplies current simulation poses, independent of visual interpolation.
+    // Supports the initial root-only Box2D/Box3D adapters; does not change the camera.
+    void appendPhysicsDebug(render::Snapshot&, const nlohmann::json& physicsScene,
+                            float thickness = 0.025f) const;
     void clearCache();
     const std::vector<std::string>& diagnostics() const;
 

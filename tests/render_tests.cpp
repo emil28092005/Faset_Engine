@@ -1,3 +1,4 @@
+#include <SDL3/SDL.h>
 #include <cmath>
 #include <faset/render/render_graph.hpp>
 #include <faset/render/renderer.hpp>
@@ -122,6 +123,28 @@ int main(int argc, char** argv) {
         renderer.render(scene);
         require(renderer.width() == 400 && renderer.height() == 300, "Render target resize");
         require(renderer.stats().validation_errors == 0, "Resize validation error");
+        if (visible) {
+            int window_count{};
+            auto windows = SDL_GetWindows(&window_count);
+            require(windows && window_count == 1, "Visible test owns exactly one SDL window");
+            auto* window = windows[0];
+            SDL_free(windows);
+            require(SDL_HideWindow(window), "Hide the test window");
+            const auto before = renderer.stats().frame;
+            // Exhaust any compositor buffers without an application event poll. Captures
+            // must still render fresh content when presentation is unavailable.
+            for (int frame = 0; frame < 12; ++frame) {
+                scene.ui_quads[0].color = frame % 2 ? Color{0, 1, 0, 1} : Color{1, 0, 0, 1};
+                renderer.render(scene);
+                auto capture = renderer.pixels();
+                const auto at = (10 * renderer.width() + 10) * 4;
+                require(capture.at(at + (frame % 2 ? 1 : 0)) > 240,
+                        "Hidden-window capture must contain the latest frame");
+            }
+            require(renderer.stats().frame == before + 12,
+                    "Hidden-window capture must progress without swapchain images");
+            require(renderer.stats().validation_errors == 0, "Hidden-window validation error");
+        }
         std::cout << "Vulkan frame, shadow/PBR, atlas upload, readback and resize passed on "
                   << renderer.stats().device << '\n';
     } catch (const std::exception& e) {

@@ -5,6 +5,7 @@
 #include <faset/player/SceneView.hpp>
 #include <faset/runtime/Runtime.hpp>
 #include <iostream>
+#include <numbers>
 #include <stdexcept>
 
 using Json = nlohmann::json;
@@ -27,6 +28,90 @@ Json component(std::string type, Json fields) {
 }
 Json entity(std::string id, Json parent, Json components) {
     return {{"id", id}, {"name", id}, {"parent", parent}, {"components", components}};
+}
+void physicsDebug(faset::player::SceneView& view) {
+    for (int dimension : {2, 3}) {
+        const std::string bodyName = dimension == 2 ? "rigid_body_2d" : "rigid_body_3d";
+        Json body{{"body_type", "dynamic"},
+                  {"half_extents", dimension == 2 ? Json{.75, .5} : Json{.75, .5, .25}},
+                  {"linear_velocity", dimension == 2 ? Json{2, 0} : Json{2, 0, 0}}};
+        const Json authoredPose{{"position", {1, 2, 3}},
+                                {"rotation", {0, 0, std::numbers::pi_v<float> / 2}},
+                                {"scale", {-2, 3, -4}}};
+        Json scene{{"format", "faset.scene"},
+                   {"version", 1},
+                   {"id", "physics"},
+                   {"name", "physics"},
+                   {"dimension", dimension},
+                   {"instances", Json::array()},
+                   {"entities",
+                    Json::array({entity("body", nullptr,
+                                        Json::array({component("faset.transform", authoredPose),
+                                                     component("faset." + bodyName, body)}))})}};
+        faset::runtime::RuntimeConfig config;
+        config.gravity = {0, 0, 0};
+        faset::runtime::Runtime runtime(config);
+        runtime.load(scene);
+        runtime.advance(config.fixedDelta * 1.5);
+        const auto handle = runtime.find("body");
+        const auto physical = runtime.transform(handle);
+        const auto displayed = runtime.presentation(handle);
+        check(physical.position[0] > displayed.position[0] + .01f,
+              "Fixture separates actual body pose from interpolated presentation");
+        // This is the same explicit current-pose contract used by the Player;
+        // snapshotJson's presentation pose is intentionally unsuitable here.
+        Json physics{
+            {"dimension", dimension},
+            {"entities", Json::array({{{"parent", nullptr},
+                                       {bodyName, runtime.fields(handle, "faset." + bodyName)},
+                                       {"transform",
+                                        {{"position", physical.position},
+                                         {"rotation", physical.rotation},
+                                         {"scale", physical.scale}}}}})}};
+        faset::render::Snapshot debug;
+        const auto originalCamera = debug.view_projection;
+        view.appendPhysicsDebug(debug, physics, .02f);
+        check(debug.draws.size() == (dimension == 2 ? 4 : 12), "Box outline edge count");
+        check(debug.view_projection == originalCamera, "Debug overlay leaves camera unchanged");
+        faset::render::Vec3 center{};
+        for (const auto& edge : debug.draws) {
+            check(!edge.cast_shadow && edge.mesh, "Debug edges are unshadowed meshes");
+            for (const auto& vertex : edge.mesh->vertices)
+                check(vertex.normal == faset::render::Vec3{0, 0, 0}, "Debug edge color is unlit");
+            for (int axis = 0; axis < 3; ++axis)
+                center[axis] += edge.model[12 + axis] / float(debug.draws.size());
+        }
+        for (int axis = 0; axis < 3; ++axis)
+            check(std::abs(center[axis] - physical.position[axis]) < .0001f,
+                  "Outlines center on current Box2D/Box3D pose");
+        // Rz(pi/2) turns the first X edge into world Y. Abs(scale) gives a
+        // three-unit X edge and 1.5-unit local Y half extent in both adapters.
+        const auto& first = debug.draws.front().model;
+        check(std::abs(first[0]) < .0001f && std::abs(first[1] - 3) < .0001f &&
+                  std::abs(first[12] - physical.position[0] - 1.5f) < .0001f,
+              "Negative nonuniform scale and box rotation match physics shape policy");
+        if (dimension == 3)
+            check(std::abs(first[14] - physical.position[2] + 1) < .0001f,
+                  "Box3D Z half extent includes absolute Z scale");
+        auto invalid = physics;
+        invalid["entities"][0]["parent"] = "another-body";
+        rejects([&] { view.appendPhysicsDebug(debug, invalid); },
+                "Debug respects runtime root-only physical bodies");
+        if (dimension == 2) {
+            invalid = physics;
+            invalid["entities"][0]["transform"]["rotation"][0] = .5;
+            rejects([&] { view.appendPhysicsDebug(debug, invalid); },
+                    "Box2D debug rejects rotation outside Z");
+        }
+        rejects([&] { view.appendPhysicsDebug(debug, physics, 0); },
+                "Debug thickness must be positive");
+        auto opaque = scene;
+        opaque["entities"][0]["components"][1]["version"] = 2;
+        opaque["entities"][0]["components"][1]["fields"] = "future representation";
+        faset::render::Snapshot skipped;
+        view.appendPhysicsDebug(skipped, opaque);
+        check(skipped.draws.empty(), "Debug does not interpret unknown body schema versions");
+    }
 }
 void run() {
     const auto folder =
@@ -74,6 +159,7 @@ void run() {
     faset::atomic_write(folder / "version.fscene", version);
     rejects([&] { faset::player::readScene(folder / "version.fscene"); }, "reject cooked version");
     faset::player::SceneView view(folder);
+    physicsDebug(view);
     auto snapshot = view.build(scene, 16.f / 9.f);
     check(snapshot.draws.size() == 1, "SceneView builtin mesh");
     check(snapshot.draws[0].model[12] == 3 && snapshot.draws[0].model[13] == 2 &&
@@ -95,6 +181,22 @@ void run() {
     view.build(bad, 1);
     check(!view.diagnostics().empty() && view.diagnostics()[0].starts_with("error:"),
           "missing asset is diagnostic, not silent success");
+    auto opaque = scene;
+    opaque["entities"][1]["components"][1]["version"] = 2;
+    opaque["entities"][1]["components"][1]["fields"] = {{"asset", 42}, {"color", "future-format"}};
+    const auto unchanged = opaque;
+    check(view.build(opaque, 1).draws.empty(), "Future mesh fields are opaque in editor preview");
+    check(!view.diagnostics().empty() &&
+              view.diagnostics()[0].find("unsupported faset.mesh") != std::string::npos,
+          "Opaque preview component has an actionable diagnostic");
+    check(opaque == unchanged, "Preview preserves unknown component bytes");
+    rejects([&] { world.load(opaque); }, "Player runtime rejects unknown component versions");
+    opaque = scene;
+    opaque["entities"][1]["components"][0]["version"] = 2;
+    opaque["entities"][1]["components"][0]["fields"] = {{"position", "future-format"}};
+    snapshot = view.build(opaque, 1);
+    check(snapshot.draws[0].model[12] == 1 && snapshot.draws[0].model[13] == 2,
+          "Future transform fields are not interpreted as v1 coordinates");
     auto camera = faset::player::CameraSettings{};
     camera.eye = camera.target;
     rejects([&] { view.build(scene, 1, camera); }, "reject degenerate camera");

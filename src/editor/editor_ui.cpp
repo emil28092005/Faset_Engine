@@ -47,6 +47,15 @@ Vec3 vector(const Mat4& m, Vec3 p) {
     return {m[0] * p[0] + m[4] * p[1] + m[8] * p[2], m[1] * p[0] + m[5] * p[1] + m[9] * p[2],
             m[2] * p[0] + m[6] * p[1] + m[10] * p[2]};
 }
+Vec3 euler_xyz(const Mat4& rotation) {
+    // The authoring transform is Rz * Ry * Rx. Reconstruct that convention
+    // after composing an intrinsic rotation instead of adding Euler channels.
+    const auto cy = std::hypot(rotation[0], rotation[1]);
+    if (cy > .00001f)
+        return {std::atan2(rotation[6], rotation[10]), std::atan2(-rotation[2], cy),
+                std::atan2(rotation[1], rotation[0])};
+    return {std::atan2(-rotation[9], rotation[5]), std::atan2(-rotation[2], cy), 0};
+}
 bool inverse(const Mat4& m, Mat4& out) {
     double a[4][8]{};
     for (int r = 0; r < 4; ++r) {
@@ -109,7 +118,7 @@ Mat4 world(const Json& scene, const Json& e, int depth = 0) {
     if (depth > 256)
         return render::identity;
     Mat4 local = render::identity;
-    if (auto* t = component(e, "faset.transform")) {
+    if (auto* t = component(e, "faset.transform"); t && t->value("version", 1) == 1) {
         const auto& f = t->at("fields");
         local =
             render::transform(vec(f.value("position", Json{})), vec(f.value("rotation", Json{})),
@@ -154,7 +163,9 @@ struct EditorUI::Impl {
     ui::DockLayout dock;
     player::SceneView view;
     render::Snapshot rendered;
-    std::string picks_key;
+    std::string picks_key, resolved_stamp, last_document;
+    std::set<std::string> seen_view_diagnostics;
+    Json instance_selection = Json::array(), template_conflicts = Json::array();
     std::string document, selected, source_file, asset_filter,
         active_bottom = "assets", menu, command_name = "faset_documents", status = "Ready",
         gizmo_mode = "Move";
@@ -164,6 +175,17 @@ struct EditorUI::Impl {
     std::map<std::string, std::uint64_t> edit_revisions;
     std::map<std::string, Json> preview_fields;
     std::filesystem::path layout_path;
+    std::filesystem::path theme_source_path, layout_source_path;
+    std::string attempted_theme, attempted_layout, applied_theme, applied_layout,
+        presentation_error;
+    std::chrono::steady_clock::time_point last_presentation_poll{};
+    bool simulation_open = false;
+    bool project_settings_open = false;
+    Json project_settings_state;
+    int project_settings_dimension = 3;
+    std::string project_settings_error;
+    bool project_switch_enabled = true, project_switch_requested = false,
+         project_switch_warning = false;
     bool palette = false, component_menu = false, assets_dirty = true, paused = false;
     float yaw = .65f, pitch = .42f, distance = 12, ortho = 12, mouse_x = 0, mouse_y = 0, last_x = 0,
           last_y = 0;
@@ -188,12 +210,18 @@ struct EditorUI::Impl {
     Impl(Session& s, render::Renderer& r, const std::filesystem::path& font,
          const std::filesystem::path& styles)
         : session(s), renderer(r), ui(font), view(s.config().project_root / ".faset/cache") {
-        ui.set_theme(ui::Theme::load(styles));
-        ui.apply_layout(read_json(styles.parent_path() / "editor-layout.json"));
+        theme_source_path = styles;
+        layout_source_path = styles.parent_path() / "editor-layout.json";
+        attempted_theme = applied_theme = read_text(theme_source_path);
+        attempted_layout = applied_layout = read_text(layout_source_path);
+        ui.set_theme(ui::Theme::from_json(Json::parse(applied_theme)));
+        ui.apply_layout(Json::parse(applied_layout));
+        last_presentation_poll = std::chrono::steady_clock::now();
         layout_path = session.config().project_root / ".faset/editor-layout.json";
         dock.move("assets", "bottom", 0);
         dock.move("console", "bottom", 1);
         dock.move("jobs", "bottom", 2);
+        dock.move("conflicts", "bottom", 3);
         if (std::filesystem::exists(layout_path))
             try {
                 dock.load(layout_path);
@@ -235,6 +263,45 @@ struct EditorUI::Impl {
             dock.save(layout_path);
         } catch (const std::exception& e) {
             report(e.what());
+        }
+    }
+    void poll_presentation() {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last_presentation_poll < std::chrono::milliseconds(500))
+            return;
+        last_presentation_poll = now;
+        try {
+            const auto theme_text = read_text(theme_source_path);
+            const auto layout_text = read_text(layout_source_path);
+            if (theme_text == attempted_theme && layout_text == attempted_layout) {
+                if (!presentation_error.empty() && theme_text == applied_theme &&
+                    layout_text == applied_layout) {
+                    presentation_error.clear();
+                    report("UI theme/layout sources restored");
+                }
+                return;
+            }
+            attempted_theme = theme_text;
+            attempted_layout = layout_text;
+            const auto theme = ui::Theme::from_json(Json::parse(theme_text));
+            const auto layout = Json::parse(layout_text);
+            // Both candidates are fully validated before changing either. Retained
+            // IDs, callbacks and dirty field edits stay in the existing Context.
+            ui.validate_layout(layout);
+            if (layout_text != applied_layout)
+                ui.apply_layout(layout);
+            if (theme_text != applied_theme)
+                ui.set_theme(theme);
+            applied_theme = theme_text;
+            applied_layout = layout_text;
+            presentation_error.clear();
+            report("UI theme/layout reloaded");
+        } catch (const std::exception& error) {
+            const auto message = std::string("UI reload kept last working styles: ") + error.what();
+            if (message != presentation_error) {
+                presentation_error = message;
+                report(message);
+            }
         }
     }
     void report(const std::string& message) {
@@ -321,7 +388,7 @@ struct EditorUI::Impl {
                  {"version", 1},
                  {"fields", session.authoring().schemas().default_fields("faset.sprite")}});
         if (transaction(Json::array({{{"op", "entity.create"}, {"entity", object}}})))
-            selected = id;
+            select(id);
     }
     void build_static() {
         auto& menurow = ui.find("menubar")->add(Kind::Row, "menuitems");
@@ -362,6 +429,9 @@ struct EditorUI::Impl {
         button(
             toolbar, "export", "Export",
             [this] { call("faset_export", {{"document", document}, {"output", "Exports"}}); }, 64);
+        button(
+            toolbar, "simulation-settings", "Simulation",
+            [this] { simulation_open = !simulation_open; }, 96);
         auto& space = toolbar.add(Kind::Label, "toolbar-space", "");
         space.layout.flex = 1;
         button(toolbar, "command-palette", "Commands", [this] { palette = !palette; }, 104);
@@ -380,10 +450,7 @@ struct EditorUI::Impl {
         tree.layout.gap = 0;
         tree.on_drop = [this](Widget&, const Json& payload) {
             if (payload.value("kind", std::string()) == "entity")
-                transaction(Json::array({{{"op", "entity.reparent"},
-                                          {"entity", payload.at("id")},
-                                          {"parent", nullptr},
-                                          {"keep_world", true}}}));
+                reparent(payload.at("id"), "");
         };
         auto& inspector = *ui.find("inspector_panel");
         inspector.add(Kind::Tab, "inspector-tab", "Inspector").selected = true;
@@ -401,6 +468,14 @@ struct EditorUI::Impl {
         vptools.layout.width = 300;
         for (const std::string mode : {"Move", "Rotate", "Scale"})
             button(vptools, "gizmo-" + mode, mode, [this, mode] { gizmo_mode = mode; }, 64);
+        button(
+            vptools, "back-document", "Back",
+            [this] {
+                if (!last_document.empty())
+                    choose_document(last_document);
+            },
+            54);
+        vptools.layout.width = 360;
         button(vptools, "frame-selection", "Frame", [this] { frame_selection(); }, 64);
         vp.on_drop = [this](Widget&, const Json& data) {
             if (data.value("kind", std::string()) == "asset")
@@ -411,7 +486,7 @@ struct EditorUI::Impl {
         auto& tabs = bottom.add(Kind::Row, "bottom-tabs");
         tabs.layout.height = 29;
         tabs.layout.gap = 0;
-        for (const std::string id : {"assets", "console", "jobs"}) {
+        for (const std::string id : {"assets", "console", "jobs", "conflicts"}) {
             auto& tab = tabs.add(Kind::Tab, "tab-" + id,
                                  id == "assets"    ? "Assets"
                                  : id == "console" ? "Console"
@@ -460,6 +535,10 @@ struct EditorUI::Impl {
         jobs.layout.flex = 1;
         jobs.layout.scroll = true;
         jobs.layout.gap = 1;
+        auto& conflicts = bottom.add(Kind::Column, "conflict-items");
+        conflicts.layout.flex = 1;
+        conflicts.layout.scroll = true;
+        conflicts.layout.gap = 3;
         auto& statusrow = ui.find("statusbar")->add(Kind::Row, "status-row");
         auto& statuslabel = statusrow.add(Kind::Label, "status", "Ready");
         statuslabel.layout.flex = 1;
@@ -479,6 +558,25 @@ struct EditorUI::Impl {
         label(pop, "menu-title", "File");
         button(pop, "new-3d", "New 3D scene", [this] { new_scene(3); });
         button(pop, "new-2d", "New 2D scene", [this] { new_scene(2); });
+        button(pop, "project-settings", "Project settings", [this] { open_project_settings(); });
+        button(pop, "open-project", "Open / create another project", [this] {
+            if (!project_switch_enabled)
+                return;
+            ui.clear_focus();
+            if (ui.editing())
+                return;
+            bool warn = session.playing();
+            for (const auto& doc : session.authoring().documents())
+                warn = warn || doc.value("dirty", false);
+            const auto jobs = call("faset_jobs");
+            if (!jobs.is_null())
+                for (const auto& job : jobs.at("jobs"))
+                    warn = warn || job.value("state", std::string()) == "running" ||
+                           job.value("state", std::string()) == "queued";
+            project_switch_warning = warn;
+            project_switch_requested = !warn;
+            menu.clear();
+        });
         pop.add(Kind::TextField, "open-path", "Scenes/Main.scene.json");
         button(pop, "open-path-button", "Open project-relative scene", [this] {
             auto result = call("faset_document_open", {{"path", ui.find("open-path")->text}});
@@ -504,6 +602,13 @@ struct EditorUI::Impl {
         });
         button(pop, "menu-delete", "Delete selection", [this] {
             delete_selected();
+            menu.clear();
+        });
+        pop.add(Kind::TextField, "template-path", "Assets/Templates/Template.scene.json");
+        button(pop, "save-template", "Save selection as template",
+               [this] { save_selection_template(ui.find("template-path")->text); });
+        button(pop, "instance-template", "Instance scene at this path", [this] {
+            instance_scene(ui.find("template-path")->text);
             menu.clear();
         });
         label(pop, "help-one", "Orbit: right drag. Pan: middle drag. Wheel: zoom.");
@@ -538,6 +643,39 @@ struct EditorUI::Impl {
             }
         });
         button(command, "palette-close", "Close", [this] { palette = false; });
+        auto& settings = ui.root().add(Kind::Panel, "simulation-panel");
+        settings.layout.absolute = true;
+        settings.layout.width = 470;
+        settings.layout.height = 350;
+        settings.layout.padding = 12;
+        settings.layout.gap = 5;
+        settings.visible = false;
+        label(settings, "simulation-title", "Scene simulation");
+        label(settings, "simulation-scope", "Used by the next Player snapshot");
+        for (const std::string field : {"tick-rate", "max_catch_up_ticks", "physics_substeps"}) {
+            auto& row = settings.add(Kind::Row, "simulation-row-" + field);
+            row.layout.height = 32;
+            label(row, "simulation-label-" + field,
+                  field == "tick-rate"            ? "Fixed tick rate (Hz)"
+                  : field == "max_catch_up_ticks" ? "Maximum catch-up ticks"
+                                                  : "Physics substeps",
+                  235);
+            auto& input = row.add(Kind::NumberField, "simulation-" + field);
+            input.layout.flex = 1;
+            input.precision = field == "tick-rate" ? 3 : 0;
+            input.step = 1;
+        }
+        label(settings, "simulation-gravity-label", "Gravity (units / second squared)");
+        auto& gravity = settings.add(Kind::Row, "simulation-gravity");
+        gravity.layout.height = 32;
+        for (int axis = 0; axis < 3; ++axis) {
+            auto& input =
+                gravity.add(Kind::NumberField, "simulation-gravity-" + std::to_string(axis));
+            input.layout.flex = 1;
+            input.precision = 3;
+            input.step = .05;
+        }
+        button(settings, "simulation-close", "Close", [this] { simulation_open = false; });
         auto& recover = ui.root().add(Kind::Panel, "recovery-panel");
         recover.layout.absolute = true;
         recover.layout.width = 470;
@@ -545,6 +683,79 @@ struct EditorUI::Impl {
         recover.layout.padding = 12;
         recover.layout.gap = 5;
         recover.visible = false;
+        auto& switching = ui.root().add(Kind::Panel, "project-switch-dialog");
+        switching.layout.absolute = true;
+        switching.layout.width = 500;
+        switching.layout.height = 220;
+        switching.layout.padding = 16;
+        switching.layout.gap = 8;
+        switching.visible = false;
+        label(switching, "project-switch-title", "Switch project?");
+        label(switching, "project-switch-dirty", "Unsaved changes remain in recovery journals.");
+        label(switching, "project-switch-jobs", "Active jobs and the Player stop on switching.");
+        label(switching, "project-switch-save", "Cancel to save your scenes first.");
+        auto& actions = switching.add(Kind::Row, "project-switch-actions");
+        actions.layout.height = 32;
+        button(
+            actions, "project-switch-continue", "Switch project",
+            [this] {
+                project_switch_warning = false;
+                project_switch_requested = project_switch_enabled;
+            },
+            180);
+        button(
+            actions, "project-switch-cancel", "Cancel", [this] { project_switch_warning = false; },
+            90);
+        auto& project = ui.root().add(Kind::Panel, "project-settings-panel");
+        project.layout.absolute = true;
+        project.layout.width = 610;
+        project.layout.height = 550;
+        project.layout.padding = 16;
+        project.layout.gap = 6;
+        project.layout.scroll = true;
+        project.visible = false;
+        auto& project_title =
+            project.add(Kind::Label, "project-settings-title", "Project settings");
+        project_title.font_size = 20;
+        project_title.layout.height = 36;
+        label(project, "project-settings-name-label", "Project name");
+        project.add(Kind::TextField, "project-settings-name");
+        label(project, "project-settings-dimension-label", "Initial scene type");
+        auto& dimensions = project.add(Kind::Row, "project-settings-dimensions");
+        dimensions.layout.height = 30;
+        for (const auto value : {2, 3}) {
+            auto& choice =
+                dimensions.add(Kind::Tab, "project-settings-" + std::to_string(value) + "d",
+                               std::to_string(value) + "D");
+            choice.layout.width = 110;
+            choice.on_click = [this, value](Widget&) { project_settings_dimension = value; };
+        }
+        label(project, "project-settings-start-label", "Start scene (saved project-relative path)");
+        project.add(Kind::TextField, "project-settings-start");
+        auto& scenes = project.add(Kind::Column, "project-settings-scenes");
+        scenes.layout.height = 104;
+        scenes.layout.scroll = true;
+        scenes.layout.gap = 1;
+        label(project, "project-settings-note",
+              "Applies on next project open. Scene Undo is unchanged.");
+        auto& project_actions = project.add(Kind::Row, "project-settings-actions");
+        project_actions.layout.height = 32;
+        button(
+            project_actions, "project-settings-save", "Save project",
+            [this] { save_project_settings(); }, 145)
+            .selected = true;
+        button(
+            project_actions, "project-settings-reload", "Reload saved",
+            [this] { open_project_settings(); }, 130);
+        button(
+            project_actions, "project-settings-cancel", "Cancel",
+            [this] {
+                project_settings_open = false;
+                ui.clear_focus(false);
+            },
+            85);
+        label(project, "project-settings-error", "");
+        label(project, "project-settings-reload-note", "Reload saved discards this form's edits.");
     }
     void new_scene(int dimension) {
         auto result =
@@ -553,7 +764,10 @@ struct EditorUI::Impl {
             choose_document(result.at("id"));
         menu.clear();
     }
-    void choose_document(const std::string& id) {
+    void choose_document(std::string id) {
+        if (document != id)
+            last_document = document;
+        instance_selection = Json::array();
         ui.clear_focus(false);
         document = id;
         selected.clear();
@@ -563,17 +777,285 @@ struct EditorUI::Impl {
         edit_revisions.clear();
         gizmo_axis = -1;
     }
-    void delete_selected() {
-        if (selected.empty())
+    bool inherited(const Json& object) const {
+        return object.contains("origin") &&
+               !object.at("origin").value("path", Json::array()).empty();
+    }
+    bool owned_addition(const Json& object) const {
+        return inherited(object) && object.at("origin").value("local", false) &&
+               object.at("origin").at("path").size() == 1;
+    }
+    Json addition_record(const Json& object) const {
+        for (const auto& instance : current.at("scene").value("instances", Json::array()))
+            if (instance.at("id") == object.at("origin").at("path").front())
+                for (const auto& item : instance.value("additions", Json::array()))
+                    if (item.at("id") == object.at("origin").at("object"))
+                        return item;
+        throw std::runtime_error("Instance-local addition is unavailable");
+    }
+    void update_addition(const Json& object, Json addition,
+                         std::uint64_t revision = std::numeric_limits<std::uint64_t>::max()) {
+        transaction(Json::array({{{"op", "template.addition_set"},
+                                  {"instance", object.at("origin").at("path").front()},
+                                  {"value", std::move(addition)}}}),
+                    revision);
+    }
+    void add_component(const std::string& type) {
+        const auto* object = entity(resolved, selected);
+        if (!object)
             return;
-        if (transaction(Json::array({{{"op", "entity.delete"}, {"entity", selected}}})))
+        if (owned_addition(*object)) {
+            auto addition = addition_record(*object);
+            addition["components"].push_back(
+                {{"id", new_id()},
+                 {"type", type},
+                 {"version", session.authoring().schemas().schema(type).value("version", 1)},
+                 {"fields", session.authoring().schemas().default_fields(type)}});
+            update_addition(*object, std::move(addition));
+            component_menu = false;
+        } else if (!inherited(*object) &&
+                   transaction(Json::array(
+                       {{{"op", "component.add"}, {"entity", selected}, {"type", type}}})))
+            component_menu = false;
+    }
+    void remove_component(const std::string& cid) {
+        const auto* object = entity(resolved, selected);
+        if (!object)
+            return;
+        if (owned_addition(*object)) {
+            std::string source;
+            for (const auto& c : object->at("components"))
+                if (c.at("id") == cid)
+                    source = c.at("source_id");
+            auto addition = addition_record(*object);
+            auto& components = addition["components"];
+            components.erase(std::remove_if(components.begin(), components.end(),
+                                            [&](const Json& c) { return c.at("id") == source; }),
+                             components.end());
+            update_addition(*object, std::move(addition));
+        } else if (!inherited(*object))
+            transaction(Json::array(
+                {{{"op", "component.remove"}, {"entity", selected}, {"component", cid}}}));
+    }
+    Json relative_address(const Json& object, const std::string& component_id = {},
+                          const std::string& field = {}) const {
+        const auto& origin = object.at("origin");
+        auto path = origin.at("path");
+        path.erase(path.begin());
+        Json address = {{"path", path}, {"object", origin.at("object")}};
+        if (!component_id.empty()) {
+            for (const auto& c : object.at("components"))
+                if (c.at("id") == component_id) {
+                    address["component"] = c.value("source_id", component_id);
+                    break;
+                }
+            address["field"] = field;
+        }
+        return address;
+    }
+    Json field_operation(const Json& object, const std::string& component_id,
+                         const std::string& field, Json value) const {
+        if (inherited(object))
+            return {{"op", "template.override"},
+                    {"instance", object.at("origin").at("path").front()},
+                    {"address", relative_address(object, component_id, field)},
+                    {"value", std::move(value)}};
+        return {{"op", "component.set"},
+                {"entity", object.at("id")},
+                {"component", component_id},
+                {"field", field},
+                {"value", std::move(value)}};
+    }
+    bool overridden(const Json& object, const std::string& component_id,
+                    const std::string& field) const {
+        if (!inherited(object))
+            return false;
+        const auto address = relative_address(object, component_id, field);
+        for (const auto& instance : current.at("scene").value("instances", Json::array()))
+            if (instance.at("id") == object.at("origin").at("path").front())
+                for (const auto& change : instance.value("overrides", Json::array()))
+                    if (change.at("address") == address)
+                        return true;
+        return false;
+    }
+    std::string instance_source(const Json& path) const {
+        auto source_scene = current.at("scene");
+        std::string source;
+        for (const auto& id : path) {
+            const auto instances = source_scene.value("instances", Json::array());
+            auto found = std::find_if(instances.begin(), instances.end(),
+                                      [&](const Json& item) { return item.at("id") == id; });
+            if (found == instances.end())
+                return {};
+            source = found->at("source");
+            bool open = false;
+            for (const auto& doc : session.authoring().documents())
+                if (doc.value("path", std::string()) == source) {
+                    source_scene = session.authoring().query(doc.at("id"))["scene"];
+                    open = true;
+                    break;
+                }
+            if (!open)
+                try {
+                    source_scene = read_json(project_path(session.config().project_root, source));
+                } catch (...) {
+                    return source;
+                }
+        }
+        return source;
+    }
+    void open_template_source(const Json& path, const std::string& object = {}) {
+        const auto source = instance_source(path);
+        if (source.empty())
+            return;
+        const auto opened = call("faset_document_open", {{"path", source}});
+        if (!opened.is_null()) {
+            choose_document(opened.at("id"));
+            selected = object;
+        }
+    }
+    void select_instance(const Json& path) {
+        ui.clear_focus();
+        selected.clear();
+        instance_selection = path;
+        preview_fields.clear();
+        edit_revisions.clear();
+    }
+    void delete_selected() {
+        if (!instance_selection.empty()) {
+            if (instance_selection.size() != 1) {
+                report("Open the source scene to remove this nested instance");
+                return;
+            }
+            if (transaction(Json::array(
+                    {{{"op", "template.remove"}, {"instance", instance_selection.front()}}})))
+                instance_selection = Json::array();
+            return;
+        }
+        const auto* object = entity(resolved, selected);
+        if (!object)
+            return;
+        const Json operation = inherited(*object)
+                                   ? Json{{"op", "template.suppress"},
+                                          {"instance", object->at("origin").at("path").front()},
+                                          {"value", relative_address(*object)}}
+                                   : Json{{"op", "entity.delete"}, {"entity", selected}};
+        if (transaction(Json::array({operation})))
             selected.clear();
     }
+    void reparent(const std::string& id, const std::string& parent) {
+        const auto* object = entity(resolved, id);
+        const auto* target = parent.empty() ? nullptr : entity(resolved, parent);
+        if (!object)
+            return;
+        if (inherited(*object)) {
+            const auto path = object->at("origin").at("path");
+            if (target && (!inherited(*target) || target->at("origin").at("path") != path)) {
+                report("Instance reparenting stays within the same instance path");
+                return;
+            }
+            transaction(
+                Json::array({{{"op", "template.reparent"},
+                              {"instance", path.front()},
+                              {"value",
+                               {{"object", relative_address(*object)},
+                                {"parent", target ? relative_address(*target) : Json(nullptr)},
+                                {"keep_world", true}}}}}));
+        } else {
+            if (target && inherited(*target)) {
+                report("Add a local child through the instance Inspector");
+                return;
+            }
+            transaction(Json::array({{{"op", "entity.reparent"},
+                                      {"entity", id},
+                                      {"parent", parent.empty() ? Json(nullptr) : Json(parent)},
+                                      {"keep_world", true}}}));
+        }
+    }
+    void add_instance_child(const Json& path, const std::string& parent = {}) {
+        if (path.size() != 1) {
+            report("Open the nested source to add a child there");
+            return;
+        }
+        auto object = authoring::make_entity(session.authoring().schemas(), "Local Object", parent);
+        transaction(
+            Json::array({{{"op", "template.add"}, {"instance", path.front()}, {"value", object}}}));
+    }
+    void instance_scene(const std::string& path) {
+        try {
+            auto data = read_json(project_path(session.config().project_root, path));
+            authoring::validate_scene(data, session.authoring().schemas());
+            if (data.at("id") == document)
+                throw std::runtime_error("A scene cannot instance itself");
+            const auto id = new_id();
+            if (transaction(Json::array({{{"op", "template.instance"},
+                                          {"instance",
+                                           {{"id", id},
+                                            {"source", path},
+                                            {"overrides", Json::array()},
+                                            {"suppressed", Json::array()},
+                                            {"additions", Json::array()},
+                                            {"reparents", Json::array()}}}}})))
+                select_instance(Json::array({id}));
+        } catch (const std::exception& e) {
+            report(e.what());
+        }
+    }
+    void save_selection_template(const std::string& path) {
+        const auto* object = entity(resolved, selected);
+        if (!object) {
+            report("Select an object subtree to create a template");
+            return;
+        }
+        try {
+            std::set<std::string> subtree{selected};
+            bool changed = true;
+            while (changed) {
+                changed = false;
+                for (const auto& item : resolved.at("entities"))
+                    if (item.at("parent").is_string() &&
+                        subtree.contains(item.at("parent").get<std::string>()))
+                        changed =
+                            subtree.insert(item.at("id").get<std::string>()).second || changed;
+            }
+            auto result = call("faset_document_create",
+                               {{"name", std::filesystem::path(path).stem().string()},
+                                {"dimension", current.at("scene").value("dimension", 3)}});
+            if (result.is_null())
+                return;
+            Json operations = Json::array();
+            for (auto item : resolved.at("entities"))
+                if (subtree.contains(item.at("id").get<std::string>())) {
+                    item.erase("origin");
+                    for (auto& c : item["components"])
+                        c.erase("source_id");
+                    if (item.at("id") == selected)
+                        item["parent"] = nullptr;
+                    operations.push_back({{"op", "entity.create"}, {"entity", item}});
+                }
+            const auto id = result.at("id");
+            result = call("faset_scene_edit", {{"document", id},
+                                               {"revision", result.at("revision")},
+                                               {"operations", operations}});
+            if (result.is_null())
+                return;
+            result = call("faset_document_save", {{"document", id}, {"path", path}});
+            if (!result.is_null()) {
+                status = "Saved template: " + path;
+                source_file = path;
+                assets_dirty = true;
+                menu.clear();
+            }
+        } catch (const std::exception& e) {
+            report(e.what());
+        }
+    }
     void select(const std::string& id) {
-        if (selected == id)
+        if (selected == id && instance_selection.empty())
             return;
         ui.clear_focus();
         selected = id;
+        instance_selection = Json::array();
         preview_fields.clear();
         edit_revisions.clear();
         component_menu = false;
@@ -618,22 +1100,31 @@ struct EditorUI::Impl {
                  {"version", 1},
                  {"fields", {{"asset", id}, {"primitive", "asset"}, {"color", {1, 1, 1, 1}}}}});
         if (transaction(Json::array({{{"op", "entity.create"}, {"entity", object}}})))
-            selected = entity_id;
+            select(entity_id);
     }
     void refresh() {
         if (document.empty())
             return;
         current = session.authoring().query(document);
         schemas = session.authoring().schemas().manifest();
-        if (shown_revision != current.at("revision").get<std::uint64_t>()) {
+        const auto document_stamp = session.authoring().documents().dump();
+        if (shown_revision != current.at("revision").get<std::uint64_t>() ||
+            resolved_stamp != document_stamp) {
+            resolved_stamp = document_stamp;
             auto result = call("faset_template_preview", {{"document", document}});
             resolved = result.is_null() ? current.at("scene") : result.at("scene");
+            template_conflicts = result.is_null() ? Json::array() : result.at("conflicts");
+            for (auto& object : resolved["entities"])
+                if (!object.contains("origin"))
+                    object["origin"] = {{"path", Json::array()}, {"object", object.at("id")}};
             if (!result.is_null() && !result.at("conflicts").empty())
                 status = "Template conflicts: " + std::to_string(result.at("conflicts").size());
             shown_revision = current.at("revision");
         }
-        if (!selected.empty() && !entity(current.at("scene"), selected))
+        if (!selected.empty() && !entity(resolved, selected))
             selected.clear();
+        if (!instance_selection.empty() && instance_source(instance_selection).empty())
+            instance_selection = Json::array();
         refresh_tree();
         refresh_inspector();
         refresh_assets();
@@ -644,60 +1135,108 @@ struct EditorUI::Impl {
         ui.find("pause")->enabled = session.playing();
         ui.find("step")->enabled = session.playing();
         ui.find("pause")->text = paused ? "Resume" : "Pause";
+        const auto schema_state = call("faset_schema_status");
+        if (!schema_state.is_null()) {
+            const bool stale = schema_state.value("stale", false);
+            ui.find("build")->text = stale ? "Build C++ !" : "Build C++";
+            ui.find("build")->tooltip =
+                stale ? "Gameplay schema is stale: " + schema_state.value("error", std::string())
+                      : "Build gameplay and refresh metadata";
+            if (stale && status == "Ready")
+                status = "Gameplay schema is stale; Build C++ to refresh";
+        }
+
         ui.find("project-title")->text = session.project().value("name", std::string("Project")) +
                                          " / " + current.at("name").get<std::string>() +
                                          (current.value("dirty", false) ? " *" : "");
         ui.find("status")->text = status;
         ui.find("renderer-status")->text =
-            "Vulkan 1.3  |  " + std::to_string(current.at("scene").at("entities").size()) +
-            " objects";
+            "Vulkan 1.3  |  " + std::to_string(resolved.at("entities").size()) + " objects";
     }
     void refresh_tree() {
         auto& tree = *ui.find("scene-tree");
         std::set<std::string> keep;
-        const auto& scene = current.at("scene");
-        auto& root = tree.add(Kind::TreeRow, "scene-root", scene.at("name"));
-        root.selected = selected.empty();
+        std::map<std::string, std::size_t> order;
+        std::size_t sequence = 0;
+        auto touch = [&](Widget& row) {
+            keep.insert(row.id);
+            order[row.id] = sequence++;
+        };
+        auto& root = tree.add(Kind::TreeRow, "scene-root", current.at("scene").at("name"));
+        root.selected = selected.empty() && instance_selection.empty();
         root.on_click = [this](Widget&) { select(""); };
-        keep.insert(root.id);
-        std::function<void(std::string, int)> append = [&](std::string parent, int depth) {
-            for (const auto& e : scene.at("entities")) {
-                const auto p = e.at("parent").is_string() ? e.at("parent").get<std::string>() : "";
-                if (p != parent)
+        touch(root);
+        std::vector<Json> groups;
+        for (const auto& instance : current.at("scene").value("instances", Json::array()))
+            groups.push_back(Json::array({instance.at("id")}));
+        for (const auto& object : resolved.at("entities")) {
+            const auto path = object.at("origin").at("path");
+            Json prefix = Json::array();
+            for (const auto& part : path) {
+                prefix.push_back(part);
+                if (std::find(groups.begin(), groups.end(), prefix) == groups.end())
+                    groups.push_back(prefix);
+            }
+        }
+        for (const auto& conflict : template_conflicts) {
+            Json prefix = Json::array();
+            for (const auto& part : conflict.at("instance_path")) {
+                prefix.push_back(part);
+                if (std::find(groups.begin(), groups.end(), prefix) == groups.end())
+                    groups.push_back(prefix);
+            }
+        }
+        std::function<void(const Json&, std::string, int)> objects = [&](const Json& path,
+                                                                         std::string parent,
+                                                                         int depth) {
+            for (const auto& object : resolved.at("entities")) {
+                if (object.at("origin").at("path") != path)
                     continue;
-                const auto id = e.at("id").get<std::string>();
-                auto& row = tree.add(Kind::TreeRow, "entity-" + id, e.at("name"));
-                keep.insert(row.id);
+                const auto parent_id =
+                    object.at("parent").is_string() ? object.at("parent").get<std::string>() : "";
+                const auto* parent_object =
+                    parent_id.empty() ? nullptr : entity(resolved, parent_id);
+                const bool own_parent =
+                    parent_object && parent_object->at("origin").at("path") == path;
+                if ((own_parent ? parent_id : "") != parent)
+                    continue;
+                const auto id = object.at("id").get<std::string>();
+                auto& row = tree.add(Kind::TreeRow, "entity-" + id, object.at("name"));
                 row.indent = depth;
                 row.selected = selected == id;
-                row.drag_payload = {{"kind", "entity"}, {"id", id}, {"label", e.at("name")}};
+                row.drag_payload = {{"kind", "entity"}, {"id", id}, {"label", object.at("name")}};
                 row.on_click = [this, id](Widget&) { select(id); };
                 row.on_drop = [this, id](Widget&, const Json& payload) {
                     if (payload.value("kind", std::string()) == "entity")
-                        transaction(Json::array({{{"op", "entity.reparent"},
-                                                  {"entity", payload.at("id")},
-                                                  {"parent", id},
-                                                  {"keep_world", true}}}));
+                        reparent(payload.at("id"), id);
                 };
-                append(id, depth + 1);
+                touch(row);
+                objects(path, id, depth + 1);
             }
         };
-        append("", 1);
-        trim_children(tree, keep);
-        // Match retained children to hierarchy order after a reparent without
-        // changing widget IDs.
-        std::map<std::string, std::size_t> order;
-        std::size_t n = 0;
-        std::function<void(std::string)> visit = [&](std::string p) {
-            for (const auto& e : scene.at("entities"))
-                if ((e.at("parent").is_string() ? e.at("parent").get<std::string>() : "") == p) {
-                    const auto id = e.at("id").get<std::string>();
-                    order["entity-" + id] = ++n;
-                    visit(id);
-                }
+        objects(Json::array(), "", 1);
+        std::function<void(Json, int)> append_group = [&](Json path, int depth) {
+            const auto source = instance_source(path);
+            auto& row = tree.add(Kind::TreeRow, "instance-" + path.dump(),
+                                 "[T] " + std::filesystem::path(source).filename().string());
+            row.indent = depth;
+            row.selected = instance_selection == path;
+            row.on_click = [this, path](Widget&) { select_instance(path); };
+            touch(row);
+            objects(path, "", depth + 1);
+            for (const auto& candidate : groups) {
+                if (candidate.size() != path.size() + 1)
+                    continue;
+                auto prefix = candidate;
+                prefix.erase(prefix.end() - 1);
+                if (prefix == path)
+                    append_group(candidate, depth + 1);
+            }
         };
-        order["scene-root"] = 0;
-        visit("");
+        for (const auto& group : groups)
+            if (group.size() == 1)
+                append_group(group, 1);
+        trim_children(tree, keep);
         std::stable_sort(tree.children.begin(), tree.children.end(),
                          [&](const auto& a, const auto& b) { return order[a->id] < order[b->id]; });
     }
@@ -707,12 +1246,10 @@ struct EditorUI::Impl {
         const auto revision = found == edit_revisions.end()
                                   ? current.at("revision").get<std::uint64_t>()
                                   : found->second;
-        transaction(Json::array({{{"op", "component.set"},
-                                  {"entity", selected},
-                                  {"component", component_id},
-                                  {"field", field},
-                                  {"value", std::move(value)}}}),
-                    revision);
+        if (const auto* object = entity(resolved, selected))
+            transaction(
+                Json::array({field_operation(*object, component_id, field, std::move(value))}),
+                revision);
         edit_revisions.erase(widget);
         preview_fields.erase(component_id + "/" + field);
     }
@@ -769,10 +1306,61 @@ struct EditorUI::Impl {
                 set_field(cid, field, payload.at("id"), id);
         };
     }
+    void refresh_instance_inspector(Widget& body, std::set<std::string>& keep) {
+        const auto path = instance_selection;
+        const auto source = instance_source(path);
+        label(body, "instance-heading", "Scene instance");
+        keep.insert("instance-heading");
+        auto& field = body.add(Kind::TextField, "instance-source");
+        ui.update_text(field.id, source);
+        field.enabled = path.size() == 1;
+        field.on_commit = [this, path](Widget& w) {
+            transaction(Json::array(
+                {{{"op", "template.source_set"}, {"instance", path.front()}, {"source", w.text}}}));
+        };
+        keep.insert(field.id);
+        button(body, "instance-open-source", "Open source",
+               [this, path] { open_template_source(path); });
+        keep.insert("instance-open-source");
+        auto& remove =
+            button(body, "instance-remove", "Remove instance", [this] { delete_selected(); });
+        remove.enabled = path.size() == 1;
+        keep.insert(remove.id);
+        auto& add = button(body, "instance-add-local", "Add local object",
+                           [this, path] { add_instance_child(path); });
+        add.enabled = path.size() == 1;
+        keep.insert(add.id);
+        if (path.size() != 1) {
+            label(body, "instance-nested-note", "Open source for nested structural changes");
+            keep.insert("instance-nested-note");
+            return;
+        }
+        for (const auto& instance : current.at("scene").value("instances", Json::array()))
+            if (instance.at("id") == path.front()) {
+                std::size_t i = 0;
+                for (const auto& address : instance.value("suppressed", Json::array())) {
+                    const auto id = "instance-restore-" + std::to_string(i++);
+                    button(body, id,
+                           "Restore suppressed object " +
+                               address.at("object").get<std::string>().substr(0, 8),
+                           [this, path, address] {
+                               transaction(Json::array({{{"op", "template.restore"},
+                                                         {"instance", path.front()},
+                                                         {"address", address}}}));
+                           });
+                    keep.insert(id);
+                }
+            }
+    }
     void refresh_inspector() {
         auto& body = *ui.find("properties");
         std::set<std::string> keep;
-        const auto* e = entity(current.at("scene"), selected);
+        const auto* e = entity(resolved, selected);
+        if (!instance_selection.empty()) {
+            refresh_instance_inspector(body, keep);
+            trim_children(body, keep);
+            return;
+        }
         if (!e) {
             label(body, "inspector-empty", "Select an object to edit its components");
             keep.insert("inspector-empty");
@@ -781,24 +1369,53 @@ struct EditorUI::Impl {
         }
         auto& name = body.add(Kind::TextField, "object-name");
         ui.update_text(name.id, e->at("name"));
+        const bool source_object = inherited(*e), local_addition = owned_addition(*e);
+        name.enabled = !source_object || local_addition;
+        if (local_addition) {
+            label(body, "object-origin", "Local addition to this instance");
+            keep.insert("object-origin");
+        } else if (source_object) {
+            const auto path = e->at("origin").at("path");
+            const auto object = e->at("origin").at("object").get<std::string>();
+            label(body, "object-origin",
+                  "Source: " + std::filesystem::path(instance_source(path)).filename().string());
+            keep.insert("object-origin");
+            button(body, "object-open-source", "Open source",
+                   [this, path, object] { open_template_source(path, object); });
+            keep.insert("object-open-source");
+        }
         keep.insert(name.id);
         name.on_preview = [this](Widget&) {
             edit_revisions.try_emplace("object-name", current.at("revision").get<std::uint64_t>());
         };
         name.on_cancel = [this](Widget& w) { edit_revisions.erase(w.id); };
         name.on_commit = [this](Widget& w) {
-            transaction(
-                Json::array({{{"op", "entity.rename"}, {"entity", selected}, {"name", w.text}}}),
-                edit_revisions.contains(w.id) ? edit_revisions[w.id]
-                                              : current.at("revision").get<std::uint64_t>());
+            const auto revision = edit_revisions.contains(w.id)
+                                      ? edit_revisions[w.id]
+                                      : current.at("revision").get<std::uint64_t>();
+            if (const auto* object = entity(resolved, selected)) {
+                if (owned_addition(*object)) {
+                    auto addition = addition_record(*object);
+                    addition["name"] = w.text;
+                    update_addition(*object, std::move(addition), revision);
+                } else
+                    transaction(
+                        Json::array(
+                            {{{"op", "entity.rename"}, {"entity", selected}, {"name", w.text}}}),
+                        revision);
+            }
             edit_revisions.erase(w.id);
         };
         for (const auto& c : e->at("components")) {
             const auto cid = c.at("id").get<std::string>(), type = c.at("type").get<std::string>();
-            const bool known = session.authoring().schemas().contains(type);
-            const auto metadata =
-                known ? session.authoring().schemas().schema(type)
-                      : Json{{"name", type + " (schema missing)"}, {"fields", Json::object()}};
+            const bool has_schema = session.authoring().schemas().contains(type);
+            const bool known =
+                has_schema && c.value("version", 1) ==
+                                  session.authoring().schemas().schema(type).value("version", 1);
+            const auto metadata = known ? session.authoring().schemas().schema(type)
+                                        : Json{{"name", type + (has_schema ? " (version mismatch)"
+                                                                           : " (schema missing)")},
+                                               {"fields", Json::object()}};
             auto& header = body.add(Kind::Row, "component-header-" + cid);
             keep.insert(header.id);
             header.layout.height = 28;
@@ -806,12 +1423,20 @@ struct EditorUI::Impl {
                 header.add(Kind::Label, "component-title-" + cid, metadata.value("name", type));
             title.layout.flex = 1;
             button(
-                header, "component-remove-" + cid, "x",
-                [this, cid] {
-                    transaction(Json::array(
-                        {{{"op", "component.remove"}, {"entity", selected}, {"component", cid}}}));
-                },
-                25);
+                header, "component-remove-" + cid, "x", [this, cid] { remove_component(cid); }, 25)
+                .enabled = !source_object || local_addition;
+            if (!known) {
+                label(body, "opaque-note-" + cid, "Schema unavailable. Data is preserved.");
+                keep.insert("opaque-note-" + cid);
+                auto& raw =
+                    body.add(Kind::TextField, "opaque-fields-" + cid, c.at("fields").dump());
+                raw.enabled = false;
+                keep.insert(raw.id);
+                button(body, "opaque-copy-" + cid, "Copy raw fields",
+                       [this, fields = c.at("fields")] { renderer.set_clipboard(fields.dump(2)); });
+                keep.insert("opaque-copy-" + cid);
+                continue;
+            }
             for (const auto& [fid, value] : c.at("fields").items()) {
                 const auto descriptor = metadata.at("fields").value(fid, Json::object());
                 const auto key = "field-" + cid + "-" + fid;
@@ -837,7 +1462,23 @@ struct EditorUI::Impl {
                         ui.clear_focus(false);
                     row.remove(input_id);
                 }
-                trim_children(row, {key + "-label", input_id});
+                if (source_object) {
+                    const auto address = relative_address(*e, cid, fid);
+                    const auto instance = e->at("origin").at("path").front();
+                    const bool local_override = overridden(*e, cid, fid);
+                    row.find(key + "-label")->text += local_override ? " · Override" : " · Source";
+                    auto& revert =
+                        button(row, key + "-revert", "Revert", [this, instance, address] {
+                            transaction(Json::array({{{"op", "template.revert"},
+                                                      {"instance", instance},
+                                                      {"address", address}}}));
+                        });
+                    revert.enabled = local_override;
+                    revert.layout.height = 23;
+                }
+                trim_children(row, source_object ? std::set<std::string>{key + "-label", input_id,
+                                                                         key + "-revert"}
+                                                 : std::set<std::string>{key + "-label", input_id});
                 if (!options.empty()) {
                     auto& input =
                         button(row, key + "-value",
@@ -858,6 +1499,7 @@ struct EditorUI::Impl {
                 } else if (vector_value) {
                     auto& vectorrow = row.add(Kind::Row, key + "-vector");
                     vectorrow.layout.gap = 3;
+                    std::set<std::string> axis_ids;
                     for (std::size_t axis = 0; axis < value.size(); ++axis) {
                         auto& input =
                             vectorrow.add(Kind::NumberField, key + "-" + std::to_string(axis));
@@ -866,7 +1508,9 @@ struct EditorUI::Impl {
                         ui.update_number(input.id, value[axis].get<double>());
                         input.step = .02;
                         bind_field(input, cid, fid, value, int(axis));
+                        axis_ids.insert(input.id);
                     }
+                    trim_children(vectorrow, axis_ids);
                 } else if (value.is_number()) {
                     auto& input = row.add(Kind::NumberField, key + "-value");
                     input.step = value.is_number_integer() ? 1 : .05;
@@ -883,16 +1527,21 @@ struct EditorUI::Impl {
         }
         auto& add = button(body, "add-component", "+ Add Component",
                            [this] { component_menu = !component_menu; });
+        add.enabled = !source_object || local_addition;
         keep.insert(add.id);
-        if (component_menu)
+        if (source_object) {
+            const auto path = e->at("origin").at("path");
+            const auto object = e->at("origin").at("object").get<std::string>();
+            auto& child = button(body, "instance-add-child", "Add local child",
+                                 [this, path, object] { add_instance_child(path, object); });
+            child.enabled = path.size() == 1;
+            keep.insert(child.id);
+        }
+        if (component_menu && (!source_object || local_addition))
             for (const auto& schema : schemas.at("types")) {
                 const auto type = schema.at("id").get<std::string>();
-                auto& choice = button(
-                    body, "component-choice-" + type, schema.value("name", type), [this, type] {
-                        if (transaction(Json::array(
-                                {{{"op", "component.add"}, {"entity", selected}, {"type", type}}})))
-                            component_menu = false;
-                    });
+                auto& choice = button(body, "component-choice-" + type, schema.value("name", type),
+                                      [this, type] { add_component(type); });
                 keep.insert(choice.id);
             }
         trim_children(body, keep);
@@ -1018,12 +1667,61 @@ struct EditorUI::Impl {
                              return std::find(order.begin(), order.end(), a->dock_panel) <
                                     std::find(order.begin(), order.end(), b->dock_panel);
                          });
-        for (const std::string id : {"assets", "console", "jobs"})
+        for (const std::string id : {"assets", "console", "jobs", "conflicts"})
             ui.find("tab-" + id)->selected = active_bottom == id;
         ui.find("asset-toolbar")->visible = active_bottom == "assets";
         ui.find("asset-items")->visible = active_bottom == "assets";
         ui.find("console-items")->visible = active_bottom == "console";
         ui.find("job-items")->visible = active_bottom == "jobs";
+        ui.find("conflict-items")->visible = active_bottom == "conflicts";
+        ui.find("tab-conflicts")->text =
+            "Conflicts (" + std::to_string(template_conflicts.size()) + ")";
+        auto& conflict_list = *ui.find("conflict-items");
+        std::set<std::string> conflict_keep;
+        std::size_t conflict_index = 0;
+        for (const auto& conflict : template_conflicts) {
+            const auto id = "conflict-" + std::to_string(conflict_index++);
+            auto& row = conflict_list.add(Kind::Row, id);
+            row.layout.height = 28;
+            const auto code = conflict.at("code").get<std::string>();
+            const auto path = conflict.at("instance_path");
+            auto& text = row.add(
+                Kind::Label, id + "-text",
+                code + " · " + std::filesystem::path(instance_source(path)).filename().string());
+            text.layout.flex = 1;
+            button(
+                row, id + "-source", "Open source", [this, path] { open_template_source(path); },
+                106);
+            const auto record = conflict.at("record");
+            const auto change = record.contains("change") ? record.at("change") : record;
+            if (path.size() == 1 && code.starts_with("override.") && change.contains("address")) {
+                const auto address = change.at("address");
+                button(
+                    row, id + "-discard", "Discard override",
+                    [this, path, address] {
+                        transaction(Json::array({{{"op", "template.revert"},
+                                                  {"instance", path.front()},
+                                                  {"address", address}}}));
+                    },
+                    140);
+            } else if (path.size() == 1 && code == "suppression.object_missing") {
+                button(
+                    row, id + "-discard", "Discard suppression",
+                    [this, path, record] {
+                        transaction(Json::array({{{"op", "template.restore"},
+                                                  {"instance", path.front()},
+                                                  {"address", record}}}));
+                    },
+                    155);
+            }
+            conflict_keep.insert(id);
+        }
+        if (conflict_keep.empty()) {
+            label(conflict_list, "conflicts-empty",
+                  "No template conflicts. Missing targets preserve their overrides here.");
+            conflict_keep.insert("conflicts-empty");
+        }
+        trim_children(conflict_list, conflict_keep);
         auto& console = *ui.find("console-items");
         std::set<std::string> keep;
         const auto& logs = session.logs();
@@ -1072,17 +1770,33 @@ struct EditorUI::Impl {
         popup.visible = !menu.empty();
         ui.find("menu-title")->text = menu;
         refresh_recovery();
+        refresh_simulation();
+        refresh_project_settings();
+        const bool modal = palette || !recovery.empty() || simulation_open ||
+                           project_switch_warning || project_settings_open;
+        for (const auto* id : {"menubar", "toolbar", "workspace", "bottom_panel"})
+            ui.find(id)->enabled = !modal;
         const bool file = menu == "File" || menu == "Faset",
                    edit = menu == "Edit" || menu == "Scene",
                    help = menu == "Help" || menu == "View";
-        for (const auto* id :
-             {"new-3d", "new-2d", "open-path", "open-path-button", "save-path", "save-as-button"})
+        for (const auto* id : {"new-3d", "new-2d", "project-settings", "open-project", "open-path",
+                               "open-path-button", "save-path", "save-as-button"})
             ui.find(id)->visible = file;
+        ui.find("open-project")->enabled = project_switch_enabled;
+        ui.find("open-project")->tooltip =
+            project_switch_enabled ? "Return to project launcher"
+                                   : "Project switching is unavailable while MCP is connected";
+        auto* switching = ui.find("project-switch-dialog");
+        switching->visible = project_switch_warning;
+        switching->layout.x = std::max(0.f, (float(renderer.width()) - 500) * .5f);
+        switching->layout.y = std::max(0.f, (float(renderer.height()) - 220) * .5f);
         for (const auto* id : {"menu-duplicate", "menu-delete"})
             ui.find(id)->visible = edit;
         for (const auto* id : {"help-one", "help-two", "help-three"})
             ui.find(id)->visible = help;
-        popup.layout.height = file ? 260 : edit ? 112 : 150;
+        for (const auto* id : {"template-path", "save-template", "instance-template"})
+            ui.find(id)->visible = menu == "Scene";
+        popup.layout.height = file ? 335 : menu == "Scene" ? 220 : edit ? 112 : 150;
         popup.layout.x = menu == "File"    ? 70
                          : menu == "Edit"  ? 126
                          : menu == "Scene" ? 182
@@ -1106,6 +1820,168 @@ struct EditorUI::Impl {
             keep.insert(row.id);
         }
         trim_children(list, keep);
+    }
+    void open_project_settings() {
+        ui.clear_focus(false);
+        auto result = call("faset_project_settings_get");
+        if (result.is_null())
+            return;
+        project_settings_state = result;
+        const auto& settings = result.at("settings");
+        project_settings_dimension = settings.value("dimension", 3);
+        ui.update_text("project-settings-name", settings.value("name", std::string()), true);
+        ui.update_text("project-settings-start", settings.value("start_scene", std::string()),
+                       true);
+        project_settings_error.clear();
+        project_settings_open = true;
+        menu.clear();
+        auto& choices = *ui.find("project-settings-scenes");
+        choices.children.clear();
+        choices.scroll_y = 0;
+        std::set<std::string> saved;
+        for (const auto& doc : session.authoring().documents()) {
+            const auto path = doc.value("path", std::string());
+            if (!path.empty())
+                saved.insert(path);
+        }
+        try {
+            for (const auto* folder : {"Scenes", "Assets"}) {
+                const auto directory = session.config().project_root / folder;
+                if (!std::filesystem::is_directory(directory))
+                    continue;
+                std::size_t visited = 0;
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(
+                         directory, std::filesystem::directory_options::skip_permission_denied)) {
+                    if (++visited > 4000)
+                        break;
+                    if (entry.is_regular_file() &&
+                        entry.path().filename().string().ends_with(".scene.json"))
+                        saved.insert(
+                            std::filesystem::relative(entry.path(), session.config().project_root)
+                                .generic_string());
+                }
+            }
+        } catch (const std::exception& error) {
+            project_settings_error = error.what();
+        }
+        std::size_t index = 0;
+        for (const auto& path : saved) {
+            try {
+                const auto scene = read_json(project_path(session.config().project_root, path));
+                if (scene.value("format", "") != "faset.scene" || scene.value("version", 0) != 1)
+                    continue;
+            } catch (...) {
+                continue;
+            }
+            auto& choice =
+                choices.add(Kind::TreeRow, "project-scene-choice-" + std::to_string(index++), path);
+            choice.layout.height = 27;
+            choice.on_click = [this, path](Widget&) {
+                ui.update_text("project-settings-start", path, true);
+                project_settings_error.clear();
+            };
+        }
+        if (index == 0)
+            choices.add(Kind::Label, "project-settings-no-scenes",
+                        "Save a scene to choose it here.");
+    }
+    void save_project_settings() {
+        ui.clear_focus();
+        if (ui.editing())
+            return;
+        const auto name = ui.find("project-settings-name")->text;
+        const auto start = ui.find("project-settings-start")->text;
+        if (name.find_first_not_of(" \t\r\n") == std::string::npos) {
+            project_settings_error = "Enter a project name.";
+            return;
+        }
+        Json changes = {{"name", name}, {"dimension", project_settings_dimension}};
+        if (!start.empty() ||
+            !project_settings_state.at("settings").value("start_scene", std::string()).empty())
+            changes["start_scene"] = start;
+        const auto result =
+            call("faset_project_settings_set",
+                 {{"revision", project_settings_state.at("revision")}, {"settings", changes}});
+        if (result.is_null()) {
+            project_settings_error = status;
+            return;
+        }
+        project_settings_state = result;
+        project_settings_open = false;
+        project_settings_error.clear();
+        status = "Project settings saved for the next project open";
+    }
+    void refresh_project_settings() {
+        auto* panel = ui.find("project-settings-panel");
+        panel->visible = project_settings_open;
+        panel->layout.width = std::min(610.f, std::max(340.f, float(renderer.width()) - 40));
+        panel->layout.height = std::min(550.f, std::max(300.f, float(renderer.height()) - 40));
+        panel->layout.x = std::max(0.f, (float(renderer.width()) - panel->layout.width) * .5f);
+        panel->layout.y = std::max(0.f, (float(renderer.height()) - panel->layout.height) * .5f);
+        ui.find("project-settings-2d")->selected = project_settings_dimension == 2;
+        ui.find("project-settings-3d")->selected = project_settings_dimension == 3;
+        ui.find("project-settings-error")->text = project_settings_error;
+        for (auto& choice : ui.find("project-settings-scenes")->children)
+            if (choice->kind == Kind::TreeRow)
+                choice->selected = choice->text == ui.find("project-settings-start")->text;
+    }
+    void refresh_simulation() {
+        auto& panel = *ui.find("simulation-panel");
+        panel.visible = simulation_open;
+        panel.layout.x = std::max(0.f, (float(renderer.width()) - 470) / 2);
+        panel.layout.y = 90;
+        if (!simulation_open)
+            return;
+        const auto response = call("faset_simulation_get", {{"document", document}});
+        if (response.is_null())
+            return;
+        const auto settings = response.at("settings");
+        auto bind = [&, this](Widget& input, const std::string& field, int axis = -1) {
+            const auto id = input.id;
+            input.on_preview = [this, id](Widget&) {
+                edit_revisions.try_emplace(id, current.at("revision").get<std::uint64_t>());
+            };
+            input.on_cancel = [this, id](Widget&) { edit_revisions.erase(id); };
+            input.on_commit = [this, id, field, axis, settings](Widget& w) {
+                Json patch;
+                if (axis >= 0) {
+                    auto gravity = settings.at("gravity");
+                    gravity[axis] = w.value;
+                    patch = {{"gravity", gravity}};
+                } else if (field == "tick-rate") {
+                    if (w.value <= 0) {
+                        report("Tick rate must be positive");
+                        edit_revisions.erase(id);
+                        return;
+                    }
+                    patch = {{"fixed_delta", 1.0 / w.value}};
+                } else
+                    patch = {{field, std::int64_t(std::llround(w.value))}};
+                const auto revision = edit_revisions.contains(id)
+                                          ? edit_revisions[id]
+                                          : current.at("revision").get<std::uint64_t>();
+                const auto result =
+                    call("faset_simulation_set",
+                         {{"document", document}, {"revision", revision}, {"settings", patch}});
+                edit_revisions.erase(id);
+                if (!result.is_null()) {
+                    current = result;
+                    status = "Scene simulation updated for the next Play";
+                }
+            };
+        };
+        for (const std::string field : {"tick-rate", "max_catch_up_ticks", "physics_substeps"}) {
+            auto& input = *ui.find("simulation-" + field);
+            ui.update_number(input.id, field == "tick-rate"
+                                           ? 1.0 / settings.at("fixed_delta").get<double>()
+                                           : settings.at(field).get<double>());
+            bind(input, field);
+        }
+        for (int axis = 0; axis < 3; ++axis) {
+            auto& input = *ui.find("simulation-gravity-" + std::to_string(axis));
+            ui.update_number(input.id, settings.at("gravity")[axis].get<double>());
+            bind(input, "gravity", axis);
+        }
     }
     void refresh_recovery() {
         auto& panel = *ui.find("recovery-panel");
@@ -1193,6 +2069,9 @@ struct EditorUI::Impl {
                 }
         viewport = ui.find("viewport")->rect;
         rendered = view.build(scene, viewport.width / std::max(1.f, viewport.height), camera());
+        for (const auto& diagnostic : view.diagnostics())
+            if (seen_view_diagnostics.insert(diagnostic).second)
+                session.log("Viewport: " + diagnostic);
         rendered.scene_rect = {viewport.x, viewport.y, viewport.width, viewport.height};
         rendered.clear_color = ui.theme().background;
         const auto key = scene.dump() + assets.dump();
@@ -1246,7 +2125,7 @@ struct EditorUI::Impl {
                 render::DrawItem grid;
                 grid.mesh = render::cube_mesh();
                 grid.cast_shadow = false;
-                grid.color = {.12f, .12f, .13f, 1};
+                grid.color = {.035f, .035f, .04f, 1};
                 grid.model = render::transform({float(i), 0, 0}, {}, {.012f, .002f, 20});
                 rendered.draws.push_back(grid);
                 grid.model = render::transform({0, 0, float(i)}, {}, {20, .002f, .012f});
@@ -1254,13 +2133,19 @@ struct EditorUI::Impl {
             }
         }
         gizmo_valid = false;
-        if (auto* e = entity(scene, selected)) {
+        if (auto* e = entity(scene, selected);
+            e && component(*e, "faset.transform") &&
+            component(*e, "faset.transform")->value("version", 1) == 1) {
             gizmo_origin = point(world(scene, *e), {});
             gizmo_valid = project(gizmo_origin, gizmo_screen[0]);
             const auto length = is2d ? ortho * .12f : distance * .12f;
             for (int axis = 0; axis < 3; ++axis) {
                 Vec3 p = gizmo_origin;
-                p[axis] += length;
+                Vec3 direction{};
+                direction[axis] = 1;
+                if (gizmo_mode != "Move")
+                    direction = normalize(vector(world(scene, *e), direction));
+                p = add(p, mul(direction, length));
                 gizmo_valid = project(p, gizmo_screen[axis + 1]) && gizmo_valid;
             }
             if (gizmo_valid) {
@@ -1305,11 +2190,11 @@ struct EditorUI::Impl {
     bool start_gizmo(float x, float y) {
         if (!gizmo_valid)
             return false;
-        const auto* e = entity(current.at("scene"), selected);
+        const auto* e = entity(resolved, selected);
         if (!e)
             return false;
         const auto* c = component(*e, "faset.transform");
-        if (!c)
+        if (!c || c->value("version", 1) != 1)
             return false;
         float best = 8;
         int axis = -1;
@@ -1351,21 +2236,23 @@ struct EditorUI::Impl {
             delta[gizmo_axis] = amount * gizmo_world_length;
             if (snap)
                 delta[gizmo_axis] = std::round(delta[gizmo_axis] * 4) / 4;
-            const auto* e = entity(current.at("scene"), selected);
+            const auto* e = entity(resolved, selected);
             if (e && e->at("parent").is_string())
-                if (auto* parent =
-                        entity(current.at("scene"), e->at("parent").get<std::string>())) {
+                if (auto* parent = entity(resolved, e->at("parent").get<std::string>())) {
                     Mat4 inv;
-                    if (inverse(world(current.at("scene"), *parent), inv))
+                    if (inverse(world(resolved, *parent), inv))
                         delta = vector(inv, delta);
                 }
             auto position = vec(gizmo_original.at("position"));
             position = add(position, delta);
             preview_fields[gizmo_component + "/position"] = position;
         } else if (gizmo_mode == "Rotate") {
-            auto rotation = vec(gizmo_original.at("rotation"));
-            rotation[gizmo_axis] += snap ? std::round(amount * 12) * .261799f : amount * 3.141593f;
-            preview_fields[gizmo_component + "/rotation"] = rotation;
+            Vec3 delta{};
+            delta[gizmo_axis] = snap ? std::round(amount * 12) * .261799f : amount * 3.141593f;
+            const auto composed =
+                render::multiply(render::transform({}, vec(gizmo_original.at("rotation"))),
+                                 render::transform({}, delta));
+            preview_fields[gizmo_component + "/rotation"] = euler_xyz(composed);
         } else {
             auto scale = vec(gizmo_original.at("scale"));
             scale[gizmo_axis] *= std::max(.01f, 1 + amount);
@@ -1432,12 +2319,10 @@ struct EditorUI::Impl {
                                                             : "scale";
                 const auto key = gizmo_component + "/" + field;
                 if (preview_fields.contains(key))
-                    transaction(Json::array({{{"op", "component.set"},
-                                              {"entity", selected},
-                                              {"component", gizmo_component},
-                                              {"field", field},
-                                              {"value", preview_fields[key]}}}),
-                                gizmo_revision);
+                    if (const auto* object = entity(resolved, selected))
+                        transaction(Json::array({field_operation(*object, gizmo_component, field,
+                                                                 preview_fields[key])}),
+                                    gizmo_revision);
                 preview_fields.erase(key);
                 gizmo_axis = -1;
                 return true;
@@ -1454,9 +2339,24 @@ struct EditorUI::Impl {
         using Type = render::Event::Type;
         for (const auto& event : input) {
             if (event.type == Type::KeyDown && event.key == "Escape") {
+                if (project_settings_open) {
+                    project_settings_open = false;
+                    ui.clear_focus(false);
+                    continue;
+                }
+                if (project_switch_warning) {
+                    project_switch_warning = false;
+                    ui.clear_focus(false);
+                    continue;
+                }
                 if (gizmo_axis >= 0) {
                     gizmo_axis = -1;
                     preview_fields.clear();
+                    continue;
+                }
+                if (simulation_open) {
+                    simulation_open = false;
+                    ui.clear_focus(false);
                     continue;
                 }
                 if (palette || !menu.empty()) {
@@ -1473,8 +2373,14 @@ struct EditorUI::Impl {
                 mouse_x = event.x;
                 mouse_y = event.y;
             }
-            if ((palette || !recovery.empty()) && event.type == Type::MouseDown) {
-                auto* modal = ui.find(!recovery.empty() ? "recovery-panel" : "palette");
+            if ((palette || !recovery.empty() || simulation_open || project_switch_warning ||
+                 project_settings_open) &&
+                event.type == Type::MouseDown) {
+                auto* modal = ui.find(project_settings_open    ? "project-settings-panel"
+                                      : project_switch_warning ? "project-switch-dialog"
+                                      : !recovery.empty()      ? "recovery-panel"
+                                      : simulation_open        ? "simulation-panel"
+                                                               : "palette");
                 if (!modal->rect.contains(event.x, event.y))
                     continue;
             }
@@ -1483,6 +2389,10 @@ struct EditorUI::Impl {
                     continue;
             }
             if (ui.handle(event))
+                continue;
+            if ((project_switch_warning || !recovery.empty() || simulation_open ||
+                 project_settings_open) &&
+                event.type == Type::KeyDown)
                 continue;
             if (event.type == Type::KeyDown) {
                 if (event.control && (event.key == "S" || event.key == "s")) {
@@ -1494,6 +2404,9 @@ struct EditorUI::Impl {
                     continue;
                 }
                 if (event.control && (event.key == "P" || event.key == "p")) {
+                    ui.clear_focus();
+                    if (ui.editing())
+                        continue;
                     palette = !palette;
                     continue;
                 }
@@ -1515,6 +2428,7 @@ struct EditorUI::Impl {
     }
     void frame(const std::vector<render::Event>& events_) {
         session.poll();
+        poll_presentation();
         refresh();
         ui.layout(float(renderer.width()), float(renderer.height()));
         if (rendered.scene_rect[2] == 0)
@@ -1549,5 +2463,15 @@ const std::string& EditorUI::selected_entity() const {
 }
 void EditorUI::select_entity(const std::string& id) {
     impl_->select(id);
+}
+bool EditorUI::project_switch_requested() const {
+    return impl_->project_switch_requested;
+}
+void EditorUI::set_project_switch_enabled(bool enabled) {
+    impl_->project_switch_enabled = enabled;
+    if (!enabled) {
+        impl_->project_switch_requested = false;
+        impl_->project_switch_warning = false;
+    }
 }
 } // namespace faset::editor

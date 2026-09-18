@@ -8,6 +8,10 @@ add_library(faset_assets
 target_compile_features(faset_assets PUBLIC cxx_std_20)
 target_include_directories(faset_assets PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(faset_assets PUBLIC faset_asset_data PRIVATE faset_cgltf faset_stb)
+string(JSON FASET_CGLTF_COMMIT GET "${FASET_DEPENDENCY_LOCK}" dependencies cgltf commit)
+string(JSON FASET_STB_COMMIT GET "${FASET_DEPENDENCY_LOCK}" dependencies stb commit)
+target_compile_definitions(faset_assets PRIVATE
+    FASET_CGLTF_COMMIT="${FASET_CGLTF_COMMIT}" FASET_STB_COMMIT="${FASET_STB_COMMIT}")
 if(BUILD_TESTING)
     add_executable(faset_assets_tests ${PROJECT_SOURCE_DIR}/tests/assets_pipeline.cpp)
     target_link_libraries(faset_assets_tests PRIVATE faset_assets)

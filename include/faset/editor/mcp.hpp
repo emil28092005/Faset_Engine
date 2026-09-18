@@ -23,6 +23,8 @@ class StdioTransport {
     bool closed() const noexcept {
         return closed_;
     }
+    // Write failure closes this transport; a disconnected client never exits
+    // the Editor process. A GUI can continue after closed() becomes true.
     void send(const Json& message);
 
   private:

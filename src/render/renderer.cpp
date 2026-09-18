@@ -1,3 +1,4 @@
+#include "shader_contract.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <algorithm>
@@ -41,13 +42,14 @@ std::array<float, 4> point(const Mat4& m, std::array<float, 4> p) {
 struct Buffer {
     VkBuffer handle{};
     VkDeviceMemory memory{};
-    VkDeviceSize size{};
+    VkDeviceSize size{}, allocation_size{};
 };
 struct Image {
     VkImage handle{};
     VkDeviceMemory memory{};
     VkImageView view{};
     VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
+    VkDeviceSize allocation_size{};
 };
 struct Batch {
     std::uint32_t first{}, count{};
@@ -74,6 +76,7 @@ struct Renderer::Impl {
     float timestamp_period{};
     std::uint32_t timestamp_bits{};
     VkSemaphore acquired{}, present_ready{};
+    std::array<std::string, 3> shader_layouts{};
     VkSwapchainKHR swapchain{};
     VkFormat swap_format{};
     VkExtent2D swap_extent{};
@@ -186,16 +189,22 @@ struct Renderer::Impl {
         if (sdl)
             SDL_QuitSubSystem(SDL_INIT_VIDEO);
     }
-    std::uint32_t memory_type(std::uint32_t bits, VkMemoryPropertyFlags properties) {
+    std::uint32_t memory_type(std::uint32_t bits, VkMemoryPropertyFlags properties,
+                              VkMemoryPropertyFlags preferred = 0) {
         VkPhysicalDeviceMemoryProperties p{};
         vkGetPhysicalDeviceMemoryProperties(physical, &p);
+        if (preferred)
+            for (std::uint32_t i = 0; i < p.memoryTypeCount; ++i)
+                if ((bits & (1u << i)) && (p.memoryTypes[i].propertyFlags &
+                                           (properties | preferred)) == (properties | preferred))
+                    return i;
         for (std::uint32_t i = 0; i < p.memoryTypeCount; ++i)
             if ((bits & (1u << i)) && (p.memoryTypes[i].propertyFlags & properties) == properties)
                 return i;
         throw std::runtime_error("Required Vulkan memory type is unavailable");
     }
     Buffer make_buffer(VkDeviceSize bytes, VkBufferUsageFlags usage,
-                       VkMemoryPropertyFlags properties) {
+                       VkMemoryPropertyFlags properties, VkMemoryPropertyFlags preferred = 0) {
         Buffer b{};
         b.size = bytes;
         VkBufferCreateInfo info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -208,8 +217,9 @@ struct Renderer::Impl {
             vkGetBufferMemoryRequirements(device, b.handle, &req);
             VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
             alloc.allocationSize = req.size;
-            alloc.memoryTypeIndex = memory_type(req.memoryTypeBits, properties);
+            alloc.memoryTypeIndex = memory_type(req.memoryTypeBits, properties, preferred);
             check(vkAllocateMemory(device, &alloc, nullptr, &b.memory), "Allocate buffer memory");
+            b.allocation_size = req.size;
             check(vkBindBufferMemory(device, b.handle, b.memory, 0), "Bind buffer memory");
         } catch (...) {
             destroy(b);
@@ -240,6 +250,7 @@ struct Renderer::Impl {
                 memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
             check(vkAllocateMemory(device, &alloc, nullptr, &image.memory),
                   "Allocate image memory");
+            image.allocation_size = req.size;
             check(vkBindImageMemory(device, image.handle, image.memory, 0), "Bind image memory");
             VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             view.image = image.handle;
@@ -338,6 +349,7 @@ struct Renderer::Impl {
         bool validation = c.validation && std::any_of(layers.begin(), layers.end(), [](auto& p) {
                               return std::strcmp(p.layerName, "VK_LAYER_KHRONOS_validation") == 0;
                           });
+        statistics.validation_enabled = validation;
         if (c.validation && !validation)
             std::cerr << "[Faset] Vulkan validation layer not installed; diagnostics disabled.\n";
         if (validation)
@@ -488,9 +500,11 @@ struct Renderer::Impl {
                            VK_IMAGE_ASPECT_COLOR_BIT);
         depth = make_image(width, height, VK_FORMAT_D32_SFLOAT,
                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+        // CPU reads this allocation every frame. Prefer cached coherent memory when available.
         readback =
             make_buffer(VkDeviceSize(width) * height * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
         last_pixels.clear();
     }
     void make_swapchain() {
@@ -680,37 +694,34 @@ struct Renderer::Impl {
         auto [inserted, _] = textures.emplace(source.get(), std::move(texture));
         return inserted->second.descriptor;
     }
-    VkShaderModule shader(const char* name) {
+    std::filesystem::path shader_directory() const {
+        if (!config.shader_directory.empty())
+            return config.shader_directory;
         std::vector<std::filesystem::path> roots;
         const char* base = SDL_GetBasePath();
         if (base)
             roots.emplace_back(std::filesystem::path(base) / "shaders");
         roots.emplace_back(std::filesystem::current_path() / "shaders");
         roots.emplace_back(FASET_SHADER_DIRECTORY);
-        std::ifstream file;
-        for (const auto& root : roots) {
-            file.open(root / (std::string(name) + ".spv"), std::ios::binary | std::ios::ate);
-            if (file)
-                break;
-            file.clear();
-        }
-        if (!file)
-            throw std::runtime_error(std::string("Compiled Slang shader missing: ") + name +
-                                     ".spv");
-        auto size = file.tellg();
-        if (size <= 0 || size % 4 != 0)
-            throw std::runtime_error("Invalid SPIR-V byte length");
-        std::vector<std::uint32_t> bytes(static_cast<std::size_t>(size) / 4);
-        file.seekg(0);
-        file.read(reinterpret_cast<char*>(bytes.data()), size);
+        for (const auto& root : roots)
+            if (std::filesystem::is_regular_file(root / "vertexMain.spv"))
+                return root;
+        throw std::runtime_error("Compiled Slang shader bundle is missing");
+    }
+    VkShaderModule shader(const detail::ShaderCode& code) {
         VkShaderModuleCreateInfo ci{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        ci.codeSize = static_cast<std::size_t>(size);
-        ci.pCode = bytes.data();
+        ci.codeSize = code.words.size() * sizeof(std::uint32_t);
+        ci.pCode = code.words.data();
         VkShaderModule result{};
         check(vkCreateShaderModule(device, &ci, nullptr, &result), "Create shader module");
         return result;
     }
     void make_pipelines() {
+        const auto shaders = detail::load_shader_bundle(shader_directory());
+        for (std::size_t i = 0; i < shaders.size(); ++i)
+            if (!shader_layouts[i].empty() && shader_layouts[i] != shaders[i].layout_fingerprint)
+                throw std::runtime_error(
+                    "Shader layout changed; the current pipeline was preserved");
         VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                  sizeof(Push)};
         VkPipelineLayoutCreateInfo li{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
@@ -722,9 +733,9 @@ struct Renderer::Impl {
               "Create pipeline layout");
         VkShaderModule vertex{}, fragment{}, shadow_vertex{};
         try {
-            vertex = shader("vertexMain");
-            fragment = shader("fragmentMain");
-            shadow_vertex = shader("shadowMain");
+            vertex = shader(shaders[0]);
+            fragment = shader(shaders[1]);
+            shadow_vertex = shader(shaders[2]);
             for (int mode = 0; mode < 3; ++mode) {
                 bool shadow_pass = mode == 2, ui = mode == 1;
                 VkPipelineShaderStageCreateInfo stages[2]{};
@@ -821,6 +832,8 @@ struct Renderer::Impl {
             vkDestroyShaderModule(device, shadow_vertex, nullptr);
             throw;
         }
+        for (std::size_t i = 0; i < shaders.size(); ++i)
+            shader_layouts[i] = shaders[i].layout_fingerprint;
         vkDestroyShaderModule(device, vertex, nullptr);
         vkDestroyShaderModule(device, fragment, nullptr);
         vkDestroyShaderModule(device, shadow_vertex, nullptr);
@@ -953,12 +966,17 @@ struct Renderer::Impl {
     void render(const Snapshot& snapshot) {
         auto start = std::chrono::steady_clock::now();
         statistics.draw_calls = statistics.culled_meshes = 0;
+        bool can_present = surface != VK_NULL_HANDLE;
         if (surface) {
+            // A capture may render between normal event-loop iterations. Keep the window
+            // system progressing without consuming events intended for the editor.
+            SDL_PumpEvents();
             int w{}, h{};
             SDL_GetWindowSizeInPixels(window, &w, &h);
-            if (w <= 0 || h <= 0)
-                return;
-            if (dirty_swapchain || !swapchain)
+            can_present =
+                w > 0 && h > 0 &&
+                !(SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED));
+            if (can_present && (dirty_swapchain || !swapchain))
                 make_swapchain();
         }
         // Retire atlas/image resources no longer retained by a caller.
@@ -1077,19 +1095,21 @@ struct Renderer::Impl {
                   {direction[0], direction[1], direction[2], 0},
                   {snapshot.eye[0], snapshot.eye[1], snapshot.eye[2], 1}};
         std::optional<std::uint32_t> swap_index;
-        if (surface) {
+        if (can_present) {
             std::uint32_t index{};
-            auto result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, acquired,
-                                                VK_NULL_HANDLE, &index);
+            // Compositors can withhold images while a window is occluded. Rendering and
+            // editor capture must remain available even when presentation cannot advance.
+            const auto result =
+                vkAcquireNextImageKHR(device, swapchain, 0, acquired, VK_NULL_HANDLE, &index);
             if (result == VK_ERROR_OUT_OF_DATE_KHR) {
                 dirty_swapchain = true;
-                return;
-            }
-            if (result == VK_SUBOPTIMAL_KHR)
-                dirty_swapchain = true;
-            else
+            } else if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
+                swap_index = index;
+                if (result == VK_SUBOPTIMAL_KHR)
+                    dirty_swapchain = true;
+            } else if (result != VK_NOT_READY && result != VK_TIMEOUT) {
                 check(result, "Acquire swapchain image");
-            swap_index = index;
+            }
         }
         begin();
         if (timestamp_pool) {
@@ -1255,12 +1275,22 @@ struct Renderer::Impl {
                 check(result, "Present frame");
             check(vkQueueWaitIdle(queue), "Wait presentation");
         }
+        const auto readback_started = std::chrono::steady_clock::now();
         last_pixels.resize(std::size_t(width) * height * 4);
         check(vkMapMemory(device, readback.memory, 0, readback.size, 0, &mapped),
               "Map captured frame");
         std::memcpy(last_pixels.data(), mapped, last_pixels.size());
         vkUnmapMemory(device, readback.memory);
+        statistics.readback_cpu_ms = std::chrono::duration<double, std::milli>(
+                                         std::chrono::steady_clock::now() - readback_started)
+                                         .count();
         ++statistics.frame;
+        statistics.gpu_allocated_bytes = vertices.allocation_size + readback.allocation_size +
+                                         color.allocation_size + depth.allocation_size +
+                                         shadow.allocation_size;
+        statistics.texture_count = static_cast<std::uint32_t>(textures.size());
+        for (const auto& [_, texture] : textures)
+            statistics.gpu_allocated_bytes += texture.image.allocation_size;
         statistics.validation_errors = validation_errors.load();
         statistics.cpu_ms =
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)

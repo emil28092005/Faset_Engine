@@ -229,6 +229,34 @@ int main() {
         declarative.layout(200, 100);
         click(declarative, *declarative.find("run"));
         check(action == 1 && declarative.find("run")->text == "Run", "layout reload lost callback");
+        const auto initial_height = declarative.find("run")->layout.height;
+        const auto invalid_patch =
+            ui::Json{{"id", "root"},
+                     {"children",
+                      ui::Json::array({{{"id", "run"}, {"layout", {{"height", 99}}}},
+                                       {{"id", "bad-label"}, {"kind", "label"}, {"text", 123}}})}};
+        rejected = false;
+        try {
+            declarative.apply_layout(invalid_patch);
+        } catch (...) {
+            rejected = true;
+        }
+        check(rejected && declarative.find("run")->layout.height == initial_height &&
+                  !declarative.find("bad-label"),
+              "Layout validation must reject all changes before mutation");
+        rejected = false;
+        try {
+            declarative.apply_layout(
+                {{"id", "root"},
+                 {"children",
+                  ui::Json::array({{{"id", "new-parent"},
+                                    {"kind", "column"},
+                                    {"children", ui::Json::array({{{"id", "run"}}})}}})}});
+        } catch (...) {
+            rejected = true;
+        }
+        check(rejected && !declarative.find("new-parent"),
+              "Hot layout must not duplicate/reparent a retained widget ID");
         std::cout << "UI: UTF-8, shaping, text/IME/clipboard, focus, transactions, "
                      "layout, clipping, docking OK\n";
         return 0;

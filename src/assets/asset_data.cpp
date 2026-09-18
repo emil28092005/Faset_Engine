@@ -168,6 +168,10 @@ CookedAsset AssetStore::load_asset(const std::string& id) const {
         asset.meshes.push_back(std::move(mesh));
     }
     for (const auto& j : m.at("materials")) {
+        // Early development manifests embedded v1 materials without a tag.
+        // Preserve readability, but never interpret an explicitly unknown version.
+        if (j.value("format", "faset.material") != "faset.material" || j.value("version", 1) != 1)
+            throw std::runtime_error("Unsupported cooked material format or version");
         Material material;
         material.id = j.at("id");
         material.name = j.at("name");

@@ -58,6 +58,10 @@ Session::Session(SessionConfig config)
     if (std::filesystem::exists(schema))
         try {
             load_schema(schema);
+            const auto state = config_.project_root / ".faset/schema-state.json";
+            if (std::filesystem::exists(state))
+                schema_source_signature_ =
+                    read_json(state).value("source_signature", std::string());
         } catch (const std::exception& error) {
             log(std::string("Schema load failed: ") + error.what());
         }
@@ -77,8 +81,26 @@ void Session::log(std::string value) {
 }
 Json Session::project() const {
     const auto path = config_.project_root / "project.faset.json";
-    if (std::filesystem::exists(path))
-        return read_json(path);
+    if (std::filesystem::exists(path)) {
+        const auto value = read_json(path);
+        require(value.is_object() && value.value("format", "") == "faset.project" &&
+                    value.value("version", 0) == 1,
+                "project.version", "Unsupported project format or version");
+        require(value.contains("name") && value.at("name").is_string() &&
+                    !value.at("name").get<std::string>().empty(),
+                "project.name", "Project name must be a nonempty string");
+        const auto dimension = value.value("dimension", 3);
+        require(dimension == 2 || dimension == 3, "project.dimension",
+                "Project dimension must be 2 or 3");
+        if (value.contains("start_scene")) {
+            require(value.at("start_scene").is_string(), "project.start_scene",
+                    "Project start_scene must be a relative path");
+            const auto scene = value.at("start_scene").get<std::string>();
+            if (!scene.empty())
+                project_path(config_.project_root, scene);
+        }
+        return value;
+    }
     return {{"format", "faset.project"},
             {"version", 1},
             {"name", config_.project_root.filename().string()},
@@ -105,6 +127,26 @@ Json Session::assets_list() const {
             }
     return {{"assets", list}};
 }
+std::string Session::source_signature() const {
+    const auto directory = config_.project_root / "Scripts";
+    std::vector<std::filesystem::path> files;
+    if (std::filesystem::exists(directory))
+        for (const auto& file : std::filesystem::recursive_directory_iterator(directory))
+            if (file.is_regular_file())
+                files.push_back(file.path());
+    std::sort(files.begin(), files.end());
+    std::string contents;
+    for (const auto& file : files)
+        contents +=
+            file.lexically_relative(directory).generic_string() + ":" + sha256_file(file) + "\n";
+    return sha256(contents);
+}
+Json Session::schema_status() const {
+    return {{"loaded", schema_loaded_},
+            {"stale", !schema_loaded_ || schema_source_signature_ != source_signature() ||
+                          !schema_error_.empty()},
+            {"error", schema_error_}};
+}
 Json Session::jobs() const {
     Json list = Json::array();
     for (const auto& item : builds_.jobs())
@@ -124,6 +166,8 @@ void Session::load_schema(const std::filesystem::path& path) {
     const auto output = config_.project_root / ".faset/schema.json";
     if (std::filesystem::weakly_canonical(path) != std::filesystem::weakly_canonical(output))
         atomic_write_json(output, value);
+    schema_loaded_ = true;
+    schema_error_.clear();
     log("Gameplay schema loaded");
 }
 void Session::launch_player(Json scene, const std::filesystem::path& executable) {
@@ -170,20 +214,35 @@ void Session::poll() {
         if (observed_jobs_[value.id] == value.state)
             continue;
         observed_jobs_[value.id] = value.state;
-        if (value.state == "failed")
-            log(value.kind + " failed: " + value.error);
+        bool schema_valid = true;
+        if (value.state == "failed") {
+            schema_error_ = value.error;
+            log(value.kind + " failed: " + value.error +
+                "; previous gameplay metadata remains available and is marked stale");
+        }
         if (value.state == "succeeded") {
             log(value.kind + " completed");
             if (value.result.contains("schema"))
                 try {
                     load_schema(value.result.at("schema").get<std::string>());
+                    // This signature represents the sources submitted with this job, not later
+                    // edits.
+                    if (value.result.contains("source_signature"))
+                        schema_source_signature_ =
+                            value.result.at("source_signature").get<std::string>();
+                    else if (submitted_sources_.contains(value.id))
+                        schema_source_signature_ = submitted_sources_.at(value.id);
+                    atomic_write_json(config_.project_root / ".faset/schema-state.json",
+                                      {{"source_signature", schema_source_signature_}});
                 } catch (const std::exception& error) {
+                    schema_valid = false;
+                    schema_error_ = error.what();
                     log(std::string("Schema update failed: ") + error.what());
                 }
         }
         if (value.id == pending_play_job_ && value.finished()) {
             pending_play_job_.clear();
-            if (value.state == "succeeded")
+            if (value.state == "succeeded" && schema_valid)
                 try {
                     const auto executable =
                         value.result.value("player", (builds_.config().build_directory /
@@ -243,66 +302,124 @@ void Session::register_commands() {
         "faset_project", "Read the authoring project's settings.", schema(Json::object()),
         [&](const Json&) { return project(); }, true);
     commands_.add(
+        "faset_project_settings_get", "Read project settings and their content revision.",
+        schema(Json::object()),
+        [&](const Json&) {
+            const auto value = project();
+            return Json{{"settings", value}, {"revision", sha256(value.dump())}};
+        },
+        true);
+    commands_.add(
+        "faset_project_settings_set",
+        "Save project name, initial scene dimension or start scene with an expected content "
+        "revision. Applies on the next project open; does not change the active scene or its Undo "
+        "history.",
+        schema({{"revision", text}, {"settings", {{"type", "object"}}}}, {"revision", "settings"}),
+        [&](const Json& args) {
+            auto value = project();
+            require(args.at("revision") == sha256(value.dump()), "revision.conflict",
+                    "Project settings changed; reload them before saving");
+            const auto& changes = args.at("settings");
+            for (const auto& [key, field] : changes.items()) {
+                require(key == "name" || key == "dimension" || key == "start_scene",
+                        "project.setting", "Unknown editable project setting: " + key);
+                if (key == "name")
+                    require(field.is_string() && !field.get<std::string>().empty(), "project.name",
+                            "Project name must be a nonempty string");
+                else if (key == "dimension")
+                    require(field.is_number_integer() && (field == 2 || field == 3),
+                            "project.dimension", "Initial scene dimension must be 2 or 3");
+                else {
+                    require(field.is_string() && !field.get<std::string>().empty(),
+                            "project.start_scene", "Choose a saved scene inside the project");
+                    const auto file = project_path(config_.project_root, field.get<std::string>());
+                    require(std::filesystem::is_regular_file(file), "project.start_scene",
+                            "Save the start scene before selecting it in Project settings");
+                    const auto scene = read_json(file);
+                    require(scene.value("format", "") == "faset.scene" &&
+                                scene.value("version", 0) == 1,
+                            "project.start_scene",
+                            "The start scene must be a supported Faset scene");
+                }
+                value[key] = field;
+            }
+            if (!value.contains("id"))
+                value["id"] = new_id();
+            atomic_write_json(config_.project_root / "project.faset.json", value);
+            log("Project settings saved; changes apply on next project open");
+            return Json{{"settings", value}, {"revision", sha256(value.dump())}};
+        });
+    commands_.add(
         "faset_assets", "List imported asset manifests and resource identities.",
         schema(Json::object()), [&](const Json&) { return assets_list(); }, true);
-    commands_.add("faset_import",
-                  "Import GLB/glTF or a Blender export manifest relative to this project. Returns "
-                  "a cancellable job ID; failure retains the last successful generation.",
-                  schema({{"path", text},
-                          {"settings", {{"type", "object"}}},
-                          {"allow_removed_outputs", boolean}},
-                         {"path"}),
-                  [&](const Json& args) {
-                      assets::ImportRequest request;
-                      request.source =
-                          project_path(config_.project_root, args.at("path").get<std::string>());
-                      request.settings = args.value("settings", Json(nullptr));
-                      request.allow_removed_outputs = args.value("allow_removed_outputs", false);
-                      auto task = std::make_shared<ImportTask>();
-                      task->id = "import-" + new_id();
-                      imports_[task->id] = task;
-                      workers_.emplace_back([this, task, request] {
-                          {
-                              std::lock_guard lock(task->mutex);
-                              task->state = "running";
-                          }
-                          try {
-                              const auto result = assets_.import_asset(request, *task->job);
-                              std::lock_guard lock(task->mutex);
-                              task->state =
-                                  result.status == assets::ImportStatus::succeeded   ? "succeeded"
+    commands_.add(
+        "faset_import",
+        "Import PNG/JPEG, GLB/glTF, or a Blender export manifest relative to this project. Returns "
+        "a cancellable job ID; failure retains the last successful generation.",
+        schema({{"path", text},
+                {"settings", {{"type", "object"}}},
+                {"allow_removed_outputs", boolean}},
+               {"path"}),
+        [&](const Json& args) {
+            assets::ImportRequest request;
+            request.source = project_path(config_.project_root, args.at("path").get<std::string>());
+            request.settings = args.value("settings", Json(nullptr));
+            request.allow_removed_outputs = args.value("allow_removed_outputs", false);
+            auto task = std::make_shared<ImportTask>();
+            task->id = "import-" + new_id();
+            imports_[task->id] = task;
+            workers_.emplace_back([this, task, request] {
+                {
+                    std::lock_guard lock(task->mutex);
+                    task->state = "running";
+                }
+                try {
+                    const auto result = assets_.import_asset(request, *task->job);
+                    std::lock_guard lock(task->mutex);
+                    task->state = result.status == assets::ImportStatus::succeeded   ? "succeeded"
                                   : result.status == assets::ImportStatus::cancelled ? "cancelled"
                                   : result.status == assets::ImportStatus::conflict  ? "conflict"
                                                                                      : "failed";
-                              task->result = {{"asset_id", result.asset_id},
-                                              {"generation", result.generation},
-                                              {"diagnostics", result.diagnostics},
-                                              {"cache_hit", result.cache_hit},
-                                              {"manifest", result.manifest}};
-                              for (const auto& message : result.diagnostics)
-                                  task->error += message + "\n";
-                          } catch (const std::exception& error) {
-                              std::lock_guard lock(task->mutex);
-                              task->state = "failed";
-                              task->error = error.what();
-                          }
-                      });
-                      return Json{{"job", task->id}};
-                  });
+                    task->result = {{"asset_id", result.asset_id},
+                                    {"generation", result.generation},
+                                    {"diagnostics", result.diagnostics},
+                                    {"cache_hit", result.cache_hit},
+                                    {"manifest", result.manifest}};
+                    for (const auto& message : result.diagnostics)
+                        task->error += message + "\n";
+                } catch (const std::exception& error) {
+                    std::lock_guard lock(task->mutex);
+                    task->state = "failed";
+                    task->error = error.what();
+                }
+            });
+            return Json{{"job", task->id}};
+        });
+    commands_.add(
+        "faset_schema_status",
+        "Report whether the last successful gameplay schema matches current project scripts. "
+        "Failed builds retain metadata but mark it stale.",
+        schema(Json::object()), [&](const Json&) { return schema_status(); }, true);
     commands_.add("faset_build",
                   "Incrementally compile C++ gameplay and export its metadata in separate native "
                   "processes. Returns a job ID.",
-                  schema(Json::object()),
-                  [&](const Json&) { return Json{{"job", builds_.start_build()}}; });
+                  schema(Json::object()), [&](const Json&) {
+                      const auto signature = source_signature();
+                      const auto id = builds_.start_build();
+                      submitted_sources_[id] = signature;
+                      return Json{{"job", id}};
+                  });
     commands_.add("faset_export",
                   "Build, validate and export a resolved authoring snapshot to a project-relative "
                   "output directory. Returns a job ID.",
                   schema({{"document", text}, {"output", text}}, {"document", "output"}),
                   [&](const Json& args) {
-                      return Json{{"job", builds_.start_export(
-                                              resolved_or_throw(commands_, args.at("document")),
-                                              project_path(config_.project_root,
-                                                           args.at("output").get<std::string>()))}};
+                      const auto signature = source_signature();
+                      const auto id = builds_.start_export(
+                          resolved_or_throw(commands_, args.at("document")),
+                          project_path(config_.project_root, args.at("output").get<std::string>()));
+                      submitted_sources_[id] = signature;
+                      return Json{{"job", id}};
                   });
     commands_.add(
         "faset_jobs", "List editor import/build/export jobs and their progress.",
@@ -326,7 +443,9 @@ void Session::register_commands() {
                   schema({{"document", text}}, {"document"}), [&](const Json& args) {
                       stop_player();
                       pending_play_scene_ = resolved_or_throw(commands_, args.at("document"));
+                      const auto signature = source_signature();
                       pending_play_job_ = builds_.start_build();
+                      submitted_sources_[pending_play_job_] = signature;
                       return Json{{"job", pending_play_job_}, {"play_pending", true}};
                   });
     commands_.add(

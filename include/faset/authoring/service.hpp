@@ -9,6 +9,7 @@
 
 namespace faset::authoring {
 Json make_scene(std::string name, int dimension = 3);
+Json default_simulation_settings();
 Json make_entity(const SchemaRegistry& schemas, std::string name, const std::string& parent = "");
 void validate_scene(const Json& scene, const SchemaRegistry& schemas);
 

@@ -1,0 +1,659 @@
+{
+  "format": "faset.scene",
+  "version": 1,
+  "id": "example-collect-2d-scene",
+  "name": "Collect & Escape 2D \u2014 WASD / Space / E reset",
+  "dimension": 2,
+  "simulation": {
+    "fixed_delta": 0.016666666666666666,
+    "max_catch_up_ticks": 4,
+    "physics_substeps": 4,
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ]
+  },
+  "entities": [
+    {
+      "id": "floor",
+      "name": "Ground",
+      "parent": null,
+      "components": [
+        {
+          "id": "floor-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              0,
+              -0.75,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "floor-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              0.2,
+              0.3,
+              0.39,
+              1
+            ],
+            "size": [
+              21,
+              0.5
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        },
+        {
+          "id": "floor-faset.rigid_body_2d",
+          "type": "faset.rigid_body_2d",
+          "version": 1,
+          "fields": {
+            "body_type": "static",
+            "half_extents": [
+              10.5,
+              0.25
+            ],
+            "density": 1,
+            "friction": 0.4,
+            "restitution": 0,
+            "gravity_scale": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "platform",
+      "name": "Jump platform",
+      "parent": null,
+      "components": [
+        {
+          "id": "platform-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "platform-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              0.35,
+              0.44,
+              0.55,
+              1
+            ],
+            "size": [
+              2,
+              1
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        },
+        {
+          "id": "platform-faset.rigid_body_2d",
+          "type": "faset.rigid_body_2d",
+          "version": 1,
+          "fields": {
+            "body_type": "static",
+            "half_extents": [
+              1.0,
+              0.5
+            ],
+            "density": 1,
+            "friction": 0.4,
+            "restitution": 0,
+            "gravity_scale": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "left-wall",
+      "name": "Left boundary",
+      "parent": null,
+      "components": [
+        {
+          "id": "left-wall-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              -10.25,
+              1,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "left-wall-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              0.2,
+              0.3,
+              0.39,
+              1
+            ],
+            "size": [
+              0.5,
+              3.5
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        },
+        {
+          "id": "left-wall-faset.rigid_body_2d",
+          "type": "faset.rigid_body_2d",
+          "version": 1,
+          "fields": {
+            "body_type": "static",
+            "half_extents": [
+              0.25,
+              1.75
+            ],
+            "density": 1,
+            "friction": 0.4,
+            "restitution": 0,
+            "gravity_scale": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "right-wall",
+      "name": "Right boundary",
+      "parent": null,
+      "components": [
+        {
+          "id": "right-wall-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              10.25,
+              1,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "right-wall-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              0.2,
+              0.3,
+              0.39,
+              1
+            ],
+            "size": [
+              0.5,
+              3.5
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        },
+        {
+          "id": "right-wall-faset.rigid_body_2d",
+          "type": "faset.rigid_body_2d",
+          "version": 1,
+          "fields": {
+            "body_type": "static",
+            "half_extents": [
+              0.25,
+              1.75
+            ],
+            "density": 1,
+            "friction": 0.4,
+            "restitution": 0,
+            "gravity_scale": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "token_1",
+      "name": "Gold pickup 1",
+      "parent": null,
+      "components": [
+        {
+          "id": "token_1-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              -5,
+              0.35,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "token_1-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              1,
+              0.68,
+              0.14,
+              1
+            ],
+            "size": [
+              0.5,
+              0.5
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "token_2",
+      "name": "Gold pickup 2",
+      "parent": null,
+      "components": [
+        {
+          "id": "token_2-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              0,
+              1.35,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "token_2-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              1,
+              0.68,
+              0.14,
+              1
+            ],
+            "size": [
+              0.5,
+              0.5
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "token_3",
+      "name": "Gold pickup 3",
+      "parent": null,
+      "components": [
+        {
+          "id": "token_3-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              5,
+              0.35,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "token_3-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              1,
+              0.68,
+              0.14,
+              1
+            ],
+            "size": [
+              0.5,
+              0.5
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "gate",
+      "name": "Collect all three to open",
+      "parent": null,
+      "components": [
+        {
+          "id": "gate-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              7,
+              1,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "gate-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              0.9,
+              0.23,
+              0.16,
+              1
+            ],
+            "size": [
+              0.45,
+              3
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        },
+        {
+          "id": "gate-faset.rigid_body_2d",
+          "type": "faset.rigid_body_2d",
+          "version": 1,
+          "fields": {
+            "body_type": "static",
+            "half_extents": [
+              0.225,
+              1.5
+            ],
+            "density": 1,
+            "friction": 0.4,
+            "restitution": 0,
+            "gravity_scale": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "goal",
+      "name": "Green exit",
+      "parent": null,
+      "components": [
+        {
+          "id": "goal-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              8.5,
+              0.15,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "goal-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              0.15,
+              0.9,
+              0.47,
+              1
+            ],
+            "size": [
+              0.85,
+              0.3
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "win_marker",
+      "name": "Victory marker",
+      "parent": null,
+      "components": [
+        {
+          "id": "win_marker-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              8.5,
+              3.0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "win_marker-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              1,
+              0.68,
+              0.14,
+              1
+            ],
+            "size": [
+              1,
+              1
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "player",
+      "name": "Blue player block",
+      "parent": null,
+      "components": [
+        {
+          "id": "player-faset.transform",
+          "type": "faset.transform",
+          "version": 1,
+          "fields": {
+            "position": [
+              -8,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "id": "player-faset.sprite",
+          "type": "faset.sprite",
+          "version": 1,
+          "fields": {
+            "color": [
+              0.12,
+              0.65,
+              1,
+              1
+            ],
+            "size": [
+              1,
+              1
+            ],
+            "texture": "",
+            "layer": 0
+          }
+        },
+        {
+          "id": "player-faset.rigid_body_2d",
+          "type": "faset.rigid_body_2d",
+          "version": 1,
+          "fields": {
+            "body_type": "dynamic",
+            "half_extents": [
+              0.5,
+              0.5
+            ],
+            "density": 1,
+            "friction": 0,
+            "restitution": 0,
+            "gravity_scale": 1
+          }
+        },
+        {
+          "id": "player-example.collector_2d",
+          "type": "example.collector_2d",
+          "version": 1,
+          "fields": {
+            "speed": 4,
+            "jump_speed": 6,
+            "gate": "gate",
+            "goal": "goal",
+            "win_marker": "win_marker",
+            "token_1": "token_1",
+            "token_2": "token_2",
+            "token_3": "token_3"
+          }
+        }
+      ]
+    }
+  ],
+  "instances": []
+}

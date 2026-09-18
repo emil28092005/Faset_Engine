@@ -80,6 +80,28 @@ int main() {
         atomic_write(root / "Scenes/courtyard.scene.json",
                      read_text(root / "Scenes/courtyard.scene.json") + "\n");
         fails([&] { restarted.save(id); }, "save.disk_conflict");
+        const auto configured = service.create("Configured scene");
+        const std::string configured_id = configured.at("id");
+        const auto setting = service.transact(
+            configured_id, 0,
+            Json::array({{{"op", "scene.simulation"},
+                          {"value", {{"fixed_delta", 0.02}, {"gravity", {0, -10, 0}}}}}}));
+        CHECK(setting["scene"]["simulation"]["fixed_delta"] == 0.02);
+        fails(
+            [&] {
+                service.transact(configured_id, 1,
+                                 Json::array({{{"op", "scene.simulation"},
+                                               {"value", {{"max_catch_up_ticks", 1.5}}}}}));
+            },
+            "simulation.integer");
+        fails(
+            [&] {
+                service.transact(
+                    configured_id, 1,
+                    Json::array({{{"op", "scene.simulation"}, {"value", {{"fixed_delta", 0}}}}}));
+            },
+            "simulation.fixed_delta");
+        CHECK(!service.undo(configured_id, 1)["scene"].contains("simulation"));
         // Parent cycles are rejected atomically; names never provide identity.
         fails(
             [&] {
@@ -90,6 +112,25 @@ int main() {
             },
             "entity.cycle");
         CHECK(service.query(id)["revision"] == 5);
+        // A failed recovery publication rejects the entire mutation and its Undo record.
+        const auto fault = service.create("Journal failure");
+        const std::string fault_id = fault["id"];
+        const auto journal = root / ".faset/recovery" / (fault_id + ".json");
+        const auto saved_journal = read_text(journal);
+        std::filesystem::remove(journal);
+        std::filesystem::create_directory(journal);
+        bool journal_failed = false;
+        try {
+            service.transact(
+                fault_id, 0,
+                Json::array({{{"op", "entity.create"}, {"name", "Must not publish"}}}));
+        } catch (const std::exception&) {
+            journal_failed = true;
+        }
+        CHECK(journal_failed);
+        CHECK(service.query(fault_id) == fault);
+        std::filesystem::remove(journal);
+        atomic_write(journal, saved_journal);
         // Unavailable extension data is retained, including fields unknown to this SDK.
         auto unknown = make_entity(schemas, "Plugin object");
         unknown["components"].push_back({{"id", new_id()},
@@ -127,6 +168,82 @@ int main() {
         source["entities"] = Json::array();
         CHECK(resolve_templates(outer, schemas, loader).conflicts.size() == 1);
         CHECK(outer["instances"][0]["overrides"].size() == 1);
+        // Template deletion, suppression restore and source repair are normal Undo transactions.
+        auto template_doc = service.create("Template management");
+        const std::string template_id = template_doc["id"];
+        service.transact(
+            template_id, 0,
+            Json::array({{{"op", "template.instance"},
+                          {"instance", {{"id", "inst"}, {"source", "Scenes/absent.json"}}}}}));
+        const Json suppressed = {{"path", Json::array()}, {"object", entity_id}};
+        service.transact(
+            template_id, 1,
+            Json::array(
+                {{{"op", "template.suppress"}, {"instance", "inst"}, {"value", suppressed}}}));
+        auto restored = service.transact(
+            template_id, 2,
+            Json::array(
+                {{{"op", "template.restore"}, {"instance", "inst"}, {"address", suppressed}},
+                 {{"op", "template.source_set"},
+                  {"instance", "inst"},
+                  {"source", "Scenes/courtyard.scene.json"}}}));
+        CHECK(restored["scene"]["instances"][0]["suppressed"].empty());
+        CHECK(service
+                  .transact(template_id, 3,
+                            Json::array({{{"op", "template.remove"},
+                                          {"instance", "inst"}}}))["scene"]["instances"]
+                  .empty());
+        CHECK(service.undo(template_id, 4)["scene"]["instances"].size() == 1);
+        const auto added = make_entity(schemas, "Local object");
+        service.transact(
+            template_id, 5,
+            Json::array({{{"op", "template.add"}, {"instance", "inst"}, {"value", added}}}));
+        auto replacement = added;
+        replacement["name"] = "Edited local object";
+        replacement["components"].push_back({{"id", new_id()},
+                                             {"type", "faset.mesh"},
+                                             {"version", 1},
+                                             {"fields", schemas.default_fields("faset.mesh")}});
+        const auto replaced = service.transact(
+            template_id, 6,
+            Json::array(
+                {{{"op", "template.addition_set"}, {"instance", "inst"}, {"value", replacement}}}));
+        CHECK(replaced["scene"]["instances"][0]["additions"][0]["components"].size() == 2);
+        auto malformed = replacement;
+        malformed["components"][1]["fields"]["primitive"] = "unsupported";
+        fails(
+            [&] {
+                service.transact(template_id, 7,
+                                 Json::array({{{"op", "template.addition_set"},
+                                               {"instance", "inst"},
+                                               {"value", malformed}}}));
+            },
+            "validation.enum");
+        // Malformed address records never reach journals; valid unresolved targets stay
+        // recoverable.
+        for (const auto& broken : Json::array(
+                 {{{"id", "bad"},
+                   {"source", "missing"},
+                   {"overrides", Json::array({{{"address", "oops"}, {"value", 42}}})}},
+                  {{"id", "bad"},
+                   {"source", "missing"},
+                   {"suppressed", Json::array({{{"object", "ok"}, {"path", 42}}})}},
+                  {{"id", "bad"},
+                   {"source", "missing"},
+                   {"reparents",
+                    Json::array({{{"object", {{"object", "ok"}}}, {"parent", false}}})}}})) {
+            const auto before = service.query(template_id);
+            bool rejected = false;
+            try {
+                service.transact(
+                    template_id, before["revision"],
+                    Json::array({{{"op", "template.instance"}, {"instance", broken}}}));
+            } catch (const Error&) {
+                rejected = true;
+            }
+            CHECK(rejected);
+            CHECK(service.query(template_id) == before);
+        }
         // Stable FieldId survives a label rename; incompatible migrations require an explicit
         // decision.
         SchemaRegistry newer;
@@ -147,6 +264,53 @@ int main() {
         CHECK(migrated["fields"]["speed"] == 3.0);
         CHECK(migrated["fields"]["enabled"] == true);
         CHECK(migrated["fields"]["unrecognized"] == "preserve");
+        // Local additions and overrides remap references within their own instance; future schemas
+        // stay opaque.
+        auto refs = builtin_schemas();
+        refs.register_schema({{"id", "ref"},
+                              {"version", 1},
+                              {"fields", {{"target", {{"type", "entity_ref"}, {"default", ""}}}}}});
+        auto ref_entity = [&](const std::string& name, const std::string& target, int version = 1) {
+            return Json{
+                {"id", name},
+                {"name", name},
+                {"parent", nullptr},
+                {"components",
+                 Json::array({{{"id", name + "-ref"},
+                               {"type", "ref"},
+                               {"version", version},
+                               {"fields", {{"target", target}, {"opaque", {{"saved", true}}}}}}})}};
+        };
+        auto ref_source = make_scene("References");
+        ref_source["entities"] =
+            Json::array({ref_entity("a", "b"), ref_entity("b", "a"), ref_entity("future", "a", 2)});
+        auto ref_outer = make_scene("Instances");
+        ref_outer["instances"] = Json::array(
+            {{{"id", "ref-instance"},
+              {"source", "ref-source"},
+              {"additions", Json::array({ref_entity("local", "b")})},
+              {"overrides",
+               Json::array(
+                   {{{"address", {{"object", "a"}, {"component", "a-ref"}, {"field", "target"}}},
+                     {"value", "local"}}})}}});
+        const auto ref_result =
+            resolve_templates(ref_outer, refs, [&](const std::string&) { return ref_source; });
+        CHECK(ref_result.conflicts.empty());
+        const auto& re = ref_result.scene["entities"];
+        CHECK(re[0]["components"][0]["fields"]["target"] == re[3]["id"]);
+        CHECK(re[3]["components"][0]["fields"]["target"] == re[1]["id"]);
+        CHECK(re[2]["components"][0]["fields"] ==
+              ref_source["entities"][2]["components"][0]["fields"]);
+        AuthoringService opaque(root / "opaque", refs);
+        const auto opaque_doc = opaque.create("Future");
+        const std::string opaque_id = opaque_doc["id"];
+        opaque.transact(
+            opaque_id, 0,
+            Json::array({{{"op", "entity.create"}, {"entity", ref_entity("a", "a", 2)}}}));
+        const auto duplicated = opaque.transact(
+            opaque_id, 1, Json::array({{{"op", "entity.duplicate"}, {"entity", "a"}}}));
+        CHECK(duplicated["scene"]["entities"][1]["components"][0]["fields"] ==
+              duplicated["scene"]["entities"][0]["components"][0]["fields"]);
         // Full TRS reparent, including parent rotation/scale, preserves world placement.
         auto hierarchy = make_scene("Transforms");
         auto parent = make_entity(schemas, "Parent");

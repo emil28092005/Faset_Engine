@@ -32,14 +32,30 @@ struct Resolver {
                 return &item;
         return nullptr;
     }
+    void remap_references(Json& entity, const std::map<std::string, std::string>& mapping) {
+        for (auto& component : entity["components"]) {
+            const auto type = component.at("type").get<std::string>();
+            if (!schemas.contains(type))
+                continue;
+            const auto metadata = schemas.schema(type);
+            if (component.value("version", 1) != metadata.value("version", 1))
+                continue;
+            for (auto& [field, value] : component["fields"].items())
+                if (metadata["fields"].contains(field) &&
+                    metadata["fields"][field].value("type", std::string()) == "entity_ref" &&
+                    value.is_string() && mapping.contains(value.get<std::string>()))
+                    value = mapping.at(value.get<std::string>());
+        }
+    }
     Json expand(const Json& scene, const Json& path) {
         require(path.size() <= 32, "template.depth", "Maximum template nesting depth exceeded");
         validate_scene(scene, schemas);
         Json output = Json::array();
-        std::map<std::string, std::string> ids;
+        std::map<std::string, std::string> ids, entity_ids;
         for (const auto& item : scene["entities"]) {
             const auto id = item.at("id").get<std::string>();
             ids[id] = path.empty() ? id : scoped_id(root, path, id);
+            entity_ids[id] = ids[id];
             for (const auto& component : item["components"]) {
                 const auto cid = component.at("id").get<std::string>();
                 ids[cid] = path.empty() ? cid : scoped_id(root, path, cid);
@@ -56,16 +72,8 @@ struct Resolver {
                 const auto source_id = component.at("id").get<std::string>();
                 component["id"] = ids.at(source_id);
                 component["source_id"] = source_id;
-                const auto type = component.at("type").get<std::string>();
-                if (!schemas.contains(type))
-                    continue;
-                const auto metadata = schemas.schema(type);
-                for (auto& [field, value] : component["fields"].items())
-                    if (metadata["fields"].contains(field) &&
-                        metadata["fields"][field].value("type", std::string()) == "entity_ref" &&
-                        value.is_string() && ids.contains(value.get<std::string>()))
-                        value = ids.at(value.get<std::string>());
             }
+            remap_references(item, entity_ids);
             output.push_back(std::move(item));
         }
         for (const auto& instance : scene.value("instances", Json::array())) {
@@ -89,19 +97,37 @@ struct Resolver {
                          {{"source", source_name}, {"message", error.what()}});
                 continue;
             }
+            std::map<std::string, std::string> local_ids;
+            for (const auto& entity : expanded)
+                if (entity.at("origin").at("path") == nested_path)
+                    local_ids[entity.at("origin").at("object").get<std::string>()] =
+                        entity.at("id").get<std::string>();
+            for (const auto& addition : instance.value("additions", Json::array())) {
+                const auto id = addition.at("id").get<std::string>();
+                require(!local_ids.contains(id), "template.addition_id_collision",
+                        "Local addition reuses a source object ID");
+                local_ids[id] = scoped_id(root, nested_path, id);
+            }
             for (const auto& addition : instance.value("additions", Json::array())) {
                 Json item = addition;
                 const auto id = item.at("id").get<std::string>();
                 item["id"] = scoped_id(root, nested_path, id);
                 item["origin"] = {{"path", nested_path}, {"object", id}, {"local", true}};
-                if (item.contains("parent") && !item["parent"].is_null())
-                    item["parent"] =
-                        scoped_id(root, nested_path, item["parent"].get<std::string>());
+                if (item.contains("parent") && !item["parent"].is_null()) {
+                    const auto parent = item["parent"].get<std::string>();
+                    if (local_ids.contains(parent))
+                        item["parent"] = local_ids.at(parent);
+                    else {
+                        conflict(nested_path, "addition.parent_missing", addition);
+                        item["parent"] = nullptr;
+                    }
+                }
                 for (auto& component : item["components"]) {
                     const auto cid = component.at("id").get<std::string>();
                     component["source_id"] = cid;
                     component["id"] = scoped_id(root, nested_path, cid);
                 }
+                remap_references(item, local_ids);
                 expanded.push_back(std::move(item));
             }
             for (const auto& change : instance.value("overrides", Json::array())) {
@@ -126,9 +152,25 @@ struct Resolver {
                     conflict(nested_path, "override.field_unavailable", change);
                     continue;
                 }
+                if (found->value("version", 1) != schemas.schema(type).value("version", 1)) {
+                    conflict(nested_path, "override.schema_version", change);
+                    continue;
+                }
                 try {
                     validate_field(change.at("value"), schemas.schema(type)["fields"][field]);
-                    (*found)["fields"][field] = change.at("value");
+                    auto value = change.at("value");
+                    if (schemas.schema(type)["fields"][field].value("type", std::string()) ==
+                            "entity_ref" &&
+                        value.is_string()) {
+                        for (const auto& target_entity : expanded)
+                            if (target_entity.at("origin").at("path") ==
+                                    item->at("origin").at("path") &&
+                                target_entity.at("origin").at("object") == value) {
+                                value = target_entity.at("id");
+                                break;
+                            }
+                    }
+                    (*found)["fields"][field] = std::move(value);
                 } catch (const std::exception& error) {
                     conflict(nested_path, "override.invalid",
                              {{"change", change}, {"message", error.what()}});

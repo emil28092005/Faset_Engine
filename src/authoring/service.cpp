@@ -48,6 +48,12 @@ bool valid_id(const Json& value) {
                std::string::npos;
 }
 } // namespace
+Json default_simulation_settings() {
+    return {{"fixed_delta", 1.0 / 60.0},
+            {"max_catch_up_ticks", 4},
+            {"physics_substeps", 4},
+            {"gravity", {0, -9.81, 0}}};
+}
 Json make_scene(std::string name, int dimension) {
     require(dimension == 2 || dimension == 3, "scene.dimension", "Scene dimension must be 2 or 3");
     return {{"format", "faset.scene"},   {"version", 1},           {"id", new_id()},
@@ -77,6 +83,26 @@ void validate_scene(const Json& scene, const SchemaRegistry& schemas) {
     require(scene.contains("entities") && scene["entities"].is_array(), "scene.entities",
             "Scene entities must be an array");
     require(finite_json(scene), "validation.finite", "Scene contains a non-finite number");
+    if (scene.contains("simulation")) {
+        const auto& settings = scene.at("simulation");
+        require(settings.is_object(), "simulation.object", "Simulation settings must be an object");
+        if (settings.contains("fixed_delta"))
+            require(settings["fixed_delta"].is_number() &&
+                        settings["fixed_delta"].get<double>() > 0 &&
+                        settings["fixed_delta"].get<double>() <= 1,
+                    "simulation.fixed_delta",
+                    "Fixed delta must be greater than zero and at most one second");
+        for (const auto& [name, maximum] :
+             std::map<std::string, int>{{"max_catch_up_ticks", 1024}, {"physics_substeps", 128}})
+            if (settings.contains(name)) {
+                const auto& value = settings[name];
+                require(value.is_number_integer() && value.get<double>() >= 1 &&
+                            value.get<double>() <= maximum,
+                        "simulation.integer", "Invalid simulation setting: " + name);
+            }
+        if (settings.contains("gravity"))
+            validate_field(settings["gravity"], {{"type", "vec3"}});
+    }
     std::set<std::string> ids;
     std::map<std::string, std::string> parents;
     auto insert_id = [&](const Json& value) {
@@ -120,6 +146,70 @@ void validate_scene(const Json& scene, const SchemaRegistry& schemas) {
                         instance["source"].is_string(),
                     "template.instance", "Invalid template instance");
             insert_id(instance["id"]);
+            require(!instance["source"].get_ref<const std::string&>().empty(), "template.source",
+                    "Template source cannot be empty");
+            auto address = [&](const Json& value, bool field) {
+                require(value.is_object() && value.contains("object") && valid_id(value["object"]),
+                        "template.address", "Template address needs a stable object ID");
+                if (value.contains("path")) {
+                    require(value["path"].is_array(), "template.address",
+                            "Instance path must be an array");
+                    for (const auto& part : value["path"])
+                        require(valid_id(part), "template.address",
+                                "Instance path needs stable IDs");
+                }
+                if (field)
+                    require(value.contains("component") && valid_id(value["component"]) &&
+                                value.contains("field") && value["field"].is_string() &&
+                                !value["field"].get_ref<const std::string&>().empty(),
+                            "template.address",
+                            "Field address needs stable component and field IDs");
+            };
+            for (const auto* collection : {"overrides", "suppressed", "reparents"})
+                if (instance.contains(collection))
+                    require(instance[collection].is_array(), "template.records",
+                            "Template records must be an array");
+            for (const auto& record : instance.value("overrides", Json::array())) {
+                require(record.is_object() && record.contains("address") &&
+                            record.contains("value"),
+                        "template.override", "Override needs an address and value");
+                address(record["address"], true);
+            }
+            for (const auto& record : instance.value("suppressed", Json::array()))
+                address(record, false);
+            for (const auto& record : instance.value("reparents", Json::array())) {
+                require(record.is_object() && record.contains("object") &&
+                            record.contains("parent"),
+                        "template.reparent", "Reparent needs object and parent addresses");
+                address(record["object"], false);
+                if (!record["parent"].is_null())
+                    address(record["parent"], false);
+                if (record.contains("keep_world"))
+                    require(record["keep_world"].is_boolean(), "template.reparent",
+                            "keep_world must be a boolean");
+            }
+
+            if (instance.contains("additions")) {
+                require(instance["additions"].is_array(), "template.additions",
+                        "Local additions must be an array");
+                auto additions = make_scene("Local additions");
+                additions["entities"] = instance["additions"];
+                // Local cycles are rejected here; parents in the source are checked during
+                // resolution.
+                std::set<std::string> local_ids;
+                for (const auto& item : additions["entities"])
+                    if (item.contains("id") && item["id"].is_string())
+                        local_ids.insert(item["id"].get<std::string>());
+                for (auto& item : additions["entities"]) {
+                    if (item.contains("parent") && !item["parent"].is_null())
+                        require(valid_id(item["parent"]), "template.addition_parent",
+                                "Local parent must be a stable object ID or null");
+                    if (!item.contains("parent") || item["parent"].is_null() ||
+                        !local_ids.contains(item["parent"].get<std::string>()))
+                        item["parent"] = nullptr;
+                }
+                validate_scene(additions, schemas);
+            }
         }
     }
 }
@@ -239,6 +329,16 @@ void AuthoringService::apply(Json& scene, const Json& command) {
         scene["entities"].push_back(std::move(value));
     } else if (op == "entity.rename") {
         entity(scene, command.at("entity").get<std::string>())["name"] = command.at("name");
+    } else if (op == "scene.simulation") {
+        const auto& value = command.at("value");
+        require(value.is_object(), "simulation.object", "Simulation settings must be an object");
+        const auto defaults = default_simulation_settings();
+        for (const auto& [key, setting] : value.items())
+            require(defaults.contains(key), "simulation.setting",
+                    "Unknown simulation setting: " + key);
+        if (!scene.contains("simulation"))
+            scene["simulation"] = defaults;
+        scene["simulation"].update(value);
     } else if (op == "entity.delete") {
         const auto id = command.at("entity").get<std::string>();
         entity(scene, id);
@@ -317,6 +417,8 @@ void AuthoringService::apply(Json& scene, const Json& command) {
                     if (!schemas_.contains(type))
                         continue;
                     const auto metadata = schemas_.schema(type);
+                    if (component.value("version", 1) != metadata.value("version", 1))
+                        continue;
                     for (auto& [field, value] : component["fields"].items())
                         if (metadata["fields"].contains(field) &&
                             metadata["fields"][field].value("type", std::string()) ==
@@ -338,12 +440,49 @@ void AuthoringService::apply(Json& scene, const Json& command) {
             scene["instances"] = Json::array();
         scene["instances"].push_back(std::move(value));
     } else if (op == "template.override" || op == "template.revert" || op == "template.suppress" ||
-               op == "template.add" || op == "template.reparent") {
+               op == "template.add" || op == "template.reparent" || op == "template.remove" ||
+               op == "template.restore" || op == "template.source_set" ||
+               op == "template.addition_set") {
         auto& instances = scene["instances"];
         const auto id = command.at("instance").get<std::string>();
         auto found = std::find_if(instances.begin(), instances.end(),
                                   [&](const Json& value) { return value.at("id") == id; });
         require(found != instances.end(), "template.missing", "Instance not found");
+        if (op == "template.addition_set") {
+            const auto& replacement = command.at("value");
+            const auto addition_id = replacement.at("id");
+            auto& additions = (*found)["additions"];
+            require(additions.is_array(), "template.addition_missing",
+                    "Instance has no local additions");
+            auto addition =
+                std::find_if(additions.begin(), additions.end(),
+                             [&](const Json& value) { return value.at("id") == addition_id; });
+            require(addition != additions.end(), "template.addition_missing",
+                    "Local addition not found");
+            *addition = replacement;
+            return;
+        }
+        if (op == "template.remove") {
+            instances.erase(found);
+            return;
+        }
+        if (op == "template.source_set") {
+            const auto source = command.at("source").get<std::string>();
+            project_path(root_, source);
+            (*found)["source"] = source;
+            return;
+        }
+        if (op == "template.restore") {
+            auto& records = (*found)["suppressed"];
+            require(records.is_array(), "template.suppression_missing",
+                    "Instance has no suppressed objects");
+            const auto address = command.at("address");
+            const auto before = records.size();
+            records.erase(std::remove(records.begin(), records.end(), address), records.end());
+            require(records.size() != before, "template.suppression_missing",
+                    "Suppressed object address not found");
+            return;
+        }
         const std::string key = op == "template.suppress"   ? "suppressed"
                                 : op == "template.add"      ? "additions"
                                 : op == "template.reparent" ? "reparents"

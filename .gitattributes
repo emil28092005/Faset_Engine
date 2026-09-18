@@ -5,3 +5,6 @@ licenses/*.txt -whitespace
 *.ttf binary
 
 assets/fonts/OFL.txt -whitespace
+
+*.blend binary
+*.glb binary

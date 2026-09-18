@@ -17,12 +17,19 @@ namespace faset::player {
 namespace {
 using Json = nlohmann::json;
 Json properties(const Json& entity, const std::string& name) {
+    if (entity.contains("components")) {
+        for (const auto& component : entity["components"])
+            if (component.at("type") == "faset." + name) {
+                // Future authoring schemas remain opaque until an explicit migration.
+                if (component.value("version", 1) != 1)
+                    return Json{};
+                return component.at("fields");
+            }
+        return Json{};
+    }
+    // Runtime presentation snapshots already contain validated typed components.
     if (entity.contains(name))
         return entity.at(name);
-    if (entity.contains("components"))
-        for (const auto& c : entity["components"])
-            if (c.at("type") == "faset." + name)
-                return c.at("fields");
     return Json{};
 }
 template <std::size_t N>
@@ -235,9 +242,21 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
     if (!entities.is_array())
         throw std::invalid_argument("Scene entities must be an array");
     std::unordered_map<std::string, const Json*> byId;
-    for (const auto& entity : entities)
-        if (!byId.emplace(entity.at("id").get<std::string>(), &entity).second)
+    for (const auto& entity : entities) {
+        const auto id = entity.at("id").get<std::string>();
+        if (!byId.emplace(id, &entity).second)
             throw std::invalid_argument("Duplicate scene ID");
+        for (const auto& component : entity.value("components", Json::array())) {
+            const auto type = component.at("type").get<std::string>();
+            if (component.value("version", 1) != 1 &&
+                (type == "faset.transform" || type == "faset.sprite" || type == "faset.mesh" ||
+                 type == "faset.camera" || type == "faset.light"))
+                impl_->messages.push_back("warning: preview skips unsupported " + type +
+                                          " version " +
+                                          std::to_string(component.at("version").get<int>()) +
+                                          " on entity " + id + "; opaque data is preserved");
+        }
+    }
     std::unordered_map<std::string, render::Mat4> matrices;
     std::set<std::string> active;
     auto world = [&](auto&& self, const Json& entity) -> render::Mat4 {
@@ -374,5 +393,78 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
     impl_->messages.erase(std::unique(impl_->messages.begin(), impl_->messages.end()),
                           impl_->messages.end());
     return out;
+}
+void SceneView::appendPhysicsDebug(render::Snapshot& snapshot, const Json& scene,
+                                   float thickness) const {
+    if (!std::isfinite(thickness) || thickness <= 0)
+        throw std::invalid_argument("Physics debug thickness must be positive");
+    const int dimension = scene.at("dimension");
+    if (dimension != 2 && dimension != 3)
+        throw std::invalid_argument("Physics debug dimension must be 2 or 3");
+    static const auto edgeMesh = [] {
+        auto mesh = std::make_shared<render::Mesh>(*render::cube_mesh());
+        for (auto& vertex : mesh->vertices)
+            vertex.normal = {0, 0, 0}; // Unlit debug color.
+        return mesh;
+    }();
+    for (const auto& entity : scene.at("entities")) {
+        const auto body = properties(entity, dimension == 2 ? "rigid_body_2d" : "rigid_body_3d");
+        if (body.is_null())
+            continue;
+        if (entity.contains("parent") && !entity.at("parent").is_null())
+            throw std::invalid_argument(
+                "Physics debug bodies must be roots, like the runtime adapters");
+        const auto pose = properties(entity, "transform");
+        const auto position = vec<3>(pose, "position", {0, 0, 0});
+        const auto rotation = vec<3>(pose, "rotation", {0, 0, 0});
+        const auto scale = vec<3>(pose, "scale", {1, 1, 1});
+        if (dimension == 2 && (rotation[0] != 0 || rotation[1] != 0))
+            throw std::invalid_argument("2D physics debug rotates only around Z");
+        render::Vec3 half{};
+        if (dimension == 2) {
+            const auto value = vec<2>(body, "half_extents", {.5f, .5f});
+            half = {value[0], value[1], 0};
+        } else
+            half = vec<3>(body, "half_extents", {.5f, .5f, .5f});
+        for (int axis = 0; axis < dimension; ++axis) {
+            if (half[axis] <= 0 || std::abs(scale[axis]) <= .00001f)
+                throw std::invalid_argument("Invalid physics debug box extent/scale");
+            half[axis] *= std::abs(scale[axis]);
+            if (!std::isfinite(half[axis]))
+                throw std::invalid_argument("Nonfinite physics debug box");
+        }
+        const auto type = body.value("body_type", std::string("dynamic"));
+        const render::Color color = type == "static"      ? render::Color{.2f, 1, .3f, 1}
+                                    : type == "kinematic" ? render::Color{1, .7f, .15f, 1}
+                                                          : render::Color{.15f, .85f, 1, 1};
+        const auto model = render::transform(position, rotation);
+        auto edge = [&](render::Vec3 center, render::Vec3 size) {
+            snapshot.draws.push_back({edgeMesh,
+                                      render::multiply(model, render::transform(center, {}, size)),
+                                      color,
+                                      .65f,
+                                      0,
+                                      false,
+                                      {}});
+        };
+        if (dimension == 2) {
+            for (float side : {-1.0f, 1.0f}) {
+                edge({0, side * half[1], 0}, {2 * half[0], thickness, thickness});
+                edge({side * half[0], 0, 0}, {thickness, 2 * half[1], thickness});
+            }
+        } else {
+            for (int axis = 0; axis < 3; ++axis) {
+                const int first = (axis + 1) % 3, second = (axis + 2) % 3;
+                for (float a : {-1.0f, 1.0f})
+                    for (float b : {-1.0f, 1.0f}) {
+                        render::Vec3 center{}, size{thickness, thickness, thickness};
+                        center[first] = a * half[first];
+                        center[second] = b * half[second];
+                        size[axis] = 2 * half[axis];
+                        edge(center, size);
+                    }
+            }
+        }
+    }
 }
 } // namespace faset::player

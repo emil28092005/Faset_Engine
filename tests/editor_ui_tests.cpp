@@ -1,7 +1,10 @@
+#include "assets_image_fixtures.hpp"
 #include <cmath>
 #include <faset/core/io.hpp>
 #include <faset/editor/editor_ui.hpp>
+#include <fstream>
 #include <iostream>
+#include <thread>
 using namespace faset;
 void check(bool value, const char* message) {
     if (!value)
@@ -175,6 +178,75 @@ int main() {
               "Plugin panel action must author Beacon through Commands");
         click(ui, "tab-assets");
 #endif
+        std::filesystem::create_directories(root / "Assets");
+        const auto image_path = root / "Assets/TwoPixels.png";
+        {
+            std::ofstream stream(image_path, std::ios::binary);
+            const auto& png = faset::test_images::png_red_green;
+            stream.write(reinterpret_cast<const char*>(png.data()),
+                         static_cast<std::streamsize>(png.size()));
+        }
+        const auto import_job =
+            session.commands()
+                .call("faset_import",
+                      {{"path", "Assets/TwoPixels.png"}, {"settings", {{"pixels_per_unit", 1.0}}}})
+                .at("job")
+                .get<std::string>();
+        Json imported;
+        for (int wait = 0; wait < 500; ++wait) {
+            session.poll();
+            imported = session.commands().call("faset_job", {{"id", import_job}});
+            if (imported.at("state") != "queued" && imported.at("state") != "running")
+                break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        check(imported.at("state") == "succeeded", "Actual asynchronous PNG importer job");
+        click(ui, "asset-refresh");
+        ui.frame({});
+        const auto image_id = imported.at("result").at("asset_id").get<std::string>();
+        auto* image_row = ui.widgets().find("asset-" + image_id);
+        check(image_row, "Imported image in asset browser");
+        const auto asset_rect = image_row->rect.intersection(image_row->clip);
+        const auto viewport_rect = ui.widgets().find("viewport")->rect;
+        down.x = asset_rect.x + 100;
+        down.y = asset_rect.y + 12;
+        move = down;
+        move.type = render::Event::Type::MouseMove;
+        move.x = viewport_rect.x + viewport_rect.width * .5f;
+        move.y = viewport_rect.y + viewport_rect.height * .5f;
+        up = move;
+        up.type = render::Event::Type::MouseUp;
+        ui.frame({down, move, up});
+        state = session.authoring().query(ui.current_document());
+        const auto& sprite = state["scene"]["entities"].back()["components"].back();
+        check(sprite["type"] == "faset.sprite" && sprite["fields"]["texture"] == image_id,
+              "Image drag/drop must author Sprite with AssetId");
+        check(sprite["fields"]["size"] == Json::array({2.0, 1.0}),
+              "Image drag/drop preserves dimensions through pixels_per_unit");
+        check(!ui.snapshot().sprites.empty() && ui.snapshot().sprites.back().texture &&
+                  ui.snapshot().sprites.back().texture->width == 2,
+              "PNG sprite must decode into actual render texture");
+        const auto before_switch = state.at("revision");
+        click(ui, "menu-File");
+        click(ui, "open-project");
+        check(ui.widgets().find("project-switch-dialog")->visible && !ui.project_switch_requested(),
+              "Dirty project switch requires an explicit recovery warning action");
+        ui.frame({key("Delete")});
+        check(session.authoring().query(ui.current_document()).at("revision") == before_switch,
+              "Switch dialog captures editor shortcuts");
+        click(ui, "project-switch-cancel");
+        check(!ui.project_switch_requested(), "Cancelling project switch keeps editor open");
+        ui.set_project_switch_enabled(false);
+        click(ui, "menu-File");
+        check(!ui.widgets().find("open-project")->enabled,
+              "Project switch disabled while an MCP client owns the session");
+        click(ui, "open-project");
+        check(!ui.project_switch_requested(), "Disabled project switch cannot request exit");
+        ui.set_project_switch_enabled(true);
+        ui.frame({});
+        click(ui, "open-project");
+        click(ui, "project-switch-continue");
+        check(ui.project_switch_requested(), "Confirmed project switch is exposed to application");
         renderer.render(ui.snapshot());
         renderer.capture(root / "editor-ui.ppm");
         check(renderer.stats().validation_errors == 0, "Vulkan validation errors");

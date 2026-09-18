@@ -54,6 +54,7 @@ int run_editor_ui(Session& session, bool enable_mcp, std::uint64_t max_frames,
     const auto font = session.config().engine_root / "assets/fonts/NotoSans.ttf";
     const auto theme = session.config().engine_root / "assets/ui/dark.json";
     EditorUI ui(session, renderer, font, theme);
+    ui.set_project_switch_enabled(!enable_mcp);
     McpServer server(session.commands());
     StdioTransport transport;
     session.commands().add(
@@ -75,6 +76,8 @@ int run_editor_ui(Session& session, bool enable_mcp, std::uint64_t max_frames,
             auto encoded = png(renderer, region);
             const auto relative =
                 arguments.value("path", std::string(".faset/screenshots/editor.png"));
+            require(std::filesystem::path(relative).extension() == ".png", "capture.path",
+                    "Editor screenshots must use a .png path");
             atomic_write(
                 project_path(session.config().project_root, relative),
                 std::string_view(reinterpret_cast<const char*>(encoded.data()), encoded.size()));
@@ -100,6 +103,8 @@ int run_editor_ui(Session& session, bool enable_mcp, std::uint64_t max_frames,
         session.poll();
         ui.frame(renderer.poll_events());
         renderer.render(ui.snapshot());
+        if (ui.project_switch_requested())
+            return 3; // Application-level request: destroy this Session before opening another.
         ++frame;
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }

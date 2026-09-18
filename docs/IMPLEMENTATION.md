@@ -85,3 +85,59 @@ triangle glTF meshes/UV0, basic PBR/directional shadows and a conservative seria
 Vulkan renderer. Advanced rendering and broader content profiles remain later work.
 The generated UI reference determines visual direction only; architecture, behavior
 and acceptance criteria remain authoritative.
+
+## Checkpoint 3 — playable projects and complete authoring workflows
+
+Implemented and exercised on Linux:
+
+- Two playable C++ projects with real Box2D/Box3D input routes, pickups, a physical
+  gate, an exit condition and reset. The 3D project includes a reproducible original
+  Blender arch, `.blend` source, stable-ID bundle and import instructions.
+- Native project launcher, retained folder browser, real recent projects, keyboard
+  navigation and safe project switching. GUI/MCP sessions retain one fixed project.
+- Nested template UI, source navigation, local additions/suppression/reparent,
+  per-field origin/Revert and conflict preservation. Parented gizmos have tested
+  transforms, cancellation and one committed Undo operation.
+- Explicit Project settings with file-content revisions and atomic save; per-scene
+  Simulation remains a separate authoring transaction. Live theme/layout reload
+  validates candidates and keeps working state on malformed edits.
+- Standalone PNG/JPEG assets; versioned material records and explicit portable
+  cache profile/toolchain identity. Clearing cache preserves identity and overrides
+  when original sources and sidecars are reimported.
+- Normalized Slang reflection, shader artifact hashes and renderer ABI compatibility
+  validation. Real compile failure, changed binding/matrix layout and invalid SPIR-V
+  keep a working pipeline; compatible pixel-changing reload succeeds.
+- Physics debug box outlines, bounded raw Player profiles, observed validation
+  activation, CPU/GPU/readback durations and allocation counters.
+- MCP broken-pipe/EOF handling and fresh GUI capture after presentation back-pressure.
+  A real GUI + stdio regression performs 12 PNG captures, a conflicting edit and Undo.
+- English manual guides for workspace, templates, Blender, export and profiling,
+  alongside compiled C++ tutorials. Generated UI references remain visual guidance.
+
+Acceptance evidence:
+
+- The integrated Linux test suite passes **29/29 tests**, including ten GPU tests:
+  native CPU, Vulkan, UI, real MCP transport, plugins, schema, physics and playable
+  input routes. Strict MkDocs also passes.
+- `tools/verify_playable_exports.py` exported the exact 2D/3D samples in Release,
+  imported the Blender arch, checked package hashes and relocated each package outside
+  its project. With the source-project paths unavailable, both passed validation and
+  120 offscreen frames on RTX 2080 Ti with the Khronos layer active and zero errors.
+- Renderer/shader regressions also passed the pinned Linux SwiftShader driver. This
+  is additional software-driver coverage, separate from Windows execution.
+- `tools/measure_workflows.py` recorded a fresh sample Debug build and incremental
+  iteration, including stale-schema transitions. On the development host, the
+  initial build took 93.06 s, unchanged build 5.59 s, changed gameplay build 11.18 s,
+  and the subsequent one-frame Player process 0.37 s. The first/cached small Blender
+  arch imports each took about 0.047 s including Editor startup. Ambient builds were
+  running; these are observations, not release budgets.
+- Profiling identified uncached readback memory as a concrete bottleneck. In a small
+  paired five-frame diagnostic, preferring compatible HOST_CACHED memory reduced
+  median readback from 27.87 to 0.47 ms and renderer-call wall time from 30.81 to
+  2.92 ms. GPU work was about 0.58 ms. A longer final baseline is still required.
+
+This remains an implementation checkpoint. Windows full graphics/export CI is still
+building its pinned software driver. A review also identified Windows Unicode path
+boundaries that must be corrected before cross-platform acceptance. Clean offline
+build verification, final performance baselines and the final acceptance record
+remain open; no MVP tag has been created.

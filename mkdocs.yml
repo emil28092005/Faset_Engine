@@ -39,7 +39,12 @@ nav:
       - Physics and grounded movement: scripting/physics.md
       - Runtime API: scripting/api.md
       - Compiled examples: scripting/examples.md
-  - Editor automation:
+  - Editor and assets:
+      - Editor workspace: editor/workspace.md
+      - Scene templates: editor/templates.md
+      - Assets and Blender: editor/assets.md
+      - Build, Play, and export: editor/export.md
+      - Profiling and measurements: editor/profiling.md
       - MCP and command line: editor/mcp.md
       - Native extensions: editor/extensions.md
   - Contributing to this manual: contributing.md

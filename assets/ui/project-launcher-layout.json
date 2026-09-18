@@ -1,0 +1,40 @@
+{
+  "root": {
+    "id": "root",
+    "layout": {"gap": 0},
+    "children": [{
+      "id": "launcher-body", "kind": "row", "layout": {"flex": 1, "gap": 0},
+      "children": [
+        {"id": "launcher-sidebar", "kind": "panel", "layout": {"width": 235, "padding": 16, "gap": 8}, "children": [
+          {"id": "launcher-wordmark", "kind": "label", "text": "Faset", "font_size": 26, "layout": {"height": 66}},
+          {"id": "launcher-open", "kind": "tree_row", "text": "Open project", "layout": {"height": 40}},
+          {"id": "launcher-create", "kind": "tree_row", "text": "Create project", "layout": {"height": 40}},
+          {"id": "launcher-recent-title", "kind": "label", "text": "Recent projects", "layout": {"height": 54}},
+          {"id": "launcher-recents", "kind": "column", "layout": {"flex": 1, "scroll": true, "gap": 6}}
+        ]},
+        {"id": "launcher-main", "kind": "column", "layout": {"flex": 1, "padding": 32, "gap": 12, "scroll": true}, "children": [
+          {"id": "launcher-heading", "kind": "label", "text": "Open project", "font_size": 26, "layout": {"height": 64}},
+          {"id": "launcher-name-label", "kind": "label", "text": "Project name"},
+          {"id": "launcher-name", "kind": "text_field", "text": "My Game", "layout": {"height": 40}},
+          {"id": "launcher-path-label", "kind": "label", "text": "Project directory"},
+          {"id": "launcher-path-row", "kind": "row", "layout": {"height": 40, "gap": 8}, "children": [
+            {"id": "launcher-path", "kind": "text_field", "layout": {"flex": 1}},
+            {"id": "launcher-browse", "kind": "button", "text": "Browse", "layout": {"width": 84}}
+          ]},
+          {"id": "launcher-dimension-label", "kind": "label", "text": "Initial scene type"},
+          {"id": "launcher-dimensions", "kind": "row", "layout": {"height": 40, "gap": 0}, "children": [
+            {"id": "launcher-2d", "kind": "tab", "text": "2D", "layout": {"width": 120}},
+            {"id": "launcher-3d", "kind": "tab", "text": "3D", "layout": {"width": 120}}
+          ]},
+          {"id": "launcher-hint", "kind": "label", "text": "Open a directory containing project.faset.json.", "layout": {"height": 36}},
+          {"id": "launcher-actions", "kind": "row", "layout": {"height": 40, "gap": 8}, "children": [
+            {"id": "launcher-submit", "kind": "button", "text": "Open project", "layout": {"width": 180}},
+            {"id": "launcher-cancel", "kind": "button", "text": "Cancel", "layout": {"width": 90}}
+          ]},
+          {"id": "launcher-error", "kind": "label", "layout": {"height": 30}},
+          {"id": "launcher-shortcuts", "kind": "label", "text": "Tab: next field   Ctrl+Enter: continue   Escape: cancel"}
+        ]}
+      ]
+    }]
+  }
+}

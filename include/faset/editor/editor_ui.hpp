@@ -20,6 +20,8 @@ class EditorUI {
     void select_document(const std::string& document);
     const std::string& selected_entity() const;
     void select_entity(const std::string& entity);
+    bool project_switch_requested() const;
+    void set_project_switch_enabled(bool enabled);
 
   private:
     struct Impl;

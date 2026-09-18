@@ -36,6 +36,9 @@ Create a project and open the native Editor:
 build/linux-debug/faset_editor --project "$PWD/MyGame" --new MyGame --dimension 3
 ```
 
+You can also run `build/linux-debug/faset_editor` without arguments to open the
+project launcher and create or select a project using the native interface.
+
 Use **Build C++** after changing `MyGame/Scripts/Gameplay.cpp`, then **Play**.
 The Player runs separately. Stop it before changing and rebuilding C++ gameplay.
 See [MCP and CLI](../editor/mcp.md) for headless authoring and automation.
@@ -73,3 +76,6 @@ ctest --preset windows-debug
 
 Windows acceptance is tracked separately from Linux; a successful Linux build does
 not verify a Windows build.
+
+The repository's `docs/TOOLCHAINS.md` records the exact compiler, SDK and GPU profiles
+used in observed validation, separately from the minimum tool requirements above.

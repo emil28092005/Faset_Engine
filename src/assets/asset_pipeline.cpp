@@ -316,7 +316,9 @@ void validate_generation(const fs::path& directory, const Json& manifest) {
     }
 }
 Json material_json(const Material& m) {
-    return {{"id", m.id},
+    return {{"format", "faset.material"},
+            {"version", 1},
+            {"id", m.id},
             {"name", m.name},
             {"base_color", m.base_color},
             {"metallic", m.metallic},
@@ -407,6 +409,10 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
         const auto source_hash = hash_bytes(source_bytes);
         const auto sidecar = fs::path(logical_source.string() + ".faset-import.json");
         Json metadata = fs::exists(sidecar) ? read_json(sidecar) : Json::object();
+        if (!metadata.is_object() ||
+            (!metadata.empty() && metadata.value("schema_version", 0) != 1))
+            throw std::runtime_error(
+                "Unsupported import settings version; source metadata is unchanged");
         const auto settings = request.settings.is_null()
                                   ? metadata.value("settings", Json::object())
                                   : request.settings;
@@ -446,6 +452,17 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
                 throw std::runtime_error("Encoded image exceeds decoder limit");
             const auto* encoded = reinterpret_cast<const stbi_uc*>(source_bytes.data());
             const auto length = static_cast<int>(source_bytes.size());
+            const bool png_signature =
+                source_bytes.size() >= 8 && source_bytes[0] == std::byte{137} &&
+                source_bytes[1] == std::byte{80} && source_bytes[2] == std::byte{78} &&
+                source_bytes[3] == std::byte{71} && source_bytes[4] == std::byte{13} &&
+                source_bytes[5] == std::byte{10} && source_bytes[6] == std::byte{26} &&
+                source_bytes[7] == std::byte{10};
+            const bool jpeg_signature =
+                source_bytes.size() >= 3 && source_bytes[0] == std::byte{255} &&
+                source_bytes[1] == std::byte{216} && source_bytes[2] == std::byte{255};
+            if ((extension == ".png" && !png_signature) || (extension != ".png" && !jpeg_signature))
+                throw std::runtime_error("Image content does not match PNG/JPEG extension");
             int width = 0, height = 0, channels = 0;
             if (!stbi_info_from_memory(encoded, length, &width, &height, &channels))
                 throw std::runtime_error("Invalid PNG/JPEG image header");
@@ -677,10 +694,13 @@ ImportResult AssetPipeline::import_asset(const ImportRequest& request, ImportJob
                 asset.textures.push_back(std::move(out));
             }
         }
-        Json key{{"source", source_hash},
-                 {"settings", settings},
-                 {"importer", recipe_version},
-                 {"dependencies", Json::object()}};
+        Json key{
+            {"source", source_hash},
+            {"settings", settings},
+            {"importer", recipe_version},
+            {"target_profile", standalone_image ? "desktop-image-v1" : "desktop-static-pbr-v1"},
+            {"toolchain", {{"cgltf", FASET_CGLTF_COMMIT}, {"stb", FASET_STB_COMMIT}}},
+            {"dependencies", Json::object()}};
         if (source != logical_source)
             key["bundle_sha256"] = logical_hash;
         for (const auto& [name, item] : dependencies)

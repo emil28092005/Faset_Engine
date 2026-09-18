@@ -118,6 +118,7 @@ struct Widget {
     bool visible = true, enabled = true, selected = false, checked = false;
     double value = 0, step = .01;
     int precision = 3, indent = 0;
+    float font_size = 0; // Zero inherits the theme typography.
     float scroll_y = 0, content_height = 0;
     std::string error, tooltip;
     Json drag_payload;
@@ -159,6 +160,7 @@ class Context {
     const Theme& theme() const;
     // Reloads declarative widget properties; matching IDs retain callbacks and
     // edit state.
+    void validate_layout(const Json&) const;
     void apply_layout(const Json&);
     void layout(float drawable_width, float drawable_height, float dpi_scale = 1);
     bool handle(const render::Event&);

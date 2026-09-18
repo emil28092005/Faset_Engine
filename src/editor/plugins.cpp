@@ -14,11 +14,25 @@
 
 namespace faset::editor {
 namespace {
-void append(void* context, const char* bytes, std::uint64_t size) {
-    auto& output = *static_cast<std::string*>(context);
-    require(size <= 8 * 1024 * 1024 && output.size() + size <= 8 * 1024 * 1024,
-            "plugin.output_limit", "Plugin response exceeds 8 MiB");
-    output.append(bytes, static_cast<std::size_t>(size));
+struct ResponseBuffer {
+    std::string bytes;
+    bool failed = false;
+};
+void append(void* context, const char* bytes, std::uint64_t size) noexcept {
+    auto& output = *static_cast<ResponseBuffer*>(context);
+    if (output.failed)
+        return;
+    if ((!bytes && size) || size > 8 * 1024 * 1024 ||
+        output.bytes.size() + size > 8 * 1024 * 1024) {
+        output.failed = true;
+        return;
+    }
+    try {
+        if (size)
+            output.bytes.append(bytes, static_cast<std::size_t>(size));
+    } catch (...) {
+        output.failed = true;
+    }
 }
 Json response(const std::string& bytes) {
     auto value = Json::parse(bytes);
@@ -237,11 +251,13 @@ struct PluginManager::Impl {
             commands.add(
                 name, descriptor.at("description"), descriptor.at("inputSchema"),
                 [registration](const Json& arguments) {
-                    std::string output;
+                    ResponseBuffer output;
                     const auto input = arguments.dump();
                     const int result =
                         registration.callback(registration.user, input.c_str(), append, &output);
-                    const auto value = response(output);
+                    require(!output.failed, "plugin.output_limit",
+                            "Cannot collect plugin response (maximum 8 MiB)");
+                    const auto value = response(output.bytes);
                     if (result != 0)
                         throw Error(value.value("code", std::string("plugin.failed")),
                                     value.value("message", std::string("Plugin command failed")),

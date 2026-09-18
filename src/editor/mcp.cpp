@@ -1,11 +1,13 @@
+#include <algorithm>
 #include <faset/editor/mcp.hpp>
-#include <iostream>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
 #else
 #include <cerrno>
+#include <csignal>
 #include <poll.h>
+#include <pthread.h>
 #include <unistd.h>
 #endif
 
@@ -126,7 +128,6 @@ std::vector<std::string> StdioTransport::poll() {
     if (type == FILE_TYPE_PIPE) {
         if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr)) {
             closed_ = true;
-            return lines;
         }
     } else if (type == FILE_TYPE_DISK)
         available = sizeof(bytes);
@@ -169,7 +170,51 @@ std::vector<std::string> StdioTransport::poll() {
     return lines;
 }
 void StdioTransport::send(const Json& value) {
-    std::cout << value.dump() << '\n';
-    std::cout.flush();
+    const auto bytes = value.dump() + '\n';
+    std::size_t offset = 0;
+#ifdef _WIN32
+    const auto output = GetStdHandle(STD_OUTPUT_HANDLE);
+    while (offset < bytes.size()) {
+        DWORD written = 0;
+        const auto count = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - offset, 65536));
+        if (!WriteFile(output, bytes.data() + offset, count, &written, nullptr) || written == 0) {
+            closed_ = true;
+            return;
+        }
+        offset += written;
+    }
+#else
+    // A disconnected MCP client must not terminate the GUI with SIGPIPE. Block
+    // it only on this thread during the write, preserving the process signal
+    // policy and any SIGPIPE that was already pending for the caller.
+    sigset_t blocked, previous, pending;
+    sigemptyset(&blocked);
+    sigaddset(&blocked, SIGPIPE);
+    if (pthread_sigmask(SIG_BLOCK, &blocked, &previous) != 0) {
+        closed_ = true;
+        return;
+    }
+    sigpending(&pending);
+    const bool alreadyPending = sigismember(&pending, SIGPIPE) == 1;
+    bool brokenPipe = false;
+    while (offset < bytes.size()) {
+        const auto written = ::write(STDOUT_FILENO, bytes.data() + offset, bytes.size() - offset);
+        if (written > 0)
+            offset += static_cast<std::size_t>(written);
+        else if (written < 0 && errno == EINTR)
+            continue;
+        else {
+            brokenPipe = written < 0 && errno == EPIPE;
+            closed_ = true;
+            break;
+        }
+    }
+    if (brokenPipe && !alreadyPending) {
+        const timespec noWait{};
+        while (sigtimedwait(&blocked, nullptr, &noWait) == -1 && errno == EINTR) {
+        }
+    }
+    pthread_sigmask(SIG_SETMASK, &previous, nullptr);
+#endif
 }
 } // namespace faset::editor

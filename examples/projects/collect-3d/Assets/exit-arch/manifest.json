@@ -1,0 +1,69 @@
+{
+  "asset_id": "5832763b-3ed0-44d6-9088-0b524f196a91",
+  "exporter": {
+    "addon_version": "0.1.0",
+    "blender_version": "4.5.3 LTS"
+  },
+  "files": [
+    {
+      "path": "payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb",
+      "sha256": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+      "size": 5556
+    }
+  ],
+  "generation": "7000c0ddc0ef38a87a6bfa1833b757df648aecfbdc3c304036028ba7f530a121",
+  "outputs": [
+    {
+      "kind": "node",
+      "locator": "/nodes/0",
+      "name": "Left post",
+      "source_id": "4fbe8b04-1247-5088-a438-934d4e26c532"
+    },
+    {
+      "kind": "node",
+      "locator": "/nodes/1",
+      "name": "Right post",
+      "source_id": "3f82eddf-7169-590e-9116-77f91d809972"
+    },
+    {
+      "kind": "node",
+      "locator": "/nodes/2",
+      "name": "Lintel",
+      "source_id": "49b46a7c-9ae3-54c1-8e4f-ad4efe627330"
+    },
+    {
+      "kind": "mesh",
+      "locator": "/meshes/0",
+      "name": "Cube.001",
+      "source_id": "b359b954-1c3e-5ae9-a127-ce251b05193e"
+    },
+    {
+      "kind": "mesh",
+      "locator": "/meshes/1",
+      "name": "Cube.002",
+      "source_id": "0a83245a-e502-5fd8-978d-dd65931238a3"
+    },
+    {
+      "kind": "mesh",
+      "locator": "/meshes/2",
+      "name": "Cube.003",
+      "source_id": "6f6587d4-1d8e-56b5-9ec6-afbd6ac51e55"
+    },
+    {
+      "kind": "material",
+      "locator": "/materials/0",
+      "name": "Weathered stone",
+      "source_id": "08046276-106a-4aeb-80f1-d4f02a2ffdc1"
+    }
+  ],
+  "recipe": {
+    "export_animations": false,
+    "export_extras": true,
+    "export_yup": true,
+    "profile": "faset-gltf-static-v1"
+  },
+  "schema_version": 1,
+  "source": {
+    "path_hint": "source.blend"
+  }
+}

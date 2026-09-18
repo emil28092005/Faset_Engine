@@ -2,7 +2,7 @@
 
 Faset is an independent engine project for desktop **2D and 3D games on Linux and Windows**. Its priorities are a custom editor that is comfortable to use by hand and through MCP, integration with Blender, and a path toward advanced graphics.
 
-**Current status: MVP implementation is in progress.** The native Editor, shared GUI/MCP authoring, C++ gameplay builds, Vulkan Player, and standalone export are integrated and under acceptance testing. Linux GPU workflows work; complete cross-platform acceptance and the two finished example games remain in progress. See the [implementation checkpoints](docs/IMPLEMENTATION.md) for observed results; a technology appearing in the plan does not mean it is complete or benchmarked.
+**Current status: MVP acceptance is in progress.** The native Editor, shared GUI/MCP authoring, C++ gameplay builds, Vulkan Player, standalone export and two playable sample games are integrated. Linux GPU workflows are tested; complete Windows graphics/export acceptance and final validation remain in progress. See the [implementation checkpoints](docs/IMPLEMENTATION.md) for observed results; a technology appearing in the plan does not mean it is complete or benchmarked.
 
 ## Start here
 
@@ -12,6 +12,13 @@ Faset is an independent engine project for desktop **2D and 3D games on Linux an
 - [Documentation](docs/README.md) — navigation and maintenance rules.
 - [Source studies](docs/studies/README.md) — Unreal Engine, Godot, Unity, Blender, ECS, graphics, asset import, and builds.
 - [Dependencies and independence](docs/DEPENDENCIES.md) — libraries, tools, and source provenance.
+- [Toolchain profiles](docs/TOOLCHAINS.md) — recorded compilers, SDKs, graphics devices and offline preparation.
+
+After following the manual's build setup, run `build/linux-debug/faset_editor`
+(or `build/windows-debug/faset_editor.exe`) to open the project launcher. The
+[`collect-2d`](examples/projects/collect-2d) and
+[`collect-3d`](examples/projects/collect-3d) projects include playable C++ examples;
+the 3D example includes an original Blender asset and import instructions.
 
 ## Language
 

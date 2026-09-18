@@ -7,7 +7,7 @@ permissions:
   contents: read
 concurrency:
   group: windows-graphics-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   windows-graphics:
     runs-on: windows-2025
@@ -21,8 +21,9 @@ jobs:
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x64
-      - name: Cache pinned Vulkan test tools
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - name: Restore pinned Vulkan test tools
+        id: vulkan-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           key: windows-2025-vulkan-${{ hashFiles('tools/ci/prepare_windows_vulkan.py') }}
           path: |
@@ -30,6 +31,14 @@ jobs:
             .cache/windows-graphics/driver
       - name: Build official Vulkan loader and SwiftShader from pinned sources
         run: python tools/ci/prepare_windows_vulkan.py
+      - name: Save successfully built Vulkan test tools
+        if: steps.vulkan-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.vulkan-cache.outputs.cache-primary-key }}
+          path: |
+            .cache/windows-graphics/sdk
+            .cache/windows-graphics/driver
       - name: Fetch checksum-verified Slang compiler
         run: python tools/fetch_slang.py
       - name: Configure full editor and Player
@@ -40,6 +49,8 @@ jobs:
         run: ctest --preset windows-debug --timeout 180
       - name: Real Release exports, 2D and 3D execution, incremental Debug rebuild
         run: build/windows-debug/faset_build_service_tests.exe --integration .cache/windows-export-e2e
+      - name: Export and relocate both checked-in playable games
+        run: python tools/verify_playable_exports.py --editor build/windows-debug/faset_editor.exe --output .cache/windows-playable-exports
       - name: Preserve graphics and export evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -55,3 +66,5 @@ jobs:
             .cache/windows-export-e2e/result-*.json
             .cache/windows-export-e2e/export-*/generations/*/manifest.json
             .cache/windows-export-e2e/export-*/generations/*/verification.ppm
+            .cache/windows-playable-exports/report.json
+            .cache/windows-playable-exports/evidence/*

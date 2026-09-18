@@ -1,3 +1,4 @@
+#include "assets_image_fixtures.hpp"
 #include <bit>
 #include <chrono>
 #include <faset/assets/asset_pipeline.hpp>
@@ -111,6 +112,16 @@ int main() {
         glb(source);
         auto first = pipeline.import_asset({source});
         success(first);
+        require(first.manifest.at("input_key").at("target_profile") == "desktop-static-pbr-v1" &&
+                    first.manifest.at("input_key")
+                            .at("toolchain")
+                            .at("cgltf")
+                            .get<std::string>()
+                            .size() == 40,
+                "cache recipe omits the desktop profile or pinned importer toolchain");
+        require(first.manifest.at("materials").at(0).at("format") == "faset.material" &&
+                    first.manifest.at("materials").at(0).at("version") == 1,
+                "material data is not explicitly versioned");
         require(!first.asset_id.empty(), "persistent identity missing");
         auto asset = pipeline.load_asset(first.asset_id);
         require(asset.meshes.size() == 1 && asset.nodes.size() == 1, "mesh/node extraction");
@@ -125,6 +136,13 @@ int main() {
                             {"physics", {{"mass", 12}}},
                             {"material", "custom-brass"}}}};
         pipeline.set_overrides(first.asset_id, custom);
+        AssetPipeline rebuilt_cache(root / "rebuilt-cache");
+        const auto recovered = rebuilt_cache.import_asset({source});
+        success(recovered);
+        require(recovered.asset_id == first.asset_id && recovered.generation == first.generation &&
+                    rebuilt_cache.load_asset(first.asset_id).nodes[0].id == node_id &&
+                    rebuilt_cache.overrides(first.asset_id) == custom,
+                "fresh cache changed source identity, outputs, or authoring overrides");
         auto unchanged = pipeline.import_asset({source});
         success(unchanged);
         require(unchanged.cache_hit && unchanged.generation == first.generation,
@@ -258,6 +276,99 @@ int main() {
                 "concurrent dependency edit accepted");
         require(pipeline.load_asset(ext.asset_id).generation == dependency_active,
                 "concurrent edit changed active");
+        // Standalone images share the same identity, generation and failure guarantees.
+        const auto picture = root / "sprite.PNG";
+        save(picture, faset::test_images::png_red_green);
+        ImportRequest image_request{picture};
+        image_request.settings = {{"pixels_per_unit", 20.0}};
+        auto image_first = pipeline.import_asset(image_request);
+        success(image_first);
+        auto image_asset = pipeline.load_asset(image_first.asset_id);
+        require(image_asset.meshes.empty() && image_asset.textures.size() == 1,
+                "Standalone PNG should produce one owned texture");
+        require(image_asset.textures[0].mime_type == "image/png" &&
+                    image_first.manifest["kind"] == "image",
+                "PNG kind/MIME");
+        require(image_first.manifest["image"]["width"] == 2 &&
+                    image_first.manifest["image"]["height"] == 1 &&
+                    image_first.manifest["image"]["pixels_per_unit"] == 20.0,
+                "PNG dimensions and sprite scale recipe");
+        const auto texture_id = image_asset.textures[0].id;
+        pipeline.set_overrides(image_first.asset_id, {{texture_id, {{"gameplay", "preserved"}}}});
+        auto image_cache = pipeline.import_asset({picture});
+        success(image_cache);
+        require(image_cache.cache_hit && image_cache.generation == image_first.generation,
+                "PNG cache/recipe persistence");
+        save(picture, faset::test_images::png_blue_white);
+        auto image_changed = pipeline.import_asset({picture});
+        success(image_changed);
+        require(image_changed.asset_id == image_first.asset_id &&
+                    image_changed.generation != image_first.generation,
+                "PNG reimport content invalidation");
+        require(pipeline.load_asset(image_first.asset_id).textures[0].id == texture_id,
+                "Image subasset ID changed after content edit");
+        image_request.settings = {{"pixels_per_unit", 40.0}};
+        auto image_recipe = pipeline.import_asset(image_request);
+        success(image_recipe);
+        require(image_recipe.generation != image_changed.generation,
+                "Image settings omitted from recipe hash");
+        save(picture, std::string("broken PNG"));
+        require(pipeline.import_asset({picture}).status == ImportStatus::failed,
+                "Broken PNG published");
+        require(pipeline.load_asset(image_first.asset_id).generation == image_recipe.generation,
+                "Broken PNG replaced successful generation");
+        save(picture, faset::test_images::jpeg_red_green);
+        require(pipeline.import_asset({picture}).status == ImportStatus::failed,
+                "Mismatched JPEG content accepted as PNG");
+        auto oversized = faset::test_images::png_red_green;
+        oversized[16] = 0;
+        oversized[17] = 1;
+        oversized[18] = 0;
+        oversized[19] = 0;
+        save(picture, oversized);
+        require(pipeline.import_asset({picture}).status == ImportStatus::failed,
+                "Oversized image accepted");
+        save(picture, faset::test_images::png_red_green);
+        ImportJob* image_job_pointer = nullptr;
+        ImportJob image_job([&](const ImportProgress& progress) {
+            if (progress.fraction >= .5f)
+                image_job_pointer->cancel();
+        });
+        image_job_pointer = &image_job;
+        require(pipeline.import_asset({picture}, image_job).status == ImportStatus::cancelled,
+                "PNG cancellation ignored");
+        require(pipeline.load_asset(image_first.asset_id).generation == image_recipe.generation,
+                "Cancelled PNG replaced active generation");
+        image_request.settings = {{"pixels_per_unit", 0}};
+        require(pipeline.import_asset(image_request).status == ImportStatus::failed,
+                "Zero pixels_per_unit accepted");
+        save(picture, faset::test_images::png_blue_white);
+        const auto renamed = root / "renamed.PNG";
+        fs::rename(picture, renamed);
+        fs::rename(picture.string() + ".faset-import.json",
+                   renamed.string() + ".faset-import.json");
+        fs::rename(picture.string() + ".faset-overrides.json",
+                   renamed.string() + ".faset-overrides.json");
+        auto image_rename = pipeline.import_asset({renamed});
+        success(image_rename);
+        require(image_rename.cache_hit && image_rename.asset_id == image_first.asset_id,
+                "Image source rename with sidecar lost identity/cache");
+        require(pipeline.current_manifest(image_first.asset_id)["source"] == renamed.string(),
+                "Image rename retained old source pointer");
+        require(pipeline.overrides(image_first.asset_id).contains(texture_id),
+                "Image rename/reimport lost overrides");
+        const auto jpeg = root / "sprite.JPEG";
+        save(jpeg, faset::test_images::jpeg_red_green);
+        auto jpeg_import = pipeline.import_asset({jpeg});
+        success(jpeg_import);
+        require(jpeg_import.manifest["image"]["width"] == 2 &&
+                    pipeline.load_asset(jpeg_import.asset_id).textures[0].mime_type == "image/jpeg",
+                "JPEG decoding/dimensions");
+        save(root / "same.png", faset::test_images::png_blue_white);
+        auto other_image = pipeline.import_asset({root / "same.png"});
+        success(other_image);
+        require(other_image.asset_id != image_first.asset_id,
+                "Independent same-content source must have independent AssetId");
         fs::remove_all(root / "cache");
         auto restored = pipeline.import_asset({source});
         success(restored);
@@ -268,7 +379,7 @@ int main() {
                 "cleared cache lost authoring overrides");
         fs::remove_all(root);
         std::cout << "assets: geometry/PBR/texture, GLB/glTF, cache, rename, deletion, overrides, "
-                     "failure, cancellation OK\n";
+                     "failure, cancellation, standalone PNG/JPEG OK\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << e.what() << "\nFixtures retained: " << root << '\n';

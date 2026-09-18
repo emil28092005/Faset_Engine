@@ -67,8 +67,13 @@ Json Commands::call(const std::string& name, const Json& arguments) {
 }
 Json Commands::resolved_scene(const std::string& id) const {
     const auto result = authoring::resolve_templates(
-        authoring_.query(id).at("scene"), authoring_.schemas(),
-        [&](const std::string& path) { return read_json(project_path(authoring_.root(), path)); });
+        authoring_.query(id).at("scene"), authoring_.schemas(), [&](const std::string& path) {
+            const auto relative = std::filesystem::path(path).lexically_normal();
+            for (const auto& document : authoring_.documents())
+                if (document.at("path") == relative.generic_string())
+                    return authoring_.query(document.at("id")).at("scene");
+            return read_json(project_path(authoring_.root(), relative));
+        });
     return {{"scene", result.scene}, {"conflicts", result.conflicts}};
 }
 Commands::Commands(authoring::AuthoringService& authoring) : authoring_(authoring) {
@@ -109,7 +114,10 @@ Commands::Commands(authoring::AuthoringService& authoring) : authoring_(authorin
     add("faset_scene_edit",
         "Apply one atomic authoring batch with optimistic revision checking and one Undo step. "
         "Operations: entity.create/rename/delete/duplicate/reparent; component.add/remove/set; "
-        "scene.rename; template.instance/override/revert/suppress/add/reparent. Use persistent IDs "
+        "scene.rename/simulation; "
+        "template.instance/override/revert/suppress/restore/add/addition_set/reparent/remove/"
+        "source_set. Use "
+        "persistent IDs "
         "from document_query and schema. An idempotency_key retries the same payload in this "
         "session.",
         object_schema({{"document", text},
@@ -138,6 +146,31 @@ Commands::Commands(authoring::AuthoringService& authoring) : authoring_(authorin
         "is not a live game query.",
         object_schema({{"document", text}}, {"document"}),
         [&](const Json& args) { return resolved_scene(args.at("document")); }, true);
+    add(
+        "faset_simulation_get",
+        "Read scene simulation settings with defaults: fixed_delta seconds, max_catch_up_ticks, "
+        "physics_substeps and gravity.",
+        object_schema({{"document", text}}, {"document"}),
+        [&](const Json& args) {
+            const auto document = authoring_.query(args.at("document"));
+            auto settings = authoring::default_simulation_settings();
+            settings.update(document.at("scene").value("simulation", Json::object()));
+            return Json{{"document", document.at("id")},
+                        {"revision", document.at("revision")},
+                        {"settings", settings}};
+        },
+        true);
+    add("faset_simulation_set",
+        "Update scene simulation settings as one Undo transaction. Values apply when the Player "
+        "next starts.",
+        object_schema(
+            {{"document", text}, {"revision", integer}, {"settings", {{"type", "object"}}}},
+            {"document", "revision", "settings"}),
+        [&](const Json& args) {
+            return authoring_.transact(
+                args.at("document"), args.at("revision"),
+                Json::array({{{"op", "scene.simulation"}, {"value", args.at("settings")}}}));
+        });
     add("faset_recovery_restore",
         "Restore a recovery journal, including an unsaved new scene. If the document is already "
         "open, pass its current revision. External file changes are never overwritten.",

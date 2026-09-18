@@ -19,3 +19,8 @@ CMakeUserPresets.json
 .env
 .env.*
 !.env.example
+
+# Per-project authoring journals, caches, native builds and exports
+**/.faset/
+**/Exports/
+*.blend1

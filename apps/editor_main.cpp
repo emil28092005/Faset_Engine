@@ -7,6 +7,7 @@
 #include <thread>
 #ifdef FASET_HAS_EDITOR_UI
 #include <faset/editor/editor_ui.hpp>
+#include <faset/editor/project_launcher.hpp>
 namespace faset::editor {
 int run_editor_ui(Session&, bool, std::uint64_t, const std::filesystem::path&);
 }
@@ -38,6 +39,7 @@ std::filesystem::path executable_directory(const char* argument) {
 void help() {
     std::cout
         << "Faset Editor\n"
+           "  faset_editor                         Open the project launcher\n"
            "  faset_editor --project PATH [--new NAME --dimension 2|3] [--scene RELATIVE_PATH]\n"
            "  faset_editor --project PATH --mcp [--gui]\n"
            "  faset_editor --project PATH --command JSON [--wait]\n"
@@ -97,71 +99,102 @@ int main(int argc, char** argv) {
             else
                 throw Error("cli.option", "Unknown option: " + arg);
         }
-        require(!project.empty(), "cli.project", "Use --project PATH to select a project");
         require(!(mcp && !command.empty()), "cli.mode", "Choose MCP or a single command");
         if (mcp && !explicit_gui)
             gui = false;
-        Session session({std::filesystem::absolute(project), std::filesystem::absolute(engine),
-                         executable_directory(argv[0])});
-        if (!new_name.empty())
-            session.scaffold(new_name, dimension);
-        const auto settings = session.project();
-        if (scene.empty())
-            scene = settings.value("start_scene", std::string());
-        if (!scene.empty() &&
-            std::filesystem::exists(project_path(session.config().project_root, scene)))
-            session.authoring().open(scene);
-        if (!command.empty()) {
-            const auto request = Json::parse(command);
-            auto result = session.commands().call(request.at("name"),
-                                                  request.value("arguments", Json::object()));
-            if (wait && result.contains("job")) {
-                const auto id = result.at("job");
-                const auto started = std::chrono::steady_clock::now();
-                for (;;) {
-                    session.poll();
-                    result = session.commands().call("faset_job", {{"id", id}});
-                    const auto state = result.value("state", std::string());
-                    if (state == "succeeded" || state == "failed" || state == "cancelled" ||
-                        state == "conflict")
-                        break;
-                    require(std::chrono::steady_clock::now() - started < std::chrono::minutes(30),
-                            "job.timeout", "Command wait exceeded 30 minutes");
-                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                }
-            }
-            std::cout << result.dump(2) << '\n';
-            const auto state = result.value("state", std::string());
-            return state == "failed" || state == "cancelled" || state == "conflict" ? 1 : 0;
-        }
-        if (gui) {
+        require(!project.empty() || (gui && !mcp && new_name.empty()), "cli.project",
+                "Use --project PATH for command, MCP, or --new modes");
+        auto previous_project = project;
+        for (;;) {
+            if (project.empty()) {
 #ifdef FASET_HAS_EDITOR_UI
-            return run_editor_ui(session, mcp, frames, capture);
+                const auto selection =
+                    run_project_launcher(engine, previous_project, frames, capture);
+                if (!selection)
+                    return 0;
+                project = selection->path;
+                new_name = selection->create ? selection->name : std::string();
+                dimension = selection->dimension;
 #else
-            throw Error("editor.gui_unavailable",
-                        "This build has no graphical editor; use --mcp or --command, or build with "
-                        "FASET_BUILD_EDITOR=ON");
+                throw Error("editor.gui_unavailable",
+                            "This build has no graphical project launcher; use --project PATH");
 #endif
-        }
-        require(mcp, "cli.mode", "Headless mode requires --mcp or --command");
-        std::signal(SIGINT, interrupt);
-        std::signal(SIGTERM, interrupt);
-        McpServer server(session.commands());
-        StdioTransport transport;
-        while (!interrupted && !transport.closed()) {
-            for (const auto& line : transport.poll()) {
-                try {
-                    const auto reply = server.handle(Json::parse(line));
-                    if (reply)
-                        transport.send(*reply);
-                } catch (const Json::exception&) {
-                    transport.send(server.parse_error());
-                }
             }
-            session.poll();
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            Session session({std::filesystem::absolute(project), std::filesystem::absolute(engine),
+                             executable_directory(argv[0])});
+            if (!new_name.empty())
+                session.scaffold(new_name, dimension);
+            const auto settings = session.project();
+#ifdef FASET_HAS_EDITOR_UI
+            if (gui && std::filesystem::exists(project / "project.faset.json"))
+                remember_project(project);
+#endif
+            if (scene.empty())
+                scene = settings.value("start_scene", std::string());
+            if (!scene.empty() &&
+                std::filesystem::exists(project_path(session.config().project_root, scene)))
+                session.authoring().open(scene);
+            if (!command.empty()) {
+                const auto request = Json::parse(command);
+                auto result = session.commands().call(request.at("name"),
+                                                      request.value("arguments", Json::object()));
+                if (wait && result.contains("job")) {
+                    const auto id = result.at("job");
+                    const auto started = std::chrono::steady_clock::now();
+                    for (;;) {
+                        session.poll();
+                        result = session.commands().call("faset_job", {{"id", id}});
+                        const auto state = result.value("state", std::string());
+                        if (state == "succeeded" || state == "failed" || state == "cancelled" ||
+                            state == "conflict")
+                            break;
+                        require(std::chrono::steady_clock::now() - started <
+                                    std::chrono::minutes(30),
+                                "job.timeout", "Command wait exceeded 30 minutes");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                    }
+                }
+                std::cout << result.dump(2) << '\n';
+                const auto state = result.value("state", std::string());
+                return state == "failed" || state == "cancelled" || state == "conflict" ? 1 : 0;
+            }
+            if (gui) {
+#ifdef FASET_HAS_EDITOR_UI
+                const int result = run_editor_ui(session, mcp, frames, capture);
+                if (result != 3)
+                    return result;
+                previous_project = project;
+                project.clear();
+                scene.clear();
+                new_name.clear();
+                continue;
+#else
+                throw Error(
+                    "editor.gui_unavailable",
+                    "This build has no graphical editor; use --mcp or --command, or build with "
+                    "FASET_BUILD_EDITOR=ON");
+#endif
+            }
+            require(mcp, "cli.mode", "Headless mode requires --mcp or --command");
+            std::signal(SIGINT, interrupt);
+            std::signal(SIGTERM, interrupt);
+            McpServer server(session.commands());
+            StdioTransport transport;
+            while (!interrupted && !transport.closed()) {
+                for (const auto& line : transport.poll()) {
+                    try {
+                        const auto reply = server.handle(Json::parse(line));
+                        if (reply)
+                            transport.send(*reply);
+                    } catch (const Json::exception&) {
+                        transport.send(server.parse_error());
+                    }
+                }
+                session.poll();
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+            return 0;
         }
-        return 0;
     } catch (const Error& error) {
         std::cerr << error.json().dump() << '\n';
         return 1;

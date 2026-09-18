@@ -38,7 +38,7 @@ These are values, not borrowed component pointers. Changing a returned copy has 
 - `void teleport(EntityHandle, const Transform&)` changes the pose discontinuously, wakes the body, and resets interpolation/contact-query history. It does not zero velocity.
 - `bool grounded(EntityHandle) const` tests support using recent native contact normals.
 
-These methods require a valid handle and a physics body. Ordinary `setTransform` is rejected for physical objects, including static and kinematic bodies. See [physics](physics.md) for dimensions, tolerances, and collider limits.
+All methods require a valid handle. Velocity, impulse, and grounded queries also require a physics body; `teleport` accepts physical and non-physical objects. Ordinary `setTransform` is rejected for physical objects, including static and kinematic bodies. See [physics](physics.md) for dimensions, tolerances, and collider limits.
 
 ## Input and collision events
 
@@ -68,3 +68,23 @@ Immediate validation errors throw. Deferred failures are recorded in diagnostics
 `RuntimeConfig` defaults to `fixedDelta = 1.0 / 60.0`, `maxCatchUpTicks = 4`, `physicsSubsteps = 4`, and `gravity = {0, -9.81f, 0}`. `FrameStats` reports fixed ticks performed, dropped time, interpolation fraction, and total tick count.
 
 `snapshot()` returns a value snapshot for rendering; `snapshotJson()` provides its JSON representation. `diagnostics()` returns a read-only vector of runtime messages. These are native C++ APIs for the Player and tests, **not MCP endpoints**.
+
+## Inspect a running Player locally
+
+The Player has local development controls in addition to gameplay input: **P** toggles
+pause, **N** steps one fixed tick while paused, and **Escape** closes the Player.
+**F3** toggles physics-box outlines; `--debug-physics` enables them from startup.
+Static bodies are green, kinematic bodies orange, and dynamic bodies cyan.
+
+These outlines use current physics poses and collider half-extents multiplied by the
+absolute transform scale. They can differ slightly from an interpolated visible mesh.
+The initial adapters support root-only boxes: four outline edges in 2D, twelve in 3D.
+This view does not show contact normals, broad-phase cells, or arbitrary mesh colliders.
+
+To record measurements, run the Player with `--profile measurements.json --frames 240`.
+A profile requires an explicit count from 1 to 100,000. As with all bounded Player
+runs, simulation uses the configured fixed delta each frame; `--headless` renders
+through offscreen Vulkan. The report contains measured durations rather than treating
+that simulation delta as frame time. See [Player profiling](../editor/profiling.md)
+for startup, CPU/GPU timing, percentiles, and their limits. These flags do not add MCP
+to the Player.

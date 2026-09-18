@@ -115,6 +115,8 @@ Layout parse_layout(const Json& j, Layout l = {}) {
 }
 } // namespace
 Theme Theme::from_json(const Json& j) {
+    if (!j.is_object())
+        throw std::runtime_error("Theme must be an object");
     Theme t;
 #define UI_COLOR(name) t.name = color(j, #name, t.name)
     UI_COLOR(background);
@@ -277,7 +279,9 @@ struct Context::Impl {
             return 5 * scale;
         if (horizontal) {
             if (w.kind == Kind::Label || w.kind == Kind::Button || w.kind == Kind::Tab)
-                return font.measure(w.text, theme.font_size * scale) + theme.padding * 2 * scale;
+                return font.measure(w.text,
+                                    (w.font_size > 0 ? w.font_size : theme.font_size) * scale) +
+                       theme.padding * 2 * scale;
             return 80 * scale;
         }
         if (w.kind == Kind::Panel || w.kind == Kind::Column || w.kind == Kind::Row) {
@@ -367,6 +371,8 @@ struct Context::Impl {
     Widget* hit(Widget& w, float x, float y) {
         if (!w.visible || !w.clip.contains(x, y))
             return nullptr;
+        if (!w.enabled)
+            return w.rect.contains(x, y) ? &w : nullptr;
         for (auto child = w.children.rbegin(); child != w.children.rend(); ++child)
             if (auto* target = hit(**child, x, y))
                 return target;
@@ -463,8 +469,9 @@ struct Context::Impl {
             while (i < e.buffer.text().size() &&
                    (static_cast<unsigned char>(e.buffer.text()[i]) & 0xc0) == 0x80)
                 ++i;
-            const auto width = font.measure(std::string_view(e.buffer.text()).substr(0, i),
-                                            theme.font_size * scale);
+            const auto width =
+                font.measure(std::string_view(e.buffer.text()).substr(0, i),
+                             (w.font_size > 0 ? w.font_size : theme.font_size) * scale);
             if (local < (previous_width + width) * .5f)
                 return previous_byte;
             previous_width = width;
@@ -518,7 +525,11 @@ struct Context::Impl {
             fill(frame, rect, theme.surface, w.clip);
             outline(frame, rect, theme.border, w.clip);
         } else if (w.kind == Kind::Button) {
-            fill(frame, rect, hover && w.enabled ? theme.hover : theme.raised, w.clip);
+            fill(frame, rect,
+                 hover && w.enabled ? theme.hover
+                 : w.selected       ? theme.selection
+                                    : theme.raised,
+                 w.clip);
             outline(frame, rect, focus ? theme.accent : theme.border, w.clip);
         } else if (w.kind == Kind::Tab || w.kind == Kind::TreeRow) {
             if (w.selected || hover)
@@ -543,7 +554,7 @@ struct Context::Impl {
             fill(frame, rect, hover || w.id == captured ? theme.accent : theme.background, w.clip);
         }
         float tx = rect.x + theme.padding * scale + w.indent * 14 * scale;
-        const auto font_size = theme.font_size * scale;
+        const auto font_size = (w.font_size > 0 ? w.font_size : theme.font_size) * scale;
         const auto ty = rect.y + std::max(0.f, (rect.height - font_size * 1.45f) * .5f);
         if (w.kind == Kind::Checkbox) {
             Rect box{tx, rect.y + (rect.height - 14 * scale) / 2, 14 * scale, 14 * scale};
@@ -666,30 +677,55 @@ const Theme& Context::theme() const {
 FontAtlas& Context::font() {
     return impl_->font;
 }
-void Context::apply_layout(const Json& document) {
+void Context::validate_layout(const Json& document) const {
+    if (!document.is_object())
+        throw std::runtime_error("Layout must be an object");
     const auto& definition = document.contains("root") ? document.at("root") : document;
+    if (definition.at("id") != impl_->root.id)
+        throw std::runtime_error("Layout root ID must match retained root");
     std::set<std::string> ids;
-    std::function<void(const Json&)> validate = [&](const Json& j) {
+    std::function<void(const Json&, const std::string&)> validate = [&](const Json& j,
+                                                                        const std::string& parent) {
         const auto id = j.at("id").get<std::string>();
         if (id.empty() || !ids.insert(id).second)
             throw std::runtime_error("Duplicate layout widget ID");
+        const auto* existing = impl_->find(id);
+        if (existing && ((existing->parent ? existing->parent->id : std::string()) != parent))
+            throw std::runtime_error("Hot layout cannot reparent existing widget: " + id);
         if (j.contains("kind")) {
             const auto type = kind_from_string(j.at("kind"));
-            if (auto* existing = find(id); existing && existing->kind != type)
+            if (existing && existing->kind != type)
                 throw std::runtime_error("Hot layout cannot replace widget kind");
         }
+        if (j.contains("text") &&
+            (!j.at("text").is_string() || !TextBuffer::valid_utf8(j.at("text").get<std::string>())))
+            throw std::runtime_error("Widget text must be valid UTF-8");
         if (j.contains("layout"))
-            parse_layout(j.at("layout"));
-        if (j.contains("children"))
+            parse_layout(j.at("layout"), existing ? existing->layout : Layout{});
+        if (j.contains("font_size")) {
+            const auto size = j.at("font_size").get<float>();
+            if (!std::isfinite(size) || size < 0 || size > 128)
+                throw std::runtime_error("Invalid widget font size");
+        }
+        if (j.contains("children")) {
+            if (!j.at("children").is_array())
+                throw std::runtime_error("Layout children must be an array");
             for (const auto& child : j.at("children"))
-                validate(child);
+                validate(child, id);
+        }
     };
-    validate(definition);
+    validate(definition, "");
+}
+void Context::apply_layout(const Json& document) {
+    validate_layout(document);
+    const auto& definition = document.contains("root") ? document.at("root") : document;
     std::function<void(Widget&, const Json&)> apply = [&](Widget& w, const Json& j) {
         if (j.contains("text"))
             update_text(w.id, j.at("text"));
         if (j.contains("layout"))
             w.layout = parse_layout(j.at("layout"), w.layout);
+        if (j.contains("font_size"))
+            w.font_size = j.at("font_size");
         if (j.contains("children"))
             for (const auto& child : j.at("children")) {
                 const auto id = child.at("id").get<std::string>();
@@ -700,8 +736,6 @@ void Context::apply_layout(const Json& document) {
                 apply(target, child);
             }
     };
-    if (definition.at("id") != root().id)
-        throw std::runtime_error("Layout root ID must match retained root");
     apply(root(), definition);
 }
 void Context::layout(float width, float height, float scale) {
