@@ -264,6 +264,8 @@ void run() {
     auto importedScene = scene;
     importedScene["entities"][1]["components"][1]["fields"]["asset"] = imported.asset_id;
     snapshot = view.build(importedScene, 1);
+    for (const auto& diagnostic : view.diagnostics())
+        std::cerr << "Cooked fixture: " << diagnostic << '\n';
     check(view.diagnostics().empty(), "valid cooked texture/material produces no error");
     check(snapshot.draws.size() == 1 && snapshot.draws[0].mesh->vertices.size() == 3,
           "cooked mesh reaches render snapshot");

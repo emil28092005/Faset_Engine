@@ -25,6 +25,23 @@ SOURCES = {
     "swiftshader": ("google/swiftshader", "1e80438d2b93ef36a7c05f8d2b81233bac0e3d16", "1c3a1afc397c7aa4d3275790bc9b451e80b144a1db665135d5519838bacf44a8"),
 }
 
+# This exact previous helper cache used the same verified source pins. Allow a
+# one-time migration without rebuilding LLVM, but never restore it after pin changes.
+LEGACY_SOURCE_IDENTITY = "38d3f6735736a2d0cf25cec2d9edef8b1220f6d10d13a694efb633aa85c3b8fc"
+LEGACY_CACHE_KEY = "windows-2025-vulkan-0ca023e20dd35e447b4e13537e95c70859cc7604367979f32c45705b3f370568"
+
+
+def cache_identity() -> str:
+    return hashlib.sha256(json.dumps(SOURCES, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def stamp(directory: Path, names: tuple[str, ...]) -> None:
+    identity = {name: list(SOURCES[name]) for name in names}
+    path = directory / "source-identity.json"
+    if path.exists() and json.loads(path.read_text(encoding="utf-8")) != identity:
+        raise RuntimeError(f"Cached tool source identity differs from the pins: {path}")
+    path.write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+
 
 def run(*arguments: str | Path) -> None:
     command = [str(argument) for argument in arguments]
@@ -67,7 +84,18 @@ def configure(source_path: Path, build: Path, *arguments: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, default=Path(".cache/windows-graphics"))
+    parser.add_argument("--loader-only", action="store_true", help="Build headers/loader only for CPU renderer-linked tests")
+    parser.add_argument("--cache-key", action="store_true", help="Print source identity and expose Actions cache outputs without building")
     args = parser.parse_args()
+    if args.cache_key:
+        identity = cache_identity()
+        key = "windows-2025-vulkan-v2-" + identity
+        legacy = LEGACY_CACHE_KEY if identity == LEGACY_SOURCE_IDENTITY else ""
+        print(key)
+        if "GITHUB_OUTPUT" in os.environ:
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                output.write(f"key={key}\nlegacy={legacy}\n")
+        return 0
     if sys.platform != "win32":
         parser.error("Run this helper on Windows in a Visual Studio x64 developer environment")
     for program in ("cmake", "ninja", "cl"):
@@ -83,7 +111,8 @@ def main() -> int:
         configure(loader, cache / "loader-build", f"-DCMAKE_INSTALL_PREFIX={sdk}", f"-DCMAKE_PREFIX_PATH={sdk}", "-DBUILD_TESTS=OFF", "-DBUILD_WERROR=OFF")
         run("cmake", "--build", cache / "loader-build", "--parallel", "2")
         run("cmake", "--install", cache / "loader-build")
-    if not (driver / "vk_swiftshader_icd.json").is_file():
+    stamp(sdk, ("headers", "loader"))
+    if not args.loader_only and not (driver / "vk_swiftshader_icd.json").is_file():
         swift = source(cache, "swiftshader")
         build = cache / "swiftshader-build"
         configure(swift, build, "-DSWIFTSHADER_BUILD_TESTS=OFF", "-DSWIFTSHADER_BUILD_BENCHMARKS=OFF", "-DSWIFTSHADER_BUILD_PVR=OFF", "-DSWIFTSHADER_WARNINGS_AS_ERRORS=OFF")
@@ -93,14 +122,29 @@ def main() -> int:
         library = (manifest_directory / manifest["ICD"]["library_path"]).resolve()
         driver.mkdir(parents=True, exist_ok=True)
         shutil.copy2(library, driver / library.name)
-        manifest["ICD"]["library_path"] = "./" + library.name
+        # Khronos' Windows loader identifies relative paths by a backslash, not
+        # a forward slash. './name.dll' otherwise remains relative to the cwd.
+        manifest["ICD"]["library_path"] = ".\\" + library.name
         (driver / "vk_swiftshader_icd.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    report = {"sources": {name: {"repository": repository, "commit": commit, "sha256": digest} for name, (repository, commit, digest) in SOURCES.items()}, "validation_layer": False, "vulkan_sdk": str(sdk), "driver": str(driver / "vk_swiftshader_icd.json")}
+    if not args.loader_only:
+        # Repair the old separator on cache hits as well as newly built bundles.
+        manifest_path = driver / "vk_swiftshader_icd.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        library_name = Path(manifest["ICD"]["library_path"]).name
+        if not (driver / library_name).is_file():
+            raise RuntimeError("Cached SwiftShader manifest points to a missing DLL")
+        manifest["ICD"]["library_path"] = ".\\" + library_name
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        stamp(driver, ("swiftshader",))
+    used_sources = {name: source for name, source in SOURCES.items() if not args.loader_only or name != "swiftshader"}
+    report = {"sources": {name: {"repository": repository, "commit": commit, "sha256": digest} for name, (repository, commit, digest) in used_sources.items()}, "validation_layer": False, "vulkan_sdk": str(sdk), "driver": None if args.loader_only else str(driver / "vk_swiftshader_icd.json"), "loader_only": args.loader_only}
     cache.mkdir(parents=True, exist_ok=True)
     (cache / "toolchain.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if "GITHUB_ENV" in os.environ:
         with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
-            output.write(f"VULKAN_SDK={sdk}\nVK_DRIVER_FILES={report['driver']}\nVK_ICD_FILENAMES={report['driver']}\n")
+            output.write(f"VULKAN_SDK={sdk}\n")
+            if report["driver"]:
+                output.write(f"VK_DRIVER_FILES={report['driver']}\nVK_ICD_FILENAMES={report['driver']}\n")
         with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as output:
             output.write(str(sdk / "bin") + "\n")
     print(json.dumps(report, indent=2))

@@ -21,11 +21,15 @@ jobs:
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x64
+      - name: Identify pinned Vulkan source cache
+        id: vulkan-identity
+        run: python tools/ci/prepare_windows_vulkan.py --cache-key
       - name: Restore pinned Vulkan test tools
         id: vulkan-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: windows-2025-vulkan-${{ hashFiles('tools/ci/prepare_windows_vulkan.py') }}
+          key: ${{ steps.vulkan-identity.outputs.key }}
+          restore-keys: ${{ steps.vulkan-identity.outputs.legacy }}
           path: |
             .cache/windows-graphics/sdk
             .cache/windows-graphics/driver
@@ -39,6 +43,10 @@ jobs:
           path: |
             .cache/windows-graphics/sdk
             .cache/windows-graphics/driver
+      - name: Probe Vulkan loader and SwiftShader before compiling the engine
+        env:
+          VK_LOADER_DEBUG: all
+        run: python tools/ci/probe_windows_vulkan.py
       - name: Fetch checksum-verified Slang compiler
         run: python tools/fetch_slang.py
       - name: Configure full editor and Player
@@ -46,6 +54,8 @@ jobs:
       - name: Build full editor and tests
         run: cmake --build --preset windows-debug --parallel 2
       - name: CPU contracts and software GPU pixel tests
+        env:
+          VK_LOADER_DEBUG: error,warn,driver
         run: ctest --preset windows-debug --timeout 180
       - name: Real Release exports, 2D and 3D execution, incremental Debug rebuild
         run: build/windows-debug/faset_build_service_tests.exe --integration .cache/windows-export-e2e
@@ -61,6 +71,9 @@ jobs:
           include-hidden-files: true
           path: |
             .cache/windows-graphics/toolchain.json
+            .cache/windows-graphics/probe.json
+            .cache/windows-graphics/driver/*.json
+            .cache/windows-graphics/sdk/source-identity.json
             build/windows-debug/Testing/Temporary/LastTest.log
             build/windows-debug/*test.ppm
             .cache/windows-export-e2e/result-*.json

@@ -19,6 +19,32 @@ jobs:
       - name: Windows compiler environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      - name: Identify pinned Windows Vulkan SDK cache
+        if: runner.os == 'Windows'
+        id: vulkan-identity
+        run: python tools/ci/prepare_windows_vulkan.py --cache-key
+      - name: Restore Windows Vulkan SDK
+        if: runner.os == 'Windows'
+        id: vulkan-sdk-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.vulkan-identity.outputs.key }}-loader-only
+          restore-keys: |
+            ${{ steps.vulkan-identity.outputs.key }}
+            ${{ steps.vulkan-identity.outputs.legacy }}
+          path: .cache/windows-graphics/sdk
+      - name: Build Windows Vulkan headers and loader without a GPU driver
+        if: runner.os == 'Windows'
+        run: python tools/ci/prepare_windows_vulkan.py --loader-only
+      - name: Save successfully built Windows Vulkan SDK
+        if: runner.os == 'Windows' && steps.vulkan-sdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.vulkan-sdk-cache.outputs.cache-primary-key }}
+          path: .cache/windows-graphics/sdk
+      - name: Fetch Windows Slang compiler
+        if: runner.os == 'Windows'
+        run: python tools/fetch_slang.py
       - name: Linux build tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang ninja-build
@@ -27,7 +53,7 @@ jobs:
         run: cmake --preset linux-debug -DFASET_BUILD_RENDERER=OFF -DFASET_BUILD_EDITOR=OFF
       - name: Configure Windows
         if: runner.os == 'Windows'
-        run: cmake --preset windows-debug -DFASET_BUILD_RENDERER=OFF -DFASET_BUILD_EDITOR=OFF
+        run: cmake --preset windows-debug -DFASET_BUILD_RENDERER=ON -DFASET_BUILD_EDITOR=OFF
       - name: Build Linux
         if: runner.os == 'Linux'
         run: cmake --build --preset linux-debug --parallel 2
@@ -39,7 +65,17 @@ jobs:
         run: ctest --preset linux-debug
       - name: Test Windows
         if: runner.os == 'Windows'
-        run: ctest --preset windows-debug
+        run: ctest --preset windows-debug -LE gpu
+      - name: Preserve Windows CPU test evidence
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-cpu-evidence
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            .cache/windows-graphics/toolchain.json
+            build/windows-debug/Testing/Temporary/LastTest.log
   manual:
     runs-on: ubuntu-24.04
     steps:
