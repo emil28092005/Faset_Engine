@@ -218,6 +218,8 @@ not encrypted code. A C++-only project continues to export without the Lua VM.
 
 Run `faset_lua_setup`. It copies annotation-only declarations to
 `.faset/lua/faset.lua` and creates `.luarc.json` **only if it does not already exist**.
+It also creates `Scripts/.luarc.json` for editors that open an individual Lua file
+with `Scripts` as the workspace root. Existing configuration files are preserved.
 For an existing LuaLS configuration, merge these settings yourself:
 
 ```json

@@ -71,16 +71,24 @@ int main() {
                 "test", "Project settings erased Lua configuration or external editor command");
         const auto setup = commands.call("faset_lua_setup", Json::object());
         require(setup.at("configuration_created") == true &&
+                    setup.at("scripts_configuration_created") == true &&
                     std::filesystem::is_regular_file(root / ".faset/lua/faset.lua") &&
                     read_json(root / ".luarc.json").at("runtime.version") == "Lua 5.4",
                 "test", "LuaLS setup did not install annotations and configuration");
+        require(read_json(root / "Scripts/.luarc.json").at("workspace.library") ==
+                    Json::array({"../.faset/lua"}),
+                "test", "Single-file Lua workspace cannot find Faset annotations");
         const Json custom_luarc = {{"runtime.version", "Lua 5.4"},
                                    {"workspace.library", {"Custom/Lua"}},
                                    {"custom_setting", true}};
+        const Json custom_scripts_luarc = {{"workspace.library", {"../Custom/Lua"}}};
         atomic_write_json(root / ".luarc.json", custom_luarc);
-        require(commands.call("faset_lua_setup", Json::object()).at("configuration_created") ==
-                        false &&
-                    read_json(root / ".luarc.json") == custom_luarc,
+        atomic_write_json(root / "Scripts/.luarc.json", custom_scripts_luarc);
+        const auto repeated_setup = commands.call("faset_lua_setup", Json::object());
+        require(repeated_setup.at("configuration_created") == false &&
+                    repeated_setup.at("scripts_configuration_created") == false &&
+                    read_json(root / ".luarc.json") == custom_luarc &&
+                    read_json(root / "Scripts/.luarc.json") == custom_scripts_luarc,
                 "test", "LuaLS setup overwrote the user's configuration");
         auto reject_command = [&](const std::string& name, const Json& args,
                                   const std::string& code) {

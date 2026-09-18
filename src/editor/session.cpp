@@ -493,16 +493,26 @@ void Session::register_commands() {
             const auto source = config_.engine_root / "tools/lua";
             const auto annotations = project_path(config_.project_root, ".faset/lua/faset.lua");
             const auto configuration = project_path(config_.project_root, ".luarc.json");
+            const auto scripts_configuration =
+                project_path(config_.project_root, "Scripts/.luarc.json");
             atomic_write(annotations, read_text(source / "faset.lua"));
             const bool create_configuration = !std::filesystem::exists(configuration);
             if (create_configuration)
                 atomic_write_json(configuration, read_json(source / "luarc.json"));
+            // Zed can open a script as a single-file workspace rooted at Scripts.
+            // Give that workspace its own relative path to the API declarations.
+            const bool create_scripts_configuration =
+                !std::filesystem::exists(scripts_configuration);
+            if (create_scripts_configuration)
+                atomic_write_json(scripts_configuration,
+                                  read_json(source / "luarc-scripts.json"));
             log(create_configuration
                     ? "LuaLS configured: .luarc.json and .faset/lua/faset.lua"
                     : "LuaLS annotations updated; existing .luarc.json preserved. Add .faset/lua "
                       "to workspace.library if needed");
             return Json{{"annotations", ".faset/lua/faset.lua"},
-                        {"configuration_created", create_configuration}};
+                        {"configuration_created", create_configuration},
+                        {"scripts_configuration_created", create_scripts_configuration}};
         });
     commands_.add(
         "faset_script_open",
