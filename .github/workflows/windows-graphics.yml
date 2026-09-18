@@ -1,0 +1,57 @@
+name: Windows editor and software Vulkan
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-graphics-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-graphics:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Visual Studio x64 environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x64
+      - name: Cache pinned Vulkan test tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: windows-2025-vulkan-${{ hashFiles('tools/ci/prepare_windows_vulkan.py') }}
+          path: |
+            .cache/windows-graphics/sdk
+            .cache/windows-graphics/driver
+      - name: Build official Vulkan loader and SwiftShader from pinned sources
+        run: python tools/ci/prepare_windows_vulkan.py
+      - name: Fetch checksum-verified Slang compiler
+        run: python tools/fetch_slang.py
+      - name: Configure full editor and Player
+        run: cmake --preset windows-debug -DFASET_BUILD_RENDERER=ON -DFASET_BUILD_EDITOR=ON
+      - name: Build full editor and tests
+        run: cmake --build --preset windows-debug --parallel 2
+      - name: CPU contracts and software GPU pixel tests
+        run: ctest --preset windows-debug --timeout 180
+      - name: Real Release exports, 2D and 3D execution, incremental Debug rebuild
+        run: build/windows-debug/faset_build_service_tests.exe --integration .cache/windows-export-e2e
+      - name: Preserve graphics and export evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-graphics-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          include-hidden-files: true
+          path: |
+            .cache/windows-graphics/toolchain.json
+            build/windows-debug/Testing/Temporary/LastTest.log
+            build/windows-debug/*test.ppm
+            .cache/windows-export-e2e/result-*.json
+            .cache/windows-export-e2e/export-*/generations/*/manifest.json
+            .cache/windows-export-e2e/export-*/generations/*/verification.ppm
