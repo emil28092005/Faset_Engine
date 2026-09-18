@@ -29,7 +29,7 @@ This README is in English. The current planning documents, studies, and research
 
 ## Accepted foundation
 
-- **C++** for the core and the first gameplay implementation. **Lua** will follow as a separate module and will be optional for individual games.
+- **C++** for the core and native gameplay. **Lua 5.4** is an optional sandboxed gameplay module, with Inspector schemas, development reload, and standalone export. See the [Lua guide](docs/manual/scripting/lua.md).
 - Objects, components, and nested scene templates for authoring; **EnTT** for the runtime ECS. JSON authoring data, stable IDs, and cooked binary assets for export.
 - A custom **Vulkan 1.3** backend, RenderGraph, and renderer. The backend calls Vulkan directly; gameplay uses Faset APIs. **Slang** compiles shaders, including compatible HLSL, to SPIR-V. The baseline renderer does not require ray tracing.
 - **SDL3** behind Faset's platform API; **Box2D** and **Box3D** for physics.
@@ -39,7 +39,7 @@ This README is in English. The current planning documents, studies, and research
 - **Editor-only MCP:** authoring, assets, import, builds, export, Play/Stop, and editor diagnostics. MCP is absent from the Player and exported games.
 - Standard, **unmodified Blender**, glTF/GLB import, and an optional add-on for convenient export and stable IDs.
 
-The MVP provides two small games, one 2D and one 3D, with scene editing, C++ behavior, physics, Play and standalone export. Lua, GPU-driven rendering, HZB, advanced shadows, temporal reconstruction and dynamic global illumination follow this baseline.
+The MVP provides two small games, one 2D and one 3D, with scene editing, C++ behavior, physics, Play and standalone export. A [Lua-only example](examples/lua) demonstrates the optional scripting module. GPU-driven rendering, HZB, advanced shadows, temporal reconstruction and dynamic global illumination follow this baseline.
 
 ## Run the research map
 

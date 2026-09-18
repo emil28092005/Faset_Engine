@@ -7,8 +7,13 @@
 #include <faset/player/SceneView.hpp>
 #include <faset/runtime/Runtime.hpp>
 #include <faset/runtime/schema.hpp>
+#include <faset/scripting/project.hpp>
+#if defined(FASET_HAS_LUA)
+#include <faset/scripting/LuaModule.hpp>
+#endif
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <set>
 #include <stdexcept>
 #include <vector>
@@ -177,28 +182,35 @@ void validatePackagedShaders(const std::filesystem::path& directory) {
 int player_main(int argc, char** argv) {
     const auto started = Clock::now();
     try {
-        std::filesystem::path scenePath, assetsPath, capturePath, controlPath, profilePath;
-        bool headless = false, validateOnly = false, debugPhysics = false;
+        std::filesystem::path scenePath, assetsPath, capturePath, controlPath, profilePath,
+            projectRoot;
+        bool headless = false, validateOnly = false, debugPhysics = false, watchLua = false;
         std::uint64_t maximumFrames = 0;
         std::set<std::string> options;
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i];
             if (arg == "--help") {
-                std::cout << "faset_player [--scene PATH] [--assets CACHE] [--frames N] "
-                             "[--headless] [--capture PATH.ppm] [--validate] [--control PATH] "
-                             "[--profile PATH.json] [--debug-physics]\n"
-                             "No --scene: open scene.fscene beside the executable. CACHE contains "
-                             "assets/<id>/.\n"
-                             "Headless uses offscreen Vulkan; --frames uses the configured fixed "
-                             "simulation delta.\n"
-                             "--validate checks scene/resources on CPU without gameplay callbacks "
-                             "or Vulkan initialization.\n"
-                             "--control is an optional editor mailbox for pause/resume/step/stop, "
-                             "without world queries.\n"
-                             "--profile requires explicit --frames 1..100000; measured durations "
-                             "include the first frame and renderer GPU waits/readback.\n"
-                             "Keys: A/D horizontal, W/S vertical, Space jump, E interact, P pause, "
-                             "N single-step, F3 physics boxes, Escape quit.\n";
+                std::cout
+                    << "faset_player [--scene PATH] [--assets CACHE] [--frames N] "
+                       "[--headless] [--capture PATH.ppm] [--validate] [--control PATH] "
+                       "[--profile PATH.json] [--debug-physics] [--project ROOT] "
+                       "[--watch-lua]\n"
+                       "No --scene: open scene.fscene beside the executable. CACHE contains "
+                       "assets/<id>/.\n"
+                       "Headless uses offscreen Vulkan; --frames uses the configured fixed "
+                       "simulation delta.\n"
+                       "--validate checks scene/resources on CPU without gameplay callbacks "
+                       "or Vulkan initialization.\n"
+                       "--control is an optional editor mailbox for pause/resume/step/stop, "
+                       "without world queries.\n"
+                       "--project loads Lua declared in project.faset.json; packaged projects "
+                       "are discovered beside the scene or executable.\n"
+                       "--watch-lua enables development-only script reload (or control "
+                       "reload-lua): the scene restarts, runtime state is not preserved.\n"
+                       "--profile requires explicit --frames 1..100000; measured durations "
+                       "include the first frame and renderer GPU waits/readback.\n"
+                       "Keys: A/D horizontal, W/S vertical, Space jump, E interact, P pause, "
+                       "N single-step, F3 physics boxes, Escape quit.\n";
                 return 0;
             }
             if (!options.insert(arg).second)
@@ -218,6 +230,8 @@ int player_main(int argc, char** argv) {
                 controlPath = faset::path_from_utf8(value());
             else if (arg == "--profile")
                 profilePath = faset::path_from_utf8(value());
+            else if (arg == "--project")
+                projectRoot = faset::path_from_utf8(value());
             else if (arg == "--frames")
                 maximumFrames = count(value());
             else if (arg == "--headless")
@@ -226,6 +240,8 @@ int player_main(int argc, char** argv) {
                 validateOnly = true;
             else if (arg == "--debug-physics")
                 debugPhysics = true;
+            else if (arg == "--watch-lua")
+                watchLua = true;
             else
                 throw std::invalid_argument("Unknown option: " + arg);
         }
@@ -234,9 +250,22 @@ int player_main(int argc, char** argv) {
              validateOnly))
             throw std::invalid_argument("--profile requires an output path and explicit --frames "
                                         "1..100000, without --validate");
+        if (options.contains("--project") && projectRoot.empty())
+            throw std::invalid_argument("--project requires a nonempty root path");
         if (scenePath.empty())
             scenePath = executableDirectory(argv[0]) / "scene.fscene";
         scenePath = std::filesystem::absolute(scenePath).lexically_normal();
+        const auto executableRoot = executableDirectory(argv[0]);
+        if (projectRoot.empty()) {
+            if (std::filesystem::is_regular_file(scenePath.parent_path() / "project.faset.json"))
+                projectRoot = scenePath.parent_path();
+            else if (std::filesystem::is_regular_file(executableRoot / "project.faset.json"))
+                projectRoot = executableRoot;
+        }
+        if (!projectRoot.empty())
+            projectRoot = std::filesystem::absolute(projectRoot).lexically_normal();
+        if (watchLua && (projectRoot.empty() || validateOnly))
+            throw std::invalid_argument("--watch-lua requires a project, without --validate");
         if (assetsPath.empty())
             assetsPath = scenePath.parent_path();
         if (!std::filesystem::is_directory(assetsPath))
@@ -246,10 +275,31 @@ int player_main(int argc, char** argv) {
             maximumFrames = 1;
         const auto sceneReadStarted = Clock::now();
         const auto document = faset::player::readScene(scenePath);
-        faset::runtime::validate_scene_schemas(document, faset::gameplay::schema());
+        const auto nativeSchema = faset::gameplay::schema();
+        if (!nativeSchema.is_array())
+            throw std::runtime_error("Gameplay schema() must return a type array");
+        const auto luaProject = projectRoot.empty() ? faset::scripting::LuaProject{}
+                                                    : faset::scripting::loadLuaProject(projectRoot);
+        auto schema = nativeSchema;
+#if defined(FASET_HAS_LUA)
+        std::unique_ptr<faset::scripting::LuaModule> lua;
+        if (luaProject.enabled()) {
+            lua = std::make_unique<faset::scripting::LuaModule>(luaProject);
+            for (const auto& type : lua->schema())
+                schema.push_back(type);
+        }
+#else
+        if (luaProject.enabled() || watchLua)
+            throw std::runtime_error("This Player was built without Lua support; configure "
+                                     "FASET_ENABLE_LUA=ON for this project");
+#endif
+        faset::runtime::validate_scene_schemas(document, schema);
+#if defined(FASET_HAS_LUA)
+        if (lua)
+            lua->validateScene(document);
+#endif
         const auto config = simulationConfig(document);
         const auto sceneReadFinished = Clock::now();
-        const auto executableRoot = executableDirectory(argv[0]);
         if (scenePath.extension() == ".fscene" &&
             std::filesystem::equivalent(scenePath.parent_path(), executableRoot))
             validatePackagedShaders(executableRoot);
@@ -272,9 +322,24 @@ int player_main(int argc, char** argv) {
             return 0;
         }
         const auto worldStarted = Clock::now();
-        faset::runtime::Runtime world(config);
-        faset::gameplay::registerGameplay(world);
-        world.load(document);
+        auto world = std::make_unique<faset::runtime::Runtime>(config);
+        faset::gameplay::registerGameplay(*world);
+#if defined(FASET_HAS_LUA)
+        if (lua)
+            lua->registerBehaviors(*world);
+#endif
+        world->load(document);
+        std::size_t logCursor = 0;
+        auto printGameplayLogs = [&]() {
+            while (logCursor < world->diagnostics().size())
+                std::cerr << world->diagnostics()[logCursor++] << '\n';
+#if defined(FASET_HAS_LUA)
+            if (lua)
+                for (const auto& message : lua->takeLogs())
+                    std::cerr << message << '\n';
+#endif
+        };
+        printGameplayLogs();
         faset::player::SceneView view(assetsPath);
         const auto rendererStarted = Clock::now();
         faset::render::Renderer renderer(
@@ -287,16 +352,78 @@ int player_main(int argc, char** argv) {
         std::set<std::string> held;
         bool stop = false;
         std::uint64_t frames = 0;
-        std::size_t logCursor = 0;
         std::set<std::string> reported;
         std::uint64_t controlSequence = 0;
         std::string previousControl;
         auto previous = std::chrono::steady_clock::now();
+#if defined(FASET_HAS_LUA)
+        auto lastLuaCheck = Clock::now();
+        std::string lastLuaFingerprint = luaProject.fingerprint;
+        std::string lastLuaReloadError;
+        auto reloadLua = [&](bool force) {
+            if (!watchLua)
+                return;
+            const auto now = Clock::now();
+            if (!force && now - lastLuaCheck < std::chrono::milliseconds(500))
+                return;
+            lastLuaCheck = now;
+            std::string candidateFingerprint;
+            try {
+                const auto candidateProject = faset::scripting::loadLuaProject(projectRoot);
+                candidateFingerprint = candidateProject.fingerprint;
+                if (!force && candidateProject.fingerprint == lastLuaFingerprint)
+                    return;
+                // Do not repeatedly execute a broken candidate every half-second.
+                // A corrected source or manifest produces a new fingerprint.
+                lastLuaFingerprint = candidateProject.fingerprint;
+                auto candidateSchema = nativeSchema;
+                std::unique_ptr<faset::scripting::LuaModule> candidateLua;
+                if (candidateProject.enabled()) {
+                    candidateLua = std::make_unique<faset::scripting::LuaModule>(candidateProject);
+                    for (const auto& type : candidateLua->schema())
+                        candidateSchema.push_back(type);
+                }
+                faset::runtime::validate_scene_schemas(document, candidateSchema);
+                if (candidateLua)
+                    candidateLua->validateScene(document);
+                auto candidateWorld = std::make_unique<faset::runtime::Runtime>(config);
+                faset::gameplay::registerGameplay(*candidateWorld);
+                if (candidateLua)
+                    candidateLua->registerBehaviors(*candidateWorld);
+                candidateWorld->load(document);
+                // Runtime isolates callback exceptions into diagnostics. A bad
+                // on_start must not replace the currently running scene.
+                if (!candidateWorld->diagnostics().empty())
+                    throw std::runtime_error(candidateWorld->diagnostics().front());
+                candidateWorld->setPaused(world->paused());
+                world->clear();
+                printGameplayLogs();
+                world = std::move(candidateWorld);
+                lua = std::move(candidateLua);
+                logCursor = 0;
+                printGameplayLogs();
+                lastLuaReloadError.clear();
+                // Compilation and initialization are not simulation wall time.
+                previous = Clock::now();
+                std::cerr << "Lua reloaded: scene restarted; runtime state reset\n";
+            } catch (const std::exception& error) {
+                const std::string message =
+                    std::string("Lua reload rejected; previous scene retained: ") + error.what();
+                // Bad/missing manifests may fail before a fingerprint exists.
+                // Retry them on the next poll but report an unchanged failure once.
+                const auto failure = candidateFingerprint + "\n" + message;
+                if (force || failure != lastLuaReloadError)
+                    std::cerr << message << '\n';
+                lastLuaReloadError = failure;
+            }
+        };
+#endif
         while (!stop && !renderer.should_close() &&
                (maximumFrames == 0 || frames < maximumFrames)) {
             const auto frameStarted = Clock::now();
             faset::runtime::InputState input;
             bool singleStep = false;
+            bool requestLuaReload = false;
             if (!controlPath.empty() && std::filesystem::is_regular_file(controlPath)) {
                 try {
                     if (std::filesystem::file_size(controlPath) > 65536)
@@ -314,14 +441,16 @@ int player_main(int argc, char** argv) {
                         if (value > controlSequence) {
                             const auto command = message.at("command").get<std::string>();
                             if (command == "pause")
-                                world.setPaused(true);
+                                world->setPaused(true);
                             else if (command == "resume")
-                                world.setPaused(false);
+                                world->setPaused(false);
                             else if (command == "step") {
-                                world.setPaused(true);
+                                world->setPaused(true);
                                 singleStep = true;
                             } else if (command == "stop")
                                 stop = true;
+                            else if (command == "reload-lua" && watchLua)
+                                requestLuaReload = true;
                             else
                                 throw std::invalid_argument("unsupported control command");
                             controlSequence = value;
@@ -355,7 +484,7 @@ int player_main(int argc, char** argv) {
                         if (key == "E")
                             input.interactPressed = true;
                         if (key == "P")
-                            world.setPaused(!world.paused());
+                            world->setPaused(!world->paused());
                         if (key == "N")
                             singleStep = true;
                         if (key == "F3")
@@ -365,6 +494,11 @@ int player_main(int argc, char** argv) {
             }
             if (stop)
                 break;
+#if defined(FASET_HAS_LUA)
+            reloadLua(requestLuaReload);
+#else
+            (void)requestLuaReload;
+#endif
             input.horizontal = float(held.contains("D") || held.contains("RIGHT")) -
                                float(held.contains("A") || held.contains("LEFT"));
             input.vertical = float(held.contains("W") || held.contains("UP")) -
@@ -375,14 +509,15 @@ int player_main(int argc, char** argv) {
                                        : std::chrono::duration<double>(now - previous).count();
             previous = now;
             const auto simulationStarted = Clock::now();
-            const auto runtimeStats = singleStep && world.paused() ? world.singleStep(input)
-                                                                   : world.advance(elapsed, input);
+            const auto runtimeStats = singleStep && world->paused()
+                                          ? world->singleStep(input)
+                                          : world->advance(elapsed, input);
             const auto simulationFinished = Clock::now();
-            const auto presentation = world.snapshotJson();
+            const auto presentation = world->snapshotJson();
             auto snapshot = view.build(presentation, static_cast<float>(renderer.width()) /
                                                          std::max(1u, renderer.height()));
             if (debugPhysics)
-                view.appendPhysicsDebug(snapshot, physicsScene(world, presentation));
+                view.appendPhysicsDebug(snapshot, physicsScene(*world, presentation));
             const auto snapshotFinished = Clock::now();
             for (const auto& diagnostic : view.diagnostics()) {
                 if (diagnostic.starts_with("error:"))
@@ -390,8 +525,7 @@ int player_main(int argc, char** argv) {
                 if (reported.insert(diagnostic).second)
                     std::cerr << diagnostic << '\n';
             }
-            while (logCursor < world.diagnostics().size())
-                std::cerr << world.diagnostics()[logCursor++] << '\n';
+            printGameplayLogs();
             const auto renderStarted = Clock::now();
             renderer.render(snapshot);
             const auto frameFinished = Clock::now();
@@ -409,12 +543,11 @@ int player_main(int argc, char** argv) {
             }
             ++frames;
         }
-        const auto completedTicks = world.snapshot().tick;
+        const auto completedTicks = world->snapshot().tick;
         // Run normal shutdown while diagnostics are still observable. Runtime's
         // destructor is a fallback and cannot print messages after this scope ends.
-        world.clear();
-        while (logCursor < world.diagnostics().size())
-            std::cerr << world.diagnostics()[logCursor++] << '\n';
+        world->clear();
+        printGameplayLogs();
         if (!capturePath.empty()) {
             if (frames == 0)
                 throw std::runtime_error("No frame was rendered for capture");

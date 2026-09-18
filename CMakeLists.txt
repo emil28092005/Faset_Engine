@@ -10,6 +10,7 @@ option(FASET_BUILD_RENDERER "Build the SDL3/Vulkan renderer and graphical applic
 option(FASET_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(FASET_DEBUG_IMGUI "Build optional Dear ImGui diagnostics library" OFF)
 option(FASET_BUILD_RUNTIME "Build ECS and physics runtime" ON)
+option(FASET_ENABLE_LUA "Build the optional sandboxed Lua scripting module" ON)
 option(FASET_BUILD_ASSETS "Build asset import tools" ON)
 option(FASET_BUILD_AUTHORING "Build scene authoring and metadata" ON)
 option(FASET_BUILD_EDITOR "Build retained UI and editor applications" ON)
@@ -32,6 +33,12 @@ target_include_directories(faset_core PUBLIC include)
 target_link_libraries(faset_core PUBLIC nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_definitions(faset_core PUBLIC FASET_VERSION="${PROJECT_VERSION}")
 
+# Manifest/snapshot support is independent of the Lua VM and available to tooling
+# even when the selected game is C++-only.
+add_library(faset_scripting_project STATIC src/scripting/project.cpp)
+target_include_directories(faset_scripting_project PUBLIC include)
+target_link_libraries(faset_scripting_project PUBLIC faset_core)
+
 # Modules are independent targets; Player never links authoring, editor or MCP.
 foreach(module Authoring Runtime Assets)
   if(module STREQUAL "Authoring" AND NOT FASET_BUILD_AUTHORING)
@@ -47,6 +54,9 @@ foreach(module Authoring Runtime Assets)
     include(cmake/${module}.cmake)
   endif()
 endforeach()
+if(FASET_ENABLE_LUA AND TARGET faset_runtime)
+  include(cmake/Lua.cmake)
+endif()
 if(FASET_BUILD_RENDERER AND EXISTS "${PROJECT_SOURCE_DIR}/cmake/Renderer.cmake")
   include(cmake/Renderer.cmake)
 endif()

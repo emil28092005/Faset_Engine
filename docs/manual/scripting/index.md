@@ -1,8 +1,12 @@
-# C++ gameplay
+# Gameplay scripting
 
-In Faset, a gameplay script is **C++ compiled into the Player**. You write ordinary functions and register the callbacks an object needs. There is no C++ interpreter or live replacement of compiled classes. Stop Play, rebuild, export the schema, and start a new Player session.
+Faset supports **C++ compiled into the Player** and optional [Lua gameplay](lua.md).
+Both languages register component schemas and callbacks on the same runtime.
+For C++, there is no interpreter or live replacement of compiled classes: stop Play,
+rebuild, export the schema, and start a new Player session.
 
-Lua is planned for a later stage. The APIs and tutorials in this section describe the C++ implementation available now.
+The following tutorials describe C++. See [Lua gameplay](lua.md) for Lua-only or
+mixed projects, the Lua API, source reload, and external-editor completion.
 
 ## Start here
 

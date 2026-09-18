@@ -1,5 +1,5 @@
 site_name: Faset Engine Manual
-site_description: Learn C++ gameplay, build scenes, and export games with Faset Engine.
+site_description: Learn C++ and Lua gameplay, build scenes, and export games with Faset Engine.
 repo_url: https://github.com/emil28092005/Faset_Engine
 repo_name: Faset_Engine
 docs_dir: docs/manual
@@ -32,8 +32,9 @@ markdown_extensions:
 nav:
   - Start here: index.md
   - Build from source: getting-started/build.md
-  - C++ gameplay:
+  - Gameplay scripting:
       - How gameplay works: scripting/index.md
+      - Lua gameplay: scripting/lua.md
       - Write your first behavior: scripting/first-behavior.md
       - Frame and physics updates: scripting/lifecycle.md
       - Physics and grounded movement: scripting/physics.md

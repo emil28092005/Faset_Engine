@@ -40,12 +40,31 @@ build/linux-debug/faset_editor --project "$PWD/MyGame" --new MyGame --dimension 
 You can also run `build/linux-debug/faset_editor` without arguments to open the
 project launcher and create or select a project using the native interface.
 
-Use **Build C++** after changing `MyGame/Scripts/Gameplay.cpp`, then **Play**.
+Use **Build** after changing `MyGame/Scripts/Gameplay.cpp`, then **Play**.
 The Player runs separately. Stop it before changing and rebuilding C++ gameplay.
 See [MCP and CLI](../editor/mcp.md) for headless authoring and automation.
 
 For an optimized build use `linux-release`. The `linux-sanitize` preset enables
 AddressSanitizer and UndefinedBehaviorSanitizer for tests without the graphics backend.
+
+## Optional Lua module
+
+Engine development builds enable `FASET_ENABLE_LUA` by default. Lua 5.4.9 is compiled
+from its checksum-pinned source archive; no system Lua installation is required.
+Pass `-DFASET_ENABLE_LUA=OFF` to omit the VM and bindings. The Editor's project
+build/export service selects this flag from `scripting.lua.scripts` in
+`project.faset.json`, so C++-only games do not link Lua.
+
+See the [Lua guide](../scripting/lua.md) for the manifest, a Lua-only project,
+hot reload, and external-editor/LuaLS setup. Headless CPU checks can be run with:
+
+```sh
+cmake --preset linux-debug -DFASET_BUILD_RENDERER=OFF -DFASET_BUILD_EDITOR=OFF
+cmake --build --preset linux-debug --parallel
+ctest --preset linux-debug
+```
+
+These checks do not verify the graphical Player or renderer.
 
 ## Dependencies and offline builds
 

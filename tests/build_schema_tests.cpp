@@ -3,6 +3,7 @@
 #include <faset/core/io.hpp>
 #include <faset/editor/build_service.hpp>
 #include <faset/editor/commands.hpp>
+#include <faset/scripting/project.hpp>
 #include <iostream>
 #include <limits>
 
@@ -154,6 +155,12 @@ int test_main(int argc, char** argv) {
         const auto previous_player = sha256_file(player);
         const auto previous_schema = read_text(schema);
         const auto previous_manifest = read_text(directory / "manifest.json");
+        check(!first.result.at("lua_enabled").get<bool>() &&
+                  !fs::exists(directory / "project.faset.json"),
+              "C++-only build publishes no Lua sources or project manifest");
+        check(read_json(config.project_root / "configure-fixture.json").back() ==
+                  "-DFASET_ENABLE_LUA=OFF",
+              "C++-only build explicitly disables the Lua VM in CMake");
         authoring.replace_external_schemas(read_json(schema));
         const auto previous_registry = authoring.schemas().manifest();
         check(authoring.schemas().schema("game.mover").at("version") == 2,
@@ -251,8 +258,96 @@ int test_main(int argc, char** argv) {
             check(rejected && authoring.schemas().manifest() == previous_registry,
                   "Cached-schema validation uses the same contract and preserves the registry");
         }
+        atomic_write_json(config.project_root / "schema-fixture.json", valid);
+        auto project = read_json(config.project_root / "project.faset.json");
+        project["scripting"]["lua"]["scripts"] = Json::array({"Scripts/main.lua"});
+        atomic_write_json(config.project_root / "project.faset.json", project);
+        const auto lua_source =
+            "return faset.behavior { id = 'game.mover', version = 2, fields = {} }\n";
+        atomic_write(config.project_root / "Scripts/main.lua", lua_source);
+        atomic_write(config.project_root / "Scripts/lib/util.lua", "return {value = 1}\n");
+        fs::remove(config.project_root / "Scripts/Gameplay.cpp");
+        fs::remove(config.project_root / "Scripts/Gameplay.hpp");
+        const auto lua_build = builds.wait(builds.start_build());
+        check(lua_build.state == "succeeded" && lua_build.result.at("lua_enabled") == true,
+              "Lua-only project builds without a Gameplay.cpp/Gameplay.hpp pair: " +
+                  lua_build.error);
+        check(read_json(config.project_root / "configure-fixture.json").back() ==
+                  "-DFASET_ENABLE_LUA=ON",
+              "Lua declaration enables the module in the native Player");
+        const auto lua_directory =
+            path_from_utf8(lua_build.result.at("directory").get<std::string>());
+        const auto captured = scripting::loadLuaProject(lua_directory);
+        check(captured.enabled() && captured.sources.size() == 2 &&
+                  captured.fingerprint ==
+                      lua_build.result.at("lua_fingerprint").get<std::string>() &&
+                  read_json(path_from_utf8(lua_build.result.at("schema").get<std::string>()))
+                          .at("lua_fingerprint")
+                          .get<std::string>() == captured.fingerprint,
+              "Immutable source snapshot and merged schema share a Lua fingerprint");
+        check(read_json(config.project_root / "exporter-project-fixture.json").at("scripting") ==
+                  project.at("scripting"),
+              "Schema exporter receives the captured project's Lua entries");
+        atomic_write(config.project_root / "Scripts/lib/util.lua", "return {value = 2}\n");
+        const auto changed = builds.wait(builds.start_build());
+        check(
+            changed.state == "succeeded" &&
+                changed.result.at("fingerprint") != lua_build.result.at("fingerprint") &&
+                changed.result.at("lua_fingerprint") != lua_build.result.at("lua_fingerprint"),
+            "Module-only Lua edits produce new build provenance without changing native fixtures");
+        check(scripting::loadLuaProject(lua_directory).fingerprint == captured.fingerprint,
+              "Later edits never mutate an already published Lua generation");
+        const auto lua_pointer = read_text(last_build);
+        for (const auto* marker : {"mutate-lua-during-build", "mutate-lua-snapshot"}) {
+            atomic_write(config.project_root / marker, "fixture\n");
+            const auto raced = builds.wait(builds.start_build());
+            check(raced.state == "failed" && read_text(last_build) == lua_pointer,
+                  "Source or snapshot changes during schema export preserve the last good build");
+            fs::remove(config.project_root / marker);
+            atomic_write(config.project_root / "Scripts/main.lua", lua_source);
+        }
+        const auto exported = builds.wait(builds.start_export(scene, root / "lua-export"));
+        check(exported.state == "succeeded",
+              "Lua export publishes a captured source package: " + exported.error);
+        const auto packaged = path_from_utf8(exported.result.at("directory").get<std::string>());
+        const auto package_manifest = read_json(packaged / "manifest.json");
+        check(scripting::loadLuaProject(packaged).fingerprint ==
+                      package_manifest.at("lua_fingerprint").get<std::string>() &&
+                  package_manifest.at("lua_enabled") == true &&
+                  read_json(packaged / "Notices/dependencies.json").contains("lua") &&
+                  fs::is_regular_file(packaged / "Notices/lua/LICENSE.txt"),
+              "Export contains source, fingerprint and the selected Lua runtime's license");
+        check(!fs::exists(packaged / "schema.json") &&
+                  !fs::exists(packaged / "faset_schema_exporter") &&
+                  !fs::exists(packaged / "faset_schema_exporter.exe") &&
+                  !fs::exists(packaged / ".luarc.json") &&
+                  !fs::exists(packaged / "Scripts/Gameplay.cpp"),
+              "Runtime export omits schema tools, editor configuration and C++ source");
+        std::size_t packaged_sources{};
+        for (const auto& file : package_manifest.at("files"))
+            if (file.at("path").get<std::string>().starts_with("Scripts/")) {
+                ++packaged_sources;
+                check(sha256_file(packaged / path_from_utf8(file.at("path").get<std::string>())) ==
+                          file.at("sha256").get<std::string>(),
+                      "Every packaged source hash matches the export manifest");
+            }
+        check(packaged_sources == 2, "Entry and require module both appear in export provenance");
+        project.erase("scripting");
+        atomic_write_json(config.project_root / "project.faset.json", project);
+        atomic_write(config.project_root / "Scripts/Gameplay.cpp", "// C++ fixture\n");
+        atomic_write(config.project_root / "Scripts/Gameplay.hpp", "// C++ fixture\n");
+        const auto cpp_export = builds.wait(builds.start_export(scene, root / "cpp-export"));
+        check(cpp_export.state == "succeeded", "C++ export still succeeds: " + cpp_export.error);
+        const auto cpp_package =
+            path_from_utf8(cpp_export.result.at("directory").get<std::string>());
+        check(!fs::exists(cpp_package / "Scripts") &&
+                  !fs::exists(cpp_package / "project.faset.json") &&
+                  !read_json(cpp_package / "Notices/dependencies.json").contains("lua") &&
+                  read_json(config.project_root / "configure-fixture.json").back() ==
+                      "-DFASET_ENABLE_LUA=OFF",
+              "Removing Lua declarations drops scripts, notices and the Lua link dependency");
         std::cout << "Valid v2 schema and atomic rejection of " << invalid.size()
-                  << " malformed metadata generations passed\n";
+                  << " malformed metadata generations; Lua snapshots and export contracts passed\n";
         fs::remove_all(root);
         return 0;
     } catch (const std::exception& error) {

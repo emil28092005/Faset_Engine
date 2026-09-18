@@ -36,4 +36,9 @@ class Process {
     std::unique_ptr<Impl> impl_;
 };
 std::filesystem::path find_executable(const std::string& name);
+// Launch an explicitly selected external application without an owning Process/job.
+// UTF-8 arguments remain literal (no shell); inherited environment, discarded stdio.
+// This does not grant permission to execute arbitrary project files as programs.
+void launch_detached(const std::vector<std::string>& arguments,
+                     const std::filesystem::path& working_directory = {});
 } // namespace faset

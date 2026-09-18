@@ -1,15 +1,28 @@
+#include <chrono>
 #include <faset/core/error.hpp>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
+#include <faset/core/process.hpp>
 #include <iostream>
 #include <set>
+#include <thread>
 
 #define CHECK(x)                                                                                   \
     do {                                                                                           \
         if (!(x))                                                                                  \
             throw std::runtime_error("Check failed: " #x);                                         \
     } while (false)
-int main() {
+int test_main(int argc, char** argv) {
+    if (argc > 2 && std::string(argv[1]) == "--detached-child") {
+        faset::Json arguments = faset::Json::array();
+        for (int i = 3; i < argc; ++i)
+            arguments.push_back(argv[i]);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        faset::atomic_write_json(
+            faset::path_from_utf8(argv[2]),
+            {{"args", arguments}, {"cwd", faset::path_to_utf8(std::filesystem::current_path())}});
+        return 0;
+    }
     const auto directory =
         std::filesystem::temp_directory_path() / ("faset-core-" + faset::new_id());
     try {
@@ -85,9 +98,39 @@ int main() {
             rejected = true;
         }
         CHECK(rejected);
+        const auto external_result = directory / faset::path_from_utf8("Editor 世界.json");
+        const std::vector<std::string> arguments = {
+            faset::path_to_utf8(std::filesystem::absolute(faset::path_from_utf8(argv[0]))),
+            "--detached-child",
+            faset::path_to_utf8(external_result),
+            "space argument",
+            "quote\"backslash\\",
+            "$(touch not-executed); & |",
+            "",
+            "Café 世界 Привет 😀"};
+        faset::launch_detached(arguments, directory);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!std::filesystem::exists(external_result) &&
+               std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        CHECK(std::filesystem::is_regular_file(external_result));
+        const auto external = faset::read_json(external_result);
+        CHECK(external.at("args") ==
+              faset::Json::array({"space argument", "quote\"backslash\\",
+                                  "$(touch not-executed); & |", "", "Café 世界 Привет 😀"}));
+        CHECK(std::filesystem::equivalent(
+            faset::path_from_utf8(external.at("cwd").get<std::string>()), directory));
+        CHECK(!std::filesystem::exists(directory / "not-executed"));
+        rejected = false;
+        try {
+            faset::launch_detached({"faset-nonexistent-editor-" + faset::new_id()}, directory);
+        } catch (const std::exception&) {
+            rejected = true;
+        }
+        CHECK(rejected);
         std::filesystem::remove_all(faset::native_io_path(directory));
         std::cout << "Core: SHA-256 vectors, persistent IDs, durable replace, Unicode, path "
-                     "boundaries passed\n";
+                     "boundaries and detached literal-argv launch passed\n";
         return 0;
     } catch (const std::exception& error) {
         std::filesystem::remove_all(faset::native_io_path(directory));
@@ -95,3 +138,12 @@ int main() {
         return 1;
     }
 }
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    return faset::run_utf8_main(argc, argv, test_main);
+}
+#else
+int main(int argc, char** argv) {
+    return test_main(argc, argv);
+}
+#endif

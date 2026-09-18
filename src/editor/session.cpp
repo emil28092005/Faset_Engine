@@ -3,6 +3,7 @@
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
 #include <faset/editor/session.hpp>
+#include <faset/scripting/project.hpp>
 
 namespace faset::editor {
 namespace {
@@ -130,24 +131,32 @@ Json Session::assets_list() const {
     return {{"assets", list}};
 }
 std::string Session::source_signature() const {
+    const auto lua = scripting::loadLuaProject(config_.project_root);
     const auto directory = config_.project_root / "Scripts";
     std::vector<std::filesystem::path> files;
     if (std::filesystem::exists(directory))
         for (const auto& file : std::filesystem::recursive_directory_iterator(directory))
-            if (file.is_regular_file())
+            if (file.is_regular_file() && (!lua.enabled() || file.path().extension() != ".lua"))
                 files.push_back(file.path());
     std::sort(files.begin(), files.end());
     std::string contents;
     for (const auto& file : files)
         contents += generic_path_to_utf8(file.lexically_relative(directory)) + ":" +
                     sha256_file(file) + "\n";
+    if (lua.enabled())
+        contents += "lua:" + lua.fingerprint + "\n";
     return sha256(contents);
 }
 Json Session::schema_status() const {
-    return {{"loaded", schema_loaded_},
-            {"stale", !schema_loaded_ || schema_source_signature_ != source_signature() ||
-                          !schema_error_.empty()},
-            {"error", schema_error_}};
+    try {
+        const auto signature = source_signature();
+        return {{"loaded", schema_loaded_},
+                {"stale", !schema_loaded_ || schema_source_signature_ != signature ||
+                              !schema_error_.empty()},
+                {"error", schema_error_}};
+    } catch (const std::exception& error) {
+        return {{"loaded", schema_loaded_}, {"stale", true}, {"error", error.what()}};
+    }
 }
 Json Session::jobs() const {
     Json list = Json::array();
@@ -185,9 +194,14 @@ void Session::launch_player(Json scene, const std::filesystem::path& executable)
     options.arguments = {
         path_to_utf8(executable),           "--scene",   path_to_utf8(snapshot),     "--assets",
         path_to_utf8(assets_.cache_root()), "--control", path_to_utf8(control_path_)};
+    if (scripting::loadLuaProject(config_.project_root).enabled()) {
+        options.arguments.insert(options.arguments.end(),
+                                 {"--project", path_to_utf8(config_.project_root), "--watch-lua"});
+    }
     options.working_directory = config_.project_root;
     player_ = std::make_unique<Process>(options);
-    log("Play started in a separate Player process");
+    log("Play started in a separate Player process; Lua projects reload changed scripts and reset "
+        "simulation state automatically");
 }
 void Session::stop_player() {
     if (!pending_play_job_.empty()) {
@@ -439,7 +453,7 @@ void Session::register_commands() {
         "Failed builds retain metadata but mark it stale.",
         schema(Json::object()), [&](const Json&) { return schema_status(); }, true);
     commands_.add("faset_build",
-                  "Incrementally compile C++ gameplay and export its metadata in separate native "
+                  "Incrementally compile gameplay and export C++/Lua metadata in separate native "
                   "processes. Returns a job ID.",
                   schema(Json::object()), [&](const Json&) {
                       const auto signature = source_signature();
@@ -447,6 +461,94 @@ void Session::register_commands() {
                       submitted_sources_[id] = signature;
                       return Json{{"job", id}};
                   });
+    commands_.add(
+        "faset_lua_refresh",
+        "Validate Lua behavior schemas in a separate process and refresh Inspector metadata. "
+        "Uses the incremental build; script edits do not require C++ compilation. Returns a job "
+        "ID.",
+        schema(Json::object()), [&](const Json&) {
+            require(scripting::loadLuaProject(config_.project_root).enabled(), "lua.disabled",
+                    "Declare scripting.lua.scripts in project.faset.json first");
+            const auto signature = source_signature();
+            const auto id = builds_.start_build();
+            submitted_sources_[id] = signature;
+            return Json{{"job", id}};
+        });
+    commands_.add("faset_lua_reload",
+                  "Reload Lua in the running development Player. Successful reload resets the Play "
+                  "snapshot and script state; invalid edits keep the current running version.",
+                  schema(Json::object()), [&](const Json&) {
+                      require(bool(player_), "play.not_running", "Player is not running");
+                      require(scripting::loadLuaProject(config_.project_root).enabled(),
+                              "lua.disabled", "The current project has no Lua behaviors");
+                      atomic_write_json(control_path_, {{"sequence", ++control_sequence_},
+                                                        {"command", "reload-lua"}});
+                      return Json{{"queued", true}};
+                  });
+    commands_.add(
+        "faset_lua_setup",
+        "Install Faset LuaLS type annotations in .faset/lua and create .luarc.json only if absent. "
+        "Existing user language-server configuration is never overwritten.",
+        schema(Json::object()), [&](const Json&) {
+            const auto source = config_.engine_root / "tools/lua";
+            const auto annotations = project_path(config_.project_root, ".faset/lua/faset.lua");
+            const auto configuration = project_path(config_.project_root, ".luarc.json");
+            atomic_write(annotations, read_text(source / "faset.lua"));
+            const bool create_configuration = !std::filesystem::exists(configuration);
+            if (create_configuration)
+                atomic_write_json(configuration, read_json(source / "luarc.json"));
+            log(create_configuration
+                    ? "LuaLS configured: .luarc.json and .faset/lua/faset.lua"
+                    : "LuaLS annotations updated; existing .luarc.json preserved. Add .faset/lua "
+                      "to workspace.library if needed");
+            return Json{{"annotations", ".faset/lua/faset.lua"},
+                        {"configuration_created", create_configuration}};
+        });
+    commands_.add(
+        "faset_script_open",
+        "Open a project Lua source in an external editor, never as an executable. Optional editor "
+        "is an argv array (default: project editor.script_editor, then zed). Exact {file} and "
+        "{project} arguments are replaced; no shell expansion is performed.",
+        schema({{"path", text}, {"editor", {{"type", "array"}, {"items", text}, {"minItems", 1}}}},
+               {"path"}),
+        [&](const Json& args) {
+            const auto file = project_path(config_.project_root,
+                                           path_from_utf8(args.at("path").get<std::string>()));
+            require(file.extension() == ".lua" && std::filesystem::is_regular_file(file),
+                    "lua.source", "Select an existing .lua file inside the project");
+            Json command = Json::array({"zed", "{file}"});
+            const auto settings = project();
+            if (settings.contains("editor") && settings.at("editor").is_object() &&
+                settings.at("editor").contains("script_editor"))
+                command = settings.at("editor").at("script_editor");
+            if (args.contains("editor"))
+                command = args.at("editor");
+            require(command.is_array() && !command.empty(), "lua.editor",
+                    "Configure editor.script_editor as a nonempty executable/argument array");
+            std::vector<std::string> arguments;
+            bool has_file = false;
+            for (const auto& part : command) {
+                require(part.is_string(), "lua.editor", "Editor arguments must be strings");
+                auto argument = part.get<std::string>();
+                require(argument.find('\0') == std::string::npos, "lua.editor",
+                        "Editor arguments cannot contain NUL");
+                if (argument == "{file}") {
+                    require(!arguments.empty(), "lua.editor", "The first argument is the editor");
+                    argument = path_to_utf8(file);
+                    has_file = true;
+                } else if (argument == "{project}") {
+                    require(!arguments.empty(), "lua.editor", "The first argument is the editor");
+                    argument = path_to_utf8(std::filesystem::absolute(config_.project_root));
+                }
+                arguments.push_back(std::move(argument));
+            }
+            require(!arguments.front().empty(), "lua.editor", "Choose an editor executable");
+            if (!has_file)
+                arguments.push_back(path_to_utf8(file));
+            launch_detached(arguments, config_.project_root);
+            log("Opened Lua source in external editor: " + args.at("path").get<std::string>());
+            return Json{{"opened", args.at("path")}};
+        });
     commands_.add("faset_export",
                   "Build, validate and export a resolved authoring snapshot to a project-relative "
                   "output directory. Returns a job ID.",

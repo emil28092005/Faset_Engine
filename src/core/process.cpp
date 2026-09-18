@@ -103,6 +103,109 @@ std::filesystem::path find_executable(const std::string& name) {
     return resolve_program(name, path ? path : "", std::filesystem::current_path());
 #endif
 }
+void launch_detached(const std::vector<std::string>& arguments,
+                     const std::filesystem::path& working_directory) {
+    if (arguments.empty() || arguments.front().empty())
+        throw std::invalid_argument("External application requires an executable");
+    for (const auto& argument : arguments)
+        if (argument.find('\0') != std::string::npos)
+            throw std::invalid_argument("NUL in external application argument");
+    const auto cwd = working_directory.empty() ? std::filesystem::current_path()
+                                               : std::filesystem::absolute(working_directory);
+    if (!std::filesystem::is_directory(cwd))
+        throw std::runtime_error("External application working directory does not exist");
+#ifdef _WIN32
+    auto program = std::filesystem::path(widen(arguments.front()));
+    if (program.has_parent_path() && program.is_relative())
+        program = cwd / program;
+    const auto executable =
+        program.has_parent_path() ? program : find_executable(arguments.front());
+    std::wstring command;
+    for (const auto& argument : arguments) {
+        if (!command.empty())
+            command += L' ';
+        command += quote(widen(argument));
+    }
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, FALSE,
+                        CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS, nullptr, cwd.c_str(), &startup,
+                        &process))
+        throw std::runtime_error("Cannot launch external application: " + arguments.front());
+    // Deliberately no kill-on-close job: the user's editor must outlive this Editor session.
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+#else
+    const char* path = std::getenv("PATH");
+    const auto executable = resolve_program(arguments.front(), path ? path : "", cwd);
+    std::vector<char*> argv;
+    for (const auto& argument : arguments)
+        argv.push_back(const_cast<char*>(argument.c_str()));
+    argv.push_back(nullptr);
+    int errors[2];
+    if (::pipe2(errors, O_CLOEXEC) < 0)
+        throw std::runtime_error("Cannot create external application status pipe");
+    // A host may have closed a standard stream. Keep the status pipe out of dup2's targets.
+    for (auto& descriptor : errors)
+        if (descriptor <= STDERR_FILENO) {
+            const auto replacement = ::fcntl(descriptor, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+            if (replacement < 0) {
+                ::close(errors[0]);
+                ::close(errors[1]);
+                throw std::runtime_error("Cannot configure external application status pipe");
+            }
+            ::close(descriptor);
+            descriptor = replacement;
+        }
+    const auto child = ::fork();
+    if (child == 0) {
+        // After fork in the multi-threaded Editor, only async-signal-safe calls are allowed.
+        ::close(errors[0]);
+        auto fail = [&](int error) {
+            while (::write(errors[1], &error, sizeof(error)) < 0 && errno == EINTR) {
+            }
+            ::_exit(127);
+        };
+        if (::setsid() < 0)
+            fail(errno);
+        const auto grandchild = ::fork();
+        if (grandchild < 0)
+            fail(errno);
+        if (grandchild > 0)
+            ::_exit(0);
+        const auto input = ::open("/dev/null", O_RDWR);
+        if (input < 0)
+            fail(errno);
+        if (::dup2(input, STDIN_FILENO) < 0 || ::dup2(input, STDOUT_FILENO) < 0 ||
+            ::dup2(input, STDERR_FILENO) < 0 || ::chdir(cwd.c_str()) < 0)
+            fail(errno);
+        if (input > STDERR_FILENO)
+            ::close(input);
+        ::execve(executable.c_str(), argv.data(), environ);
+        fail(errno);
+    }
+    ::close(errors[1]);
+    if (child < 0) {
+        ::close(errors[0]);
+        throw std::runtime_error("Cannot fork external application");
+    }
+    int status{};
+    pid_t reaped;
+    do {
+        reaped = ::waitpid(child, &status, 0);
+    } while (reaped < 0 && errno == EINTR);
+    int error{};
+    ssize_t count;
+    do {
+        count = ::read(errors[0], &error, sizeof(error));
+    } while (count < 0 && errno == EINTR);
+    ::close(errors[0]);
+    if (count != 0 || reaped < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        throw std::runtime_error("Cannot launch external application: " + arguments.front() +
+                                 (count > 0 ? ": " + std::string(std::strerror(error)) : ""));
+#endif
+}
 struct Process::Impl {
 #ifdef _WIN32
     HANDLE process{}, thread{}, job{}, output{};

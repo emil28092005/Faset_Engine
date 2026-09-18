@@ -7,6 +7,7 @@
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
 #include <faset/editor/build_service.hpp>
+#include <faset/scripting/project.hpp>
 #include <iostream>
 #include <thread>
 #ifndef _WIN32
@@ -40,6 +41,87 @@ Json scene(int dimension) {
     return {{"format", "faset.scene"},   {"version", 1},           {"id", "scene-test"},
             {"name", "Build test"},      {"dimension", dimension}, {"entities", Json::array()},
             {"instances", Json::array()}};
+}
+void lua_project_contracts(const fs::path& root) {
+    fs::create_directories(root);
+    require(!scripting::loadLuaProject(root).enabled(), "No manifest means no Lua dependency");
+    Json manifest{{"format", "faset.project"}, {"version", 1}};
+    const auto save_manifest = [&] { atomic_write_json(root / "project.faset.json", manifest); };
+    save_manifest();
+    require(!scripting::loadLuaProject(root).enabled(), "C++ manifest requires no Lua sources");
+    atomic_write(root / "Scripts/main.lua", "return {value = 1}\n");
+    atomic_write(root / "Scripts/lib/util.lua", "return {answer = 42}\n");
+    atomic_write(root / "Scripts/Gameplay.cpp", "// Not a Lua module\n");
+    manifest["scripting"]["lua"]["scripts"] = Json::array({"Scripts/main.lua"});
+    save_manifest();
+    const auto original = scripting::loadLuaProject(root);
+    require(original.enabled() && original.sources.size() == 2 && original.fingerprint.size() == 64,
+            "Capture entry script and transitive module candidates, not C++");
+    require(scripting::loadLuaProject(root).fingerprint == original.fingerprint,
+            "Lua fingerprint is deterministic");
+    atomic_write(root / "Scripts/lib/util.lua", "return {answer = 43}\n");
+    require(scripting::loadLuaProject(root).fingerprint != original.fingerprint,
+            "Changes to non-entry require modules invalidate the Lua fingerprint");
+    const auto target = root.parent_path() / "lua-snapshot";
+    scripting::writeLuaSources(original, target);
+    atomic_write_json(target / "project.faset.json", manifest);
+    require(scripting::loadLuaProject(target).fingerprint == original.fingerprint &&
+                read_text(target / "Scripts/lib/util.lua") == "return {answer = 42}\n",
+            "Publishing writes captured bytes rather than rereading live scripts");
+    const auto valid_manifest = manifest;
+    auto rejected = [&](const auto& operation) {
+        try {
+            operation();
+        } catch (const std::exception&) {
+            return true;
+        }
+        return false;
+    };
+    for (const auto& entries :
+         {Json::array({"Scripts/main.lua", "Scripts/main.lua"}),
+          Json::array({"Scripts/../main.lua"}), Json::array({"Scripts/missing.lua"}),
+          Json::array({"Scripts/Gameplay.cpp"}), Json::array({"/Scripts/main.lua"}),
+          Json::array({"Scripts\\main.lua"}), Json::array({"Scripts/./main.lua"}),
+          Json::array({"Scripts//main.lua"}), Json::array({"C:/Scripts/main.lua"}),
+          Json::array({12}), Json("Scripts/main.lua")}) {
+        manifest["scripting"]["lua"]["scripts"] = entries;
+        save_manifest();
+        require(rejected([&] { (void)scripting::loadLuaProject(root); }),
+                "Lua rejects malformed, duplicate, missing and escaping entry paths");
+    }
+    manifest = valid_manifest;
+    manifest["scripting"]["lua"]["scripts"].push_back("Scripts/lib/util.lua");
+    save_manifest();
+    const auto with_second_entry = scripting::loadLuaProject(root).fingerprint;
+    manifest["scripting"]["lua"]["scripts"] =
+        Json::array({"Scripts/lib/util.lua", "Scripts/main.lua"});
+    save_manifest();
+    require(scripting::loadLuaProject(root).fingerprint != with_second_entry,
+            "Entry order is part of the source fingerprint");
+    manifest = valid_manifest;
+    save_manifest();
+    atomic_write(root / "Scripts/too-large.lua", std::string(1024 * 1024 + 1, ' '));
+    require(rejected([&] { (void)scripting::loadLuaProject(root); }),
+            "Source size is bounded before code execution");
+    fs::remove(root / "Scripts/too-large.lua");
+    auto corrupt = original;
+    corrupt.sources["../outside.lua"] = "return {}";
+    require(rejected([&] { scripting::writeLuaSources(corrupt, target); }),
+            "Writing an externally supplied snapshot validates paths too");
+    std::error_code symlink_error;
+    fs::create_symlink(root / "Scripts/main.lua", root / "Scripts/link.lua", symlink_error);
+    if (!symlink_error) {
+        require(rejected([&] { (void)scripting::loadLuaProject(root); }),
+                "Lua source snapshots reject even in-project symlink aliases");
+        fs::remove(root / "Scripts/link.lua");
+        fs::create_directory_symlink(root / "Scripts", target / "linked", symlink_error);
+        if (!symlink_error)
+            require(rejected([&] { scripting::writeLuaSources(original, target / "linked"); }),
+                    "Snapshot destination root cannot be a symlink");
+    }
+    manifest["scripting"]["lua"]["scripts"] = Json::array();
+    save_manifest();
+    require(!scripting::loadLuaProject(root).enabled(), "Empty Lua declaration links no Lua VM");
 }
 int integration(const fs::path& root) {
     fs::create_directories(root);
@@ -296,6 +378,7 @@ int test_main(int argc, char** argv) {
     fs::path temporary = fs::temp_directory_path() / path_from_utf8("Faset Café 世界 " + new_id());
     try {
         fs::create_directories(temporary);
+        lua_project_contracts(temporary / "lua-project");
         const auto original_executable = fs::absolute(path_from_utf8(argv[0]));
         const auto executable = temporary / original_executable.filename();
         fs::copy_file(original_executable, executable);

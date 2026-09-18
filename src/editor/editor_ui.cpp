@@ -180,6 +180,8 @@ struct EditorUI::Impl {
     std::string attempted_theme, attempted_layout, applied_theme, applied_layout,
         presentation_error;
     std::chrono::steady_clock::time_point last_presentation_poll{};
+    std::chrono::steady_clock::time_point last_schema_poll{};
+    Json schema_state;
     bool simulation_open = false;
     bool project_settings_open = false;
     Json project_settings_state;
@@ -435,7 +437,7 @@ struct EditorUI::Impl {
         button(
             toolbar, "step", "Step", [this] { call("faset_play_control", {{"command", "step"}}); },
             55);
-        button(toolbar, "build", "Build C++", [this] { call("faset_build"); }, 94);
+        button(toolbar, "build", "Build", [this] { call("faset_build"); }, 94);
         button(
             toolbar, "export", "Export",
             [this] { call("faset_export", {{"document", document}, {"output", "Exports"}}); }, 64);
@@ -510,7 +512,7 @@ struct EditorUI::Impl {
         assetbar.layout.height = 30;
         assetbar.layout.padding = 2;
         assetbar.layout.gap = 5;
-        label(assetbar, "asset-path", "Project assets", 135);
+        label(assetbar, "asset-path", "Project files", 135);
         auto& search = assetbar.add(Kind::TextField, "asset-search", "");
         search.layout.width = 220;
         search.on_preview = [this](Widget& w) {
@@ -1093,6 +1095,12 @@ struct EditorUI::Impl {
     void open_source() {
         if (source_file.empty())
             return;
+        if (path_from_utf8(source_file).extension() == ".lua") {
+            const auto result = call("faset_script_open", {{"path", source_file}});
+            if (!result.is_null())
+                status = "Opened in external editor: " + source_file;
+            return;
+        }
         auto result = call("faset_document_open", {{"path", source_file}});
         if (!result.is_null())
             choose_document(result.at("id"));
@@ -1167,15 +1175,20 @@ struct EditorUI::Impl {
         ui.find("pause")->enabled = session.playing();
         ui.find("step")->enabled = session.playing();
         ui.find("pause")->text = paused ? "Resume" : "Pause";
-        const auto schema_state = call("faset_schema_status");
+        const auto now = std::chrono::steady_clock::now();
+        // Source fingerprints read complete script bytes; do not hash them every render frame.
+        if (schema_state.is_null() || now - last_schema_poll >= std::chrono::seconds(1)) {
+            schema_state = call("faset_schema_status");
+            last_schema_poll = now;
+        }
         if (!schema_state.is_null()) {
             const bool stale = schema_state.value("stale", false);
-            ui.find("build")->text = stale ? "Build C++ !" : "Build C++";
+            ui.find("build")->text = stale ? "Build !" : "Build";
             ui.find("build")->tooltip =
                 stale ? "Gameplay schema is stale: " + schema_state.value("error", std::string())
-                      : "Build gameplay and refresh metadata";
+                      : "Incremental gameplay build and C++/Lua Inspector metadata refresh";
             if (stale && status == "Ready")
-                status = "Gameplay schema is stale; Build C++ to refresh";
+                status = "Gameplay schema is stale; Build to refresh Inspector metadata";
         }
 
         ui.find("project-title")->text = session.project().value("name", std::string("Project")) +
@@ -1604,7 +1617,7 @@ struct EditorUI::Impl {
         last_assets = now;
         files = Json::array();
         try {
-            for (const std::string folder : {"Assets", "Scenes"}) {
+            for (const std::string folder : {"Assets", "Scenes", "Scripts"}) {
                 const auto directory = session.config().project_root / folder;
                 if (!std::filesystem::exists(directory))
                     continue;
@@ -1614,6 +1627,8 @@ struct EditorUI::Impl {
                     if (++count > 4000)
                         break;
                     if (!entry.is_regular_file())
+                        continue;
+                    if (folder == "Scripts" && entry.path().extension() != ".lua")
                         continue;
                     auto relative = generic_path_to_utf8(
                         std::filesystem::relative(entry.path(), session.config().project_root));
@@ -1636,6 +1651,11 @@ struct EditorUI::Impl {
             assets = result.at("assets");
         }
         auto& list = *ui.find("asset-items");
+        const bool script = path_from_utf8(source_file).extension() == ".lua";
+        ui.find("asset-open")->text = script ? "Open Script" : "Open Scene";
+        ui.find("asset-open")->tooltip =
+            script ? "Open Lua source in your external editor" : "Open a project scene";
+        ui.find("asset-import")->enabled = !script;
         std::set<std::string> keep;
         for (const auto& file : files) {
             const auto path = file.get<std::string>();
@@ -1683,7 +1703,8 @@ struct EditorUI::Impl {
             keep.insert(row.id);
         }
         if (keep.empty()) {
-            label(list, "assets-empty", "Place GLB, glTF, PNG or JPEG in Assets, then Import.");
+            label(list, "assets-empty",
+                  "Import images/models from Assets, or open Lua sources from Scripts.");
             keep.insert("assets-empty");
         }
         trim_children(list, keep);

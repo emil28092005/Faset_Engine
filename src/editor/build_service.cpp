@@ -10,6 +10,7 @@
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
 #include <faset/editor/build_service.hpp>
+#include <faset/scripting/project.hpp>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -114,6 +115,7 @@ struct BuildService::Impl {
         std::condition_variable finished;
         Json scene;
         Json asset_manifests = Json::object();
+        scripting::LuaProject lua;
         fs::path output;
     };
     BuildConfig config;
@@ -240,11 +242,16 @@ struct BuildService::Impl {
     Json build(Job& job, bool exporting = false) {
         const auto& configuration = exporting ? config.export_configuration : config.configuration;
         const auto native_directory = config.build_directory / configuration;
-        checkpoint(job, "Configuring C++ gameplay", .05);
-        if (!fs::is_regular_file(config.project_root / "Scripts" / "Gameplay.cpp") ||
-            !fs::is_regular_file(config.project_root / "Scripts" / "Gameplay.hpp"))
-            throw std::runtime_error("Project Scripts/Gameplay.cpp and Gameplay.hpp are required; "
-                                     "create a project scaffold first");
+        checkpoint(job, "Configuring gameplay", .05);
+        job.lua = scripting::loadLuaProject(config.project_root);
+        const auto cpp = config.project_root / "Scripts" / "Gameplay.cpp";
+        const auto hpp = config.project_root / "Scripts" / "Gameplay.hpp";
+        const bool has_cpp = fs::is_regular_file(cpp), has_hpp = fs::is_regular_file(hpp);
+        if (has_cpp != has_hpp || (!has_cpp && !job.lua.enabled()))
+            throw std::runtime_error("Project requires Scripts/Gameplay.cpp and Gameplay.hpp, "
+                                     "or Lua entry scripts declared in project.faset.json");
+        const auto cpp_source = has_cpp ? read_text(cpp) : std::string{};
+        const auto hpp_source = has_hpp ? read_text(hpp) : std::string{};
         fs::create_directories(native_directory);
         std::vector<std::string> arguments = {config.cmake,
                                               "-S",
@@ -278,6 +285,10 @@ struct BuildService::Impl {
         arguments.insert(arguments.end(), config.configure_arguments.begin(),
                          config.configure_arguments.end());
         arguments.push_back("-DCMAKE_BUILD_TYPE=" + configuration);
+        // Project declarations, not a stale cache or a user-supplied override, determine
+        // whether the packaged game has a Lua VM linked into it.
+        arguments.push_back(std::string("-DFASET_ENABLE_LUA=") +
+                            (job.lua.enabled() ? "ON" : "OFF"));
         run(job, std::move(arguments), config.project_root);
         checkpoint(job, "Compiling and linking Player", .25);
         run(job,
@@ -292,8 +303,18 @@ struct BuildService::Impl {
         fs::create_directories(staging);
         try {
             const auto schema_file = staging / "schema.json";
-            run(job, {path_to_utf8(exporter), "--output", path_to_utf8(schema_file)},
-                config.project_root);
+            std::vector<std::string> export_arguments = {path_to_utf8(exporter), "--output",
+                                                         path_to_utf8(schema_file)};
+            if (job.lua.enabled()) {
+                scripting::writeLuaSources(job.lua, staging);
+                atomic_write_json(staging / "project.faset.json",
+                                  {{"format", "faset.project"},
+                                   {"version", 1},
+                                   {"scripting", {{"lua", {{"scripts", job.lua.scripts}}}}}});
+                export_arguments.insert(export_arguments.end(),
+                                        {"--project", path_to_utf8(staging)});
+            }
+            run(job, std::move(export_arguments), config.project_root);
             auto schema = read_json(schema_file);
             if (schema.value("format", "") != "faset.schema" || schema.value("version", 0) != 1 ||
                 !schema.contains("types") || !schema.at("types").is_array())
@@ -303,10 +324,11 @@ struct BuildService::Impl {
             (void)authoring::gameplay_schemas(schema);
             std::string fingerprint = sha256_file(player) + sha256_file(exporter) +
                                       read_text(native_directory / "CMakeCache.txt");
-            for (const auto& file : {"Gameplay.cpp", "Gameplay.hpp"})
-                fingerprint += read_text(config.project_root / "Scripts" / file);
+            fingerprint += cpp_source + hpp_source + job.lua.fingerprint;
             fingerprint = sha256(fingerprint);
             schema["build_fingerprint"] = fingerprint;
+            if (job.lua.enabled())
+                schema["lua_fingerprint"] = job.lua.fingerprint;
             atomic_write_json(schema_file, schema);
             copy_required_file(player, staging / ("faset_player" + executable_suffix()));
             copy_required_file(exporter, staging / ("faset_schema_exporter" + executable_suffix()));
@@ -320,10 +342,19 @@ struct BuildService::Impl {
                           {"id", job.status.id},
                           {"fingerprint", fingerprint},
                           {"configuration", configuration},
+                          {"lua_enabled", job.lua.enabled()},
+                          {"lua_fingerprint", job.lua.fingerprint},
                           {"player", "faset_player" + executable_suffix()},
                           {"schema", "schema.json"}};
             atomic_write_json(staging / "manifest.json", manifest);
             checkpoint(job, "Publishing build generation", .68);
+            if (job.lua.enabled() &&
+                scripting::loadLuaProject(staging).fingerprint != job.lua.fingerprint)
+                throw std::runtime_error("Lua build snapshot changed during schema export");
+            if (scripting::loadLuaProject(config.project_root).fingerprint != job.lua.fingerprint ||
+                has_cpp != fs::is_regular_file(cpp) || has_hpp != fs::is_regular_file(hpp) ||
+                (has_cpp && (read_text(cpp) != cpp_source || read_text(hpp) != hpp_source)))
+                throw std::runtime_error("Gameplay sources changed during the build; build again");
             fs::rename(staging, generation);
             atomic_write_json(config.cache_root / "last_build.json",
                               {{"generation", job.status.id}, {"fingerprint", fingerprint}});
@@ -333,6 +364,8 @@ struct BuildService::Impl {
                     {"configuration", configuration},
                     {"player", path_to_utf8(generation / ("faset_player" + executable_suffix()))},
                     {"schema", path_to_utf8(generation / "schema.json")},
+                    {"lua_enabled", job.lua.enabled()},
+                    {"lua_fingerprint", job.lua.fingerprint},
                     {"fingerprint", fingerprint}};
         } catch (...) {
             std::error_code error;
@@ -442,7 +475,8 @@ struct BuildService::Impl {
             throw;
         }
     }
-    void package_notices(const fs::path& destination, const fs::path& native_directory) {
+    void package_notices(const fs::path& destination, const fs::path& native_directory,
+                         bool lua_enabled) {
         fs::create_directories(destination);
         auto lock = read_json(config.engine_root / "dependencies.lock.json");
         const std::vector<std::string> runtime_dependencies = {"sdl3",  "entt", "box2d",
@@ -475,6 +509,11 @@ struct BuildService::Impl {
             if (!copied)
                 throw std::runtime_error("Cannot package required license notices for " + name);
             used[name] = lock.at("dependencies").at(name);
+        }
+        if (lua_enabled) {
+            copy_required_file(config.engine_root / "docs" / "licenses" / "Lua.txt",
+                               destination / "lua" / "LICENSE.txt");
+            used["lua"] = lock.at("dependencies").at("lua");
         }
         atomic_write_json(destination / "dependencies.json", used);
         if (fs::is_regular_file(config.engine_root / "LICENSE"))
@@ -529,6 +568,16 @@ struct BuildService::Impl {
             checkpoint(job, "Cooking export snapshot", .72);
             write_cooked_scene(staging / "scene.fscene", job.scene);
             auto build_directory = path_from_utf8(built.at("directory").get<std::string>());
+            if (job.lua.enabled()) {
+                // Never read live Scripts files for a published game: schemas, source,
+                // and fingerprint all originate in the same validated build snapshot.
+                const auto captured = scripting::loadLuaProject(build_directory);
+                if (captured.fingerprint != job.lua.fingerprint)
+                    throw std::runtime_error("Lua build snapshot is corrupt");
+                scripting::writeLuaSources(captured, staging);
+                copy_required_file(build_directory / "project.faset.json",
+                                   staging / "project.faset.json");
+            }
             copy_required_file(build_directory / ("faset_player" + executable_suffix()),
                                staging / ("faset_player" + executable_suffix()));
             for (const auto* shader : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv",
@@ -546,12 +595,15 @@ struct BuildService::Impl {
             checkpoint(job, "Packaging assets and notices", .80);
             package_assets(job, staging);
             package_notices(staging / "Notices",
-                            path_from_utf8(built.at("build_directory").get<std::string>()));
+                            path_from_utf8(built.at("build_directory").get<std::string>()),
+                            job.lua.enabled());
             atomic_write(
                 staging / "README.txt",
                 "Run faset_player" + executable_suffix() +
                     " to start this game.\nThe executable loads scene.fscene and assets beside "
-                    "it.\nKeep shaders/, assets/, and Notices/ with the executable.\nA compatible "
+                    "it.\nKeep shaders/, assets/, Notices/, and any Scripts/ and "
+                    "project.faset.json "
+                    "with the executable.\nA compatible "
                     "Vulkan 1.3 driver and the supported OS runtime are required.\n");
 #ifdef _WIN32
             atomic_write(staging / "Windows-Runtime.txt",
@@ -567,6 +619,9 @@ struct BuildService::Impl {
                      "--scene", path_to_utf8(staging / "scene.fscene"), "--assets",
                      path_to_utf8(staging)},
                     staging);
+            if (job.lua.enabled() &&
+                scripting::loadLuaProject(staging).fingerprint != job.lua.fingerprint)
+                throw std::runtime_error("Packaged Lua snapshot changed during validation");
             Json files = Json::array();
             for (const auto& entry : fs::recursive_directory_iterator(staging)) {
                 if (entry.is_symlink())
@@ -581,6 +636,8 @@ struct BuildService::Impl {
                           {"version", 1},
                           {"generation", job.status.id},
                           {"build_fingerprint", built.at("fingerprint")},
+                          {"lua_enabled", job.lua.enabled()},
+                          {"lua_fingerprint", job.lua.fingerprint},
                           {"scene_hash", sha256(job.scene.dump())},
                           {"asset_generations", Json::object()},
                           {"configuration", built.at("configuration")},

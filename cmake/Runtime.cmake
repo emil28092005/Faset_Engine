@@ -7,8 +7,11 @@ target_include_directories(faset_runtime PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../inc
 target_link_libraries(faset_runtime PUBLIC nlohmann_json::nlohmann_json PRIVATE EnTT::EnTT box2d box3d)
 
 set(FASET_GAMEPLAY_SOURCE_DIR "${PROJECT_SOURCE_DIR}/examples/gameplay" CACHE PATH "Directory containing the game's Gameplay.cpp and Gameplay.hpp")
-if(NOT EXISTS "${FASET_GAMEPLAY_SOURCE_DIR}/Gameplay.cpp" OR NOT EXISTS "${FASET_GAMEPLAY_SOURCE_DIR}/Gameplay.hpp")
-    message(FATAL_ERROR "FASET_GAMEPLAY_SOURCE_DIR must contain Gameplay.cpp and Gameplay.hpp")
+if(NOT EXISTS "${FASET_GAMEPLAY_SOURCE_DIR}/Gameplay.cpp" AND NOT EXISTS "${FASET_GAMEPLAY_SOURCE_DIR}/Gameplay.hpp" AND FASET_ENABLE_LUA)
+    # A Lua-only game needs the same stable native entry points, but no user C++.
+    set(FASET_GAMEPLAY_SOURCE_DIR "${PROJECT_SOURCE_DIR}/src/scripting/empty_gameplay")
+elseif(NOT EXISTS "${FASET_GAMEPLAY_SOURCE_DIR}/Gameplay.cpp" OR NOT EXISTS "${FASET_GAMEPLAY_SOURCE_DIR}/Gameplay.hpp")
+    message(FATAL_ERROR "Provide both Gameplay.cpp and Gameplay.hpp, or enable Lua for a Lua-only project")
 endif()
 add_library(faset_gameplay STATIC "${FASET_GAMEPLAY_SOURCE_DIR}/Gameplay.cpp")
 add_library(Faset::Gameplay ALIAS faset_gameplay)

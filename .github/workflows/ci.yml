@@ -68,6 +68,12 @@ jobs:
       - name: Test Linux
         if: runner.os == 'Linux'
         run: ctest --preset linux-debug
+      - name: Verify Lua-free native build
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B build/no-lua -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFASET_ENABLE_LUA=OFF -DFASET_BUILD_RENDERER=OFF -DFASET_BUILD_EDITOR=OFF
+          cmake --build build/no-lua --target faset_schema_exporter faset_runtime_tests --parallel 2
+          ctest --test-dir build/no-lua --output-on-failure -R '^(runtime_contracts|lua_cli_contracts)$'
       - name: Test Windows
         if: runner.os == 'Windows'
         run: ctest --preset windows-debug -LE gpu

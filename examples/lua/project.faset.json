@@ -1,0 +1,13 @@
+{
+  "format": "faset.project",
+  "version": 1,
+  "id": "example-lua-project",
+  "name": "Lua playground",
+  "dimension": 2,
+  "start_scene": "Scenes/main.scene.json",
+  "scripting": {
+    "lua": {
+      "scripts": ["Scripts/player.lua", "Scripts/beacon.lua"]
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "runtime.version": "Lua 5.4",
+  "runtime.path": ["Scripts/?.lua", "Scripts/?/init.lua"],
+  "workspace.library": [".faset/lua"],
+  "workspace.checkThirdParty": false,
+  "diagnostics.globals": ["faset"]
+}
