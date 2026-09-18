@@ -78,8 +78,10 @@ void text(editor::ProjectLauncher& launcher, const std::string& id, const std::s
 }
 } // namespace
 int main() {
-    const auto root =
-        std::filesystem::temp_directory_path() / path_from_utf8("faset-проекты-" + new_id());
+    // Windows may spell TEMP using an 8.3 alias (RUNNER~1). The launcher returns
+    // canonical paths, so the fixture must compare the same filesystem identity.
+    const auto root = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path()) /
+                      path_from_utf8("faset-проекты-" + new_id());
     try {
         const auto existing = root / path_from_utf8("Существующий проект");
         const auto new_project = root / path_from_utf8("Новая игра");
@@ -106,17 +108,22 @@ int main() {
             click(launcher, "launcher-submit");
             check(!launcher.selection() && !launcher.widgets().find("launcher-error")->text.empty(),
                   "Create must reject nonempty existing project");
-            text(launcher, "launcher-path", path_to_utf8(new_project));
+            text(launcher, "launcher-path", path_to_utf8(root / "." / new_project.filename()));
             click(launcher, "launcher-2d");
             check(launcher.widgets().find("launcher-2d")->selected, "2D project selection");
             renderer.render(launcher.snapshot());
             renderer.capture(root / "launcher-create.ppm");
             launcher.frame({key("Return", true)});
-            check(launcher.selection() && launcher.selection()->create &&
-                      launcher.selection()->dimension == 2 &&
-                      launcher.selection()->name == "Тестовый проект" &&
-                      launcher.selection()->path == new_project,
-                  "Create through keyboard returns typed selection");
+            check(launcher.selection().has_value(),
+                  "Create through keyboard rejected: " +
+                      launcher.widgets().find("launcher-error")->text);
+            check(launcher.selection()->create && launcher.selection()->dimension == 2 &&
+                      launcher.selection()->name == "Тестовый проект",
+                  "Create through keyboard preserves typed project metadata");
+            check(launcher.selection()->path == new_project,
+                  "Create must normalize the typed project path: got " +
+                      path_to_utf8(launcher.selection()->path) + ", expected " +
+                      path_to_utf8(new_project));
             check(!std::filesystem::exists(new_project),
                   "Launcher does not create a partial project before Session scaffold");
         }
