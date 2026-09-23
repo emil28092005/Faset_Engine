@@ -172,9 +172,11 @@ void benchmark(const Options& options) {
     csv << "light_count,shadows,visibility,effective_visibility,lighting_path,"
            "build_configuration,run_index,frame,"
            "device,driver,commit,width,height,validation_enabled,validation_errors,"
-           "submitted_local_lights,omitted_local_lights,shadow_tiles,draw_calls,gpu_bytes,"
+           "submitted_local_lights,omitted_local_lights,"
+           "requested_local_shadow_faces,rendered_local_shadow_faces,dropped_shadow_faces,"
+           "shadow_atlas_full_drops,shadow_tiles,draw_calls,gpu_bytes,"
            "gpu_main_raster_ms,gpu_post_raster_ms,gpu_post_visible,visibility_counters_valid,"
-           "gpu_shadow_ms,gpu_ms,cpu_ms,readback_cpu_ms\n";
+           "gpu_sun_shadow_ms,gpu_local_shadow_ms,gpu_shadow_ms,gpu_ms,cpu_ms,readback_cpu_ms\n";
     csv << std::fixed << std::setprecision(6);
     for (unsigned frame = 0; frame < options.frames; ++frame) {
         renderer.render(scene);
@@ -189,7 +191,7 @@ void benchmark(const Options& options) {
             throw std::runtime_error("GPU raster or frame timestamp was unavailable");
         csv << options.lights << ',' << (options.shadows ? "on" : "off") << ','
             << mode_name(options.visibility) << ',' << mode_name(stats.effective_visibility_mode)
-            << ",forward," << FASET_BENCHMARK_CONFIGURATION << ','
+            << ',' << stats.effective_lighting_path << ',' << FASET_BENCHMARK_CONFIGURATION << ','
             << options.run_index << ',' << frame << ',';
         csv_text(csv, stats.device);
         csv << ',';
@@ -198,11 +200,15 @@ void benchmark(const Options& options) {
         csv_text(csv, options.commit);
         csv << ',' << options.width << ',' << options.height << ','
             << (stats.validation_enabled ? 1 : 0) << ',' << stats.validation_errors << ','
-            << stats.submitted_local_lights << ',' << stats.omitted_local_lights
-            << ",0," << stats.draw_calls << ',' << stats.gpu_allocated_bytes << ','
+            << stats.submitted_local_lights << ',' << stats.omitted_local_lights << ','
+            << stats.requested_local_shadow_faces << ',' << stats.local_shadow_faces << ','
+            << stats.dropped_shadow_faces << ',' << stats.shadow_atlas_full_drops << ','
+            << stats.local_shadow_tiles << ',' << stats.draw_calls << ','
+            << stats.gpu_allocated_bytes << ','
             << stats.gpu_main_raster_ms << ',' << stats.gpu_post_raster_ms << ','
             << stats.gpu_post_visible << ',' << (stats.visibility_counters_valid ? 1 : 0)
-            << ",0," << stats.gpu_ms << ','
+            << ',' << stats.gpu_sun_shadow_ms << ',' << stats.gpu_local_shadow_ms << ','
+            << (stats.gpu_sun_shadow_ms + stats.gpu_local_shadow_ms) << ',' << stats.gpu_ms << ','
             << stats.cpu_ms << ',' << stats.readback_cpu_ms << '\n';
     }
     if (!csv)
