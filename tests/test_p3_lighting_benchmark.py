@@ -2,6 +2,7 @@
 
 import csv
 import json
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -15,17 +16,39 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 
 def sample(shadows, visibility, lights, raster, gpu, repeat=1, frame=0):
+    requested = 6 * lights if shadows == "on" else 0
+    rendered = min(12, requested)
     return {
         "shadows": shadows, "visibility": visibility, "light_count": str(lights),
         "run_index": str(repeat), "frame": str(frame),
-        "gpu_main_raster_ms": str(raster), "gpu_ms": str(gpu),
+        "gpu_main_raster_ms": str(raster), "gpu_post_raster_ms": "0",
+        "gpu_post_visible": "0", "gpu_ms": str(gpu),
         "gpu_shadow_ms": "0", "cpu_ms": "1", "readback_cpu_ms": ".5",
         "validation_errors": "0", "device": "Fake GPU", "driver": "Fake Driver",
         "commit": "abc123", "effective_visibility": visibility,
         "lighting_path": "forward", "submitted_local_lights": str(lights),
-        "omitted_local_lights": "0", "shadow_tiles": "0", "draw_calls": "1",
+        "omitted_local_lights": "0", "shadow_tiles": str(rendered), "draw_calls": "1",
         "gpu_bytes": "4096", "validation_enabled": "0", "width": "1920", "height": "1080",
+        "build_configuration": "Release", "requested_local_shadow_faces": str(requested),
+        "rendered_local_shadow_faces": str(rendered),
+        "dropped_shadow_faces": str(requested - rendered),
+        "shadow_atlas_full_drops": str(requested - rendered),
     }
+
+
+def source_repository(root: Path) -> tuple[Path, str]:
+    source = root / "source"
+    source.mkdir()
+    (source / "README").write_text("fixed source\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", source], check=True)
+    subprocess.run(["git", "-C", source, "-c", "user.name=Benchmark Test",
+                    "-c", "user.email=benchmark@example.invalid", "add", "README"], check=True)
+    subprocess.run(["git", "-C", source, "-c", "user.name=Benchmark Test",
+                    "-c", "user.email=benchmark@example.invalid", "commit", "-qm", "Fixture"],
+                   check=True)
+    revision = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"],
+                                       text=True).strip()
+    return source, revision
 
 
 FAKE_BENCHMARK = r'''import argparse
@@ -46,7 +69,10 @@ fieldnames = ["light_count", "shadows", "visibility", "frame", "device", "driver
               "commit", "gpu_main_raster_ms", "gpu_ms", "gpu_shadow_ms", "cpu_ms",
               "readback_cpu_ms", "validation_errors", "run_index", "effective_visibility",
               "lighting_path", "submitted_local_lights", "omitted_local_lights",
-              "shadow_tiles", "draw_calls", "gpu_bytes", "validation_enabled", "width", "height"]
+              "shadow_tiles", "draw_calls", "gpu_bytes", "validation_enabled", "width", "height",
+              "build_configuration", "requested_local_shadow_faces", "rendered_local_shadow_faces",
+              "dropped_shadow_faces", "shadow_atlas_full_drops", "gpu_post_raster_ms",
+              "gpu_post_visible"]
 with path.open("w", newline="", encoding="utf-8") as stream:
     writer = csv.DictWriter(stream, fieldnames=fieldnames)
     writer.writeheader()
@@ -54,13 +80,20 @@ with path.open("w", newline="", encoding="utf-8") as stream:
         writer.writerow(dict(light_count=a.lights, shadows=a.shadows,
                              visibility=a.visibility, frame=frame, device="Fake GPU",
                              driver="Fake Driver", commit=a.commit,
-                             gpu_main_raster_ms=.4 + .02 * a.lights, gpu_ms=4 + .02 * a.lights,
+                             gpu_main_raster_ms=.4 + .02 * a.lights, gpu_post_raster_ms=0,
+                             gpu_post_visible=0, gpu_ms=4 + .02 * a.lights,
                              gpu_shadow_ms=0, cpu_ms=1, readback_cpu_ms=.5,
                              validation_errors=0, run_index=a.run_index,
                              effective_visibility=a.visibility, lighting_path="forward",
                              submitted_local_lights=a.lights, omitted_local_lights=0,
-                             shadow_tiles=0, draw_calls=1, gpu_bytes=4096,
-                             validation_enabled=0, width=a.width, height=a.height))
+                             shadow_tiles=min(12, 6 * a.lights) if a.shadows == "on" else 0,
+                             draw_calls=1, gpu_bytes=4096,
+                             validation_enabled=0, width=a.width, height=a.height,
+                             build_configuration="Release",
+                             requested_local_shadow_faces=6 * a.lights if a.shadows == "on" else 0,
+                             rendered_local_shadow_faces=min(12, 6 * a.lights) if a.shadows == "on" else 0,
+                             dropped_shadow_faces=max(0, 6 * a.lights - 12) if a.shadows == "on" else 0,
+                             shadow_atlas_full_drops=max(0, 6 * a.lights - 12) if a.shadows == "on" else 0))
 '''
 
 
@@ -83,6 +116,17 @@ class LightingBenchmarkTests(unittest.TestCase):
                               for light in (0, 4, 16, 32, 64, 128)
                               for mode in ("direct", "gpu-frustum", "gpu-occlusion")
                               for repeat in (1, 2, 3)})
+        positions = {(run["shadows"], run["visibility"], run["repeat"], run["light_count"]): index
+                     for index, run in enumerate(runs)}
+        for run in runs:
+            if run["light_count"] not in (32, 64, 128):
+                continue
+            baseline = positions[(run["shadows"], run["visibility"], run["repeat"], 0)]
+            separation = positions[(run["shadows"], run["visibility"],
+                                    run["repeat"], run["light_count"])] - baseline
+            self.assertGreater(separation, 0)
+            self.assertLessEqual(separation, 5,
+                                 "Each expensive run needs a nearby control on the same repeat")
 
     def test_gate_uses_per_run_medians_and_same_mode_shadow_baseline(self):
         from benchmark_p3_lighting import summarize_rows
@@ -107,15 +151,54 @@ class LightingBenchmarkTests(unittest.TestCase):
         self.assertEqual(hits[("off", "direct", 32)]["zero_light_gpu_ms"], 10)
         self.assertEqual(hits[("on", "gpu-frustum", 64)]["zero_light_gpu_ms"], 4)
 
+    def test_gate_pairs_controls_and_counts_occlusion_post_raster(self):
+        from benchmark_p3_lighting import summarize_rows
+
+        rows = []
+        for repeat, baseline_main, candidate_main in ((1, .4, 1.5),
+                                                       (2, 1.4, 1.4),
+                                                       (3, 2.4, 3.5)):
+            rows.append(sample("off", "direct", 0, baseline_main, 5, repeat))
+            rows.append(sample("off", "direct", 32, candidate_main, 6, repeat))
+            control = sample("off", "gpu-occlusion", 0, .4, 4, repeat)
+            candidate = sample("off", "gpu-occlusion", 64, .5, 4.9, repeat)
+            candidate["gpu_post_raster_ms"] = ".8"
+            rows.extend((control, candidate))
+        summary = summarize_rows(rows)
+        hits = {(item["visibility"], item["light_count"]): item
+                for item in summary["forward_plus_gate"]["candidates"]}
+        self.assertAlmostEqual(hits[("direct", 32)]["overhead_ms"], 1.1)
+        self.assertAlmostEqual(hits[("gpu-occlusion", 64)]["overhead_ms"], .9)
+        self.assertEqual(hits[("gpu-occlusion", 64)]["raster_metric"], "main_plus_post")
+
+    def test_shadow_summary_keeps_requested_rendered_and_dropped_faces(self):
+        from benchmark_p3_lighting import summarize_rows
+
+        rows = [sample("on", "direct", 0, .4, 4, repeat)
+                for repeat in (1, 2, 3)]
+        rows += [sample("on", "direct", 64, 1.1, 5, repeat)
+                 for repeat in (1, 2, 3)]
+        summary = summarize_rows(rows)
+        high = next(item for item in summary["configurations"] if item["light_count"] == 64)
+        self.assertEqual(high["shadow_counts"], {
+            "requested_local_shadow_faces": 384,
+            "rendered_local_shadow_faces": 12,
+            "shadow_tiles": 12,
+            "dropped_shadow_faces": 372,
+            "shadow_atlas_full_drops": 372,
+        })
+
     def test_sweep_runs_fake_executable_and_preserves_all_raw_frames(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             fake = root / "fake_benchmark.py"
             fake.write_text(FAKE_BENCHMARK, encoding="utf-8")
+            source, revision = source_repository(root)
             output = root / "café 世界"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--output", output, "--shadows", "off", "--commit", revision,
+                 "--source-root", source,
                  "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertEqual(process.returncode, 0, process.stderr)
@@ -126,10 +209,14 @@ class LightingBenchmarkTests(unittest.TestCase):
             self.assertEqual(len(merged), 54 * 30)
             self.assertEqual({row["source_csv"] for row in merged},
                              {path.name for path in raw})
+            self.assertEqual({int(row["acquisition_index"]) for row in merged}, set(range(54)))
             report = json.loads((output / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(report["runs_completed"], 54)
             self.assertEqual(report["rows"], 54 * 30)
             self.assertTrue(report["forward_plus_gate"]["triggered"])
+            self.assertEqual(report["benchmark_sha256"], hashlib.sha256(fake.read_bytes()).hexdigest())
+            self.assertEqual(report["source_revision"], revision)
+            self.assertFalse(report["source_dirty"])
             one = json.loads(next((output / "raw").glob("*.args.json")).read_text())
             self.assertEqual((one["width"], one["height"], one["warmup"], one["frames"]),
                              (1920, 1080, 10, 30))
@@ -142,10 +229,12 @@ class LightingBenchmarkTests(unittest.TestCase):
             fake.write_text(FAKE_BENCHMARK.replace(
                 '"gpu_main_raster_ms", "gpu_ms"', '"gpu_ms"').replace(
                 'gpu_main_raster_ms=.4 + .02 * a.lights, ', ''), encoding="utf-8")
+            source, revision = source_repository(root)
             output = root / "invalid"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--output", output, "--shadows", "off", "--commit", revision,
+                 "--source-root", source,
                  "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertNotEqual(process.returncode, 0)
@@ -159,10 +248,12 @@ class LightingBenchmarkTests(unittest.TestCase):
             fake.write_text(FAKE_BENCHMARK.replace(
                 'effective_visibility=a.visibility', 'effective_visibility="direct"'),
                 encoding="utf-8")
+            source, revision = source_repository(root)
             output = root / "fallback-output"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--output", output, "--shadows", "off", "--commit", revision,
+                 "--source-root", source,
                  "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertNotEqual(process.returncode, 0)
@@ -176,10 +267,12 @@ class LightingBenchmarkTests(unittest.TestCase):
             fake.write_text(FAKE_BENCHMARK.replace(
                 'submitted_local_lights=a.lights', 'submitted_local_lights=0'),
                 encoding="utf-8")
+            source, revision = source_repository(root)
             output = root / "wrong-count-output"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--output", output, "--shadows", "off", "--commit", revision,
+                 "--source-root", source,
                  "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertNotEqual(process.returncode, 0)
@@ -193,6 +286,64 @@ class LightingBenchmarkTests(unittest.TestCase):
             fake.write_text(FAKE_BENCHMARK, encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "--driver"):
                 sweep(fake, Path(temporary) / "out", "off", "abc123")
+
+    def test_sweep_rejects_debug_binary_before_reporting_a_release_gate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, revision = source_repository(root)
+            fake = root / "debug.py"
+            fake.write_text(FAKE_BENCHMARK.replace(
+                'build_configuration="Release"', 'build_configuration="Debug"'),
+                encoding="utf-8")
+            output = root / "debug-output"
+            process = subprocess.run(
+                [sys.executable, SCRIPT, "--sweep", "--executable", fake,
+                 "--output", output, "--source-root", source, "--commit", revision,
+                 "--driver", "Fake Driver", "--shadows", "off"],
+                text=True, capture_output=True)
+            self.assertNotEqual(process.returncode, 0)
+            self.assertIn("Release", process.stderr)
+            self.assertFalse((output / "summary.json").exists())
+
+    def test_sweep_rejects_dirty_or_misidentified_source_revision(self):
+        from benchmark_p3_lighting import sweep
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, revision = source_repository(root)
+            fake = root / "fake.py"
+            fake.write_text(FAKE_BENCHMARK, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "revision"):
+                sweep(fake, root / "wrong-commit", "off", "incorrect", driver="Fake Driver",
+                      source_root=source)
+            (source / "README").write_text("edited after commit\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "dirty"):
+                sweep(fake, root / "dirty", "off", revision, driver="Fake Driver",
+                      source_root=source)
+
+    def test_sweep_rejects_mixed_device_driver_path_or_validation(self):
+        mutations = {
+            "device": ('device="Fake GPU"', 'device="Other GPU" if a.lights else "Fake GPU"'),
+            "driver": ('driver="Fake Driver"', 'driver="Wrong Driver"'),
+            "lighting_path": ('lighting_path="forward"',
+                              'lighting_path="forward_plus" if a.lights else "forward"'),
+            "validation_enabled": ('validation_enabled=0', 'validation_enabled=1'),
+        }
+        for field, (before, after) in mutations.items():
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source, revision = source_repository(root)
+                fake = root / "changed.py"
+                fake.write_text(FAKE_BENCHMARK.replace(before, after), encoding="utf-8")
+                output = root / "changed-output"
+                process = subprocess.run(
+                    [sys.executable, SCRIPT, "--sweep", "--executable", fake,
+                     "--output", output, "--source-root", source, "--commit", revision,
+                     "--driver", "Fake Driver", "--shadows", "off"],
+                    text=True, capture_output=True)
+                self.assertNotEqual(process.returncode, 0)
+                self.assertIn(field, process.stderr)
+                self.assertFalse((output / "summary.json").exists())
 
 
 def real_executable_smoke(executable: Path) -> None:
