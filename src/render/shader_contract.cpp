@@ -158,6 +158,75 @@ void validate_gpu_layout(const Json& layout, std::string_view entry) {
         locations(layout.at("outputs"), {}, "GPU compute outputs");
     }
 }
+void validate_temporal_layout(const Json& layout, std::string_view entry) {
+    const bool resolve = entry == "temporalResolveMain";
+    const bool vertex = entry == "temporalCompositeVertexMain";
+    require(resolve || vertex || entry == "temporalCompositeFragmentMain",
+            "unknown temporal shader entry");
+    require(layout.at("stage") == (resolve ? "compute" : vertex ? "vertex" : "fragment"),
+            "temporal shader stage changed");
+    const auto& descriptors = layout.at("descriptors");
+    require(descriptors.is_array() && descriptors.size() == (resolve ? 7u : 1u),
+            "temporal descriptor count changed");
+    for (std::size_t i = 0; i < descriptors.size(); ++i) {
+        const auto& descriptor = descriptors[i];
+        require(descriptor.at("set") == 0 && descriptor.at("binding") == i &&
+                    descriptor.at("count") == 1,
+                "temporal descriptor set, binding or count changed");
+        require(descriptor.at("type") ==
+                    (resolve && i >= 5 ? "storage_image_2d" : "sampled_image_2d"),
+                "temporal image descriptor type changed");
+        require(descriptor.at("used") == (resolve || !vertex),
+                "temporal entry uses an unexpected image binding");
+    }
+    const auto& constants = layout.at("push_constants");
+    const auto& spirv_constants = layout.at("spirv_push_constants");
+    require(constants.is_array() && spirv_constants.is_array(),
+            "temporal push constants are malformed");
+    if (resolve) {
+        require(constants.size() == 1 && constants[0].at("offset") == 0 &&
+                    constants[0].at("size") == 64 && spirv_constants.size() == 1,
+                "temporal resolve push block changed");
+        const auto& members = constants[0].at("members");
+        const auto& spirv_members = spirv_constants[0].at("members");
+        require(members.size() == 4 && spirv_members.size() == 4,
+                "temporal resolve push members changed");
+        const char* types[] = {"uint32x4", "float32x4", "float32x4", "uint32x4"};
+        for (std::size_t i = 0; i < 4; ++i)
+            require(members[i].at("offset") == 16 * i &&
+                        members[i].at("size") == 16 && members[i].at("type") == types[i] &&
+                        spirv_members[i].at("member") == i &&
+                        spirv_members[i].at("offset") == 16 * i,
+                    "temporal resolve push member ABI changed");
+    } else
+        require(constants.empty() && spirv_constants.empty(),
+                "temporal composite unexpectedly uses push constants");
+    if (resolve) {
+        locations(layout.at("inputs"), {}, "temporal resolve inputs");
+        locations(layout.at("outputs"), {}, "temporal resolve outputs");
+    } else if (vertex) {
+        locations(layout.at("inputs"), {}, "temporal composite vertex inputs");
+        locations(layout.at("outputs"), {}, "temporal composite vertex outputs");
+    } else {
+        locations(layout.at("inputs"), {}, "temporal composite fragment inputs");
+        locations(layout.at("outputs"), {"float32x4"},
+                  "temporal composite fragment outputs");
+    }
+    const auto& input_builtins = layout.at("input_builtins");
+    require(input_builtins.is_array() && input_builtins.size() == 1 &&
+                input_builtins[0].at("semantic") ==
+                    (resolve ? "SV_DISPATCHTHREADID" : vertex ? "SV_VERTEXID" : "SV_POSITION") &&
+                input_builtins[0].at("type") == (vertex ? "uint32" : resolve ? "uint32x3"
+                                                                       : "float32x4"),
+            "temporal entry input builtin changed");
+    const auto& output_builtins = layout.at("output_builtins");
+    require(output_builtins.is_array() && output_builtins.size() == (vertex ? 1u : 0u),
+            "temporal entry output builtin count changed");
+    if (vertex)
+        require(output_builtins[0].at("semantic") == "SV_POSITION" &&
+                    output_builtins[0].at("type") == "float32x4",
+                "temporal composite vertex position changed");
+}
 void validate_spirv(const std::vector<std::uint32_t>& words, std::uint32_t execution_model) {
     require(words.size() >= 5 && words[0] == 0x07230203 && words[1] >= 0x00010000 &&
                 words[1] <= 0x00010600 && words[3] > 0 && words[3] < (1u << 20) && words[4] == 0,
@@ -183,7 +252,7 @@ void validate_spirv(const std::vector<std::uint32_t>& words, std::uint32_t execu
     require(entry_found, "SPIR-V main entry point missing");
 }
 detail::ShaderCode load(const std::filesystem::path& directory, const char* entry,
-                        bool gpu = false) {
+                        bool gpu = false, bool temporal = false) {
     const auto bytes = read_bounded(directory / (std::string(entry) + ".spv"), 16 * 1024 * 1024);
     require(bytes.size() >= 20 && bytes.size() % 4 == 0, "invalid SPIR-V byte length");
     const auto metadata = Json::parse(
@@ -196,7 +265,9 @@ detail::ShaderCode load(const std::filesystem::path& directory, const char* entr
     const auto& layout = metadata.at("layout");
     const auto fingerprint = faset::sha256(layout.dump());
     require(metadata.at("layout_fingerprint") == fingerprint, "layout fingerprint mismatch");
-    if (gpu)
+    if (temporal)
+        validate_temporal_layout(layout, entry);
+    else if (gpu)
         validate_gpu_layout(layout, entry);
     else
         validate_layout(layout, entry);
@@ -204,9 +275,13 @@ detail::ShaderCode load(const std::filesystem::path& directory, const char* entr
     result.layout_fingerprint = fingerprint;
     result.words.resize(bytes.size() / 4);
     std::memcpy(result.words.data(), bytes.data(), bytes.size());
-    validate_spirv(result.words, gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
-                                           std::string_view(entry) == "gpuShadowMain") ? 0u : 5u)
-                                     : (std::string_view(entry) == "fragmentMain" ? 4u : 0u));
+    const auto stage = temporal
+        ? (std::string_view(entry) == "temporalResolveMain" ? 5u
+           : std::string_view(entry) == "temporalCompositeVertexMain" ? 0u : 4u)
+        : gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
+                  std::string_view(entry) == "gpuShadowMain") ? 0u : 5u)
+              : (std::string_view(entry) == "fragmentMain" ? 4u : 0u);
+    validate_spirv(result.words, stage);
     return result;
 }
 } // namespace
@@ -220,6 +295,12 @@ detail::load_gpu_shader_bundle(const std::filesystem::path& directory) {
     return {load(directory, "gpuVertexMain", true), load(directory, "gpuShadowMain", true),
             load(directory, "gpuCullMain", true), load(directory, "gpuHzbMain", true),
             load(directory, "gpuPostCullMain", true)};
+}
+std::array<detail::ShaderCode, 3>
+detail::load_temporal_shader_bundle(const std::filesystem::path& directory) {
+    return {load(directory, "temporalResolveMain", false, true),
+            load(directory, "temporalCompositeVertexMain", false, true),
+            load(directory, "temporalCompositeFragmentMain", false, true)};
 }
 void validate_shader_bundle(const std::filesystem::path& directory) {
     (void)detail::load_shader_bundle(directory);
