@@ -50,6 +50,19 @@ outside the Editor, ordinary Save reports a conflict instead of overwriting it.
 Save your in-memory work to a new path and compare the two versions before replacing
 anything.
 
+Autosave is enabled by default. After a named scene has been idle for two seconds,
+the Editor saves its current revision to that scene file. The status bar shows
+**Pending autosave**, **Saving**, or **Saved**. An unnamed scene shows **Save As
+required** until you choose its path. The status bar's **Save As...** action opens
+an editable, new project-relative path; it never overwrites the conflicting file.
+
+If the disk file changes outside Faset, autosave stops for that revision and shows
+**Save conflict**. Use **Save As...** to keep both versions, then compare or reload
+the original. **Save failed** preserves the unsaved scene in the recovery journal;
+correct the write error or use Save As. Autosave does not clear Undo history or
+replace the [recovery journal](#recover-unsaved-work). Recovery still protects
+unnamed scenes and edits before the idle deadline.
+
 ## Navigate and transform
 
 - **Right drag:** orbit the 3D view; pan in a 2D scene.
@@ -119,13 +132,16 @@ for the C++ iteration loop.
 ## Project settings
 
 Open **File → Project settings** to change the project name, initial **2D / 3D** type,
-and start-scene path. Save a scene first, then choose it from the saved-scene list or
-enter its project-relative path. Choose **Save project** to update
-`project.faset.json` explicitly. A missing start scene is rejected and the dialog
-stays open.
+start-scene path, or **Autosave named scenes** preference. Save a scene first, then
+choose it from the saved-scene list or enter its project-relative path. Choose
+**Save project** to update `project.faset.json` explicitly. A missing start scene is
+rejected and the dialog stays open. The Autosave preference applies immediately;
+when disabled, the status bar says **Autosave off** and you can still use Ctrl+S or
+Save As. The project file stores it as `editor.autosave`; omitting it means enabled.
 
-These settings are used when the project opens again; they do not convert the active
-scene, switch its dimension, restart the Player, or add a scene Undo entry.
+The project name, default dimension, and start scene are used when the project opens
+again; they do not convert the active scene, switch its dimension, restart the Player,
+or add a scene Undo entry.
 **Cancel** or **Escape** discards this form's draft. If another writer changes the
 project settings while the dialog is open, Save reports a revision conflict and
 keeps your draft. **Reload saved** deliberately discards it and reloads the latest

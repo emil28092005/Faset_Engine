@@ -1,6 +1,8 @@
 #include <faset/core/io.hpp>
 #include <faset/editor/editor_ui.hpp>
+#include <chrono>
 #include <iostream>
+#include <thread>
 using namespace faset;
 namespace {
 void check(bool value, const std::string& message) {
@@ -50,6 +52,7 @@ int main() {
                                          {"id", new_id()},
                                          {"name", "Original project"},
                                          {"dimension", 3},
+                                         {"editor", {{"script_editor", {"zed", "{file}"}}}},
                                          {"custom_metadata", {{"preserve", true}}}});
         editor::Session session({root, path_from_utf8(FASET_TEST_ENGINE), root});
         render::Renderer renderer({1280, 800, "Project settings acceptance", true, true});
@@ -73,6 +76,13 @@ int main() {
         open(ui);
         check(ui.widgets().find("project-settings-name")->text == "Original project",
               "Opening settings reloads current saved values");
+        check(ui.widgets().find("project-settings-autosave")->checked,
+              "Missing autosave setting appears enabled in Project settings");
+        check(ui.widgets().focus("project-settings-autosave"),
+              "Keyboard focus reaches the Autosave toggle");
+        ui.frame({key("Space")});
+        check(!ui.widgets().find("project-settings-autosave")->checked,
+              "Space toggles Autosave from the keyboard");
         text(ui, "project-settings-name", "Новый проект");
         click(ui, "project-settings-2d");
         click(ui, "project-scene-choice-1");
@@ -81,11 +91,25 @@ int main() {
         click(ui, "project-settings-save");
         auto saved = read_json(project_file);
         check(saved["name"] == "Новый проект" && saved["dimension"] == 2 &&
-                  saved["start_scene"] == "Scenes/Другая.scene.json",
+                  saved["start_scene"] == "Scenes/Другая.scene.json" &&
+                  saved["editor"]["autosave"] == false,
               "Explicit Save project persists typed settings");
         check(saved["custom_metadata"] == project_before["custom_metadata"] &&
-                  saved["id"] == project_before["id"],
+                  saved["id"] == project_before["id"] &&
+                  saved["editor"]["script_editor"] ==
+                      project_before["editor"]["script_editor"],
               "Project settings preserve unknown metadata and project identity");
+        ui.frame({});
+        check(ui.widgets().find("autosave-status")->text == "Autosave off",
+              "Disabling Autosave is visible in the Editor status bar");
+        open(ui);
+        check(!ui.widgets().find("project-settings-autosave")->checked,
+              "Autosave preference is restored when reopening Project settings");
+        click(ui, "project-settings-autosave");
+        click(ui, "project-settings-save");
+        saved = read_json(project_file);
+        check(saved["editor"]["autosave"] == true,
+              "Autosave can be enabled again through Project settings");
         check(session.authoring().query(ui.current_document()) == document_before,
               "Project settings do not change current document, dimension, revision or Undo");
         open(ui);
@@ -118,6 +142,51 @@ int main() {
               "Save after explicit reload uses new content revision");
         check(session.authoring().query(ui.current_document()) == document_before,
               "Project settings remain outside scene Undo throughout conflicts");
+        const auto original_document = ui.current_document();
+        const auto revision =
+            session.authoring().query(original_document).at("revision").get<std::uint64_t>();
+        session.authoring().transact(
+            original_document, revision,
+            Json::array({{{"op", "scene.rename"}, {"name", "Pending autosave"}}}));
+        ui.frame({});
+        check(ui.widgets().find("autosave-status")->text == "Pending autosave",
+              "Status bar shows pending scene save after edit");
+        session.authoring().save(original_document);
+        ui.frame({});
+        check(ui.widgets().find("autosave-status")->text == "Saved",
+              "Status bar returns to Saved after the scene reaches disk");
+        session.authoring().transact(
+            original_document,
+            session.authoring().query(original_document).at("revision"),
+            Json::array({{{"op", "scene.rename"}, {"name", "Conflicting autosave"}}}));
+        ui.frame({});
+        auto disk_scene = read_json(root / "Scenes/Главная.scene.json");
+        disk_scene["name"] = "External scene edit";
+        atomic_write_json(root / "Scenes/Главная.scene.json", disk_scene);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2100));
+        ui.frame({});
+        check(ui.widgets().find("autosave-status")->text == "Save conflict" &&
+                  ui.widgets().find("autosave-status")->tooltip.find("Save As") !=
+                      std::string::npos,
+              "Disk conflict remains visible with Save As guidance");
+        renderer.render(ui.snapshot());
+        renderer.capture(root / "autosave-conflict.ppm");
+        check(ui.widgets().focus("autosave-save-as"),
+              "Keyboard focus reaches the recovery Save As action");
+        ui.frame({key("Return")});
+        check(ui.widgets().find("menu-popup")->visible &&
+                  ui.widgets().find("save-path")->visible,
+              "Recovery action opens an editable Save As path");
+        ui.frame({key("Escape")});
+        const auto unnamed = session.authoring().create("Unsaved", 2);
+        session.authoring().transact(
+            unnamed.at("id"), unnamed.at("revision"),
+            Json::array({{{"op", "scene.rename"}, {"name", "Needs a path"}}}));
+        ui.select_document(unnamed.at("id"));
+        ui.frame({});
+        check(ui.widgets().find("autosave-status")->text == "Save As required" &&
+                  ui.widgets().find("autosave-save-as")->visible,
+              "Unnamed dirty scene is never assigned an implicit path");
         open(ui);
         renderer.render(ui.snapshot());
         renderer.capture(root / "project-settings.ppm");

@@ -186,6 +186,7 @@ struct EditorUI::Impl {
     bool project_settings_open = false;
     Json project_settings_state;
     int project_settings_dimension = 3;
+    bool project_settings_autosave = true;
     std::string project_settings_error;
     bool project_switch_enabled = true, project_switch_requested = false,
          project_switch_warning = false;
@@ -601,6 +602,20 @@ struct EditorUI::Impl {
         schema_status.visible = false;
         schema_status.enabled = false;
         schema_status.tooltip = "Choose Build to refresh gameplay fields in Inspector";
+        auto& autosave_status = statusrow.add(Kind::Label, "autosave-status", "Saved");
+        autosave_status.layout.width = 160;
+        autosave_status.enabled = false;
+        auto& autosave_action = button(statusrow, "autosave-save-as", "Save As...", [this] {
+            const auto path = current.value("path", std::string());
+            const auto directory = path.empty() ? std::string("Scenes/")
+                                                : path.substr(0, path.find_last_of('/') + 1);
+            ui.update_text("save-path",
+                           directory + "Recovered-" + new_id().substr(0, 8) + ".scene.json",
+                           true);
+            menu = "File";
+        }, 100);
+        autosave_action.visible = false;
+        autosave_action.tooltip = "Save this scene to a new project-relative path";
         label(statusrow, "renderer-status", "Vulkan", 225);
         statusrow.find("renderer-status")->enabled = false;
         build_overlays();
@@ -792,12 +807,20 @@ struct EditorUI::Impl {
         }
         label(project, "project-settings-start-label", "Start scene (saved project-relative path)");
         project.add(Kind::TextField, "project-settings-start");
+        auto& autosave = project.add(Kind::Checkbox, "project-settings-autosave",
+                                     "Autosave named scenes after 2 seconds idle");
+        autosave.layout.height = 30;
+        autosave.checked = true;
+        autosave.on_commit = [this](Widget& widget) {
+            project_settings_autosave = widget.checked;
+        };
+        autosave.tooltip = "Unsaved scenes remain in recovery until you choose Save As";
         auto& scenes = project.add(Kind::Column, "project-settings-scenes");
         scenes.layout.height = 104;
         scenes.layout.scroll = true;
         scenes.layout.gap = 1;
         label(project, "project-settings-note",
-              "Applies on next project open. Scene Undo is unchanged.");
+              "Autosave applies now; other settings on next open. Scene Undo is unchanged.");
         auto& project_actions = project.add(Kind::Row, "project-settings-actions");
         project_actions.layout.height = 32;
         button(
@@ -1258,6 +1281,42 @@ struct EditorUI::Impl {
                                          (current.value("dirty", false) ? " *" : "");
         ui.find("project-title")->tooltip = project_name + " / " + scene_name;
         ui.find("status")->text = status;
+        const auto autosave = call("faset_autosave_status");
+        std::string save_state = "saved", save_error;
+        if (!autosave.is_null()) {
+            if (!autosave.value("enabled", true))
+                save_state = "disabled";
+            for (const auto& entry : autosave.at("documents"))
+                if (entry.at("id") == document) {
+                    save_state = entry.at("state").get<std::string>();
+                    save_error = entry.value("error", std::string());
+                    break;
+                }
+            if (!autosave.value("enabled", true) && save_state == "saved")
+                save_state = "disabled";
+        }
+        auto& save_label = *ui.find("autosave-status");
+        save_label.text = save_state == "pending"          ? "Pending autosave"
+                          : save_state == "saving"         ? "Saving"
+                          : save_state == "conflict"       ? "Save conflict"
+                          : save_state == "failed"         ? "Save failed"
+                          : save_state == "save_as_required" ? "Save As required"
+                          : save_state == "disabled"       ? "Autosave off"
+                                                           : "Saved";
+        save_label.tooltip = save_state == "conflict"
+                                 ? "Scene file changed outside Faset. Use Save As to keep both "
+                                   "versions, then compare or reload. " + save_error
+                             : save_state == "failed"
+                                 ? "Scene save failed. Your recovery journal remains available. "
+                                   "Use Save As or correct the error. " + save_error
+                             : save_state == "save_as_required"
+                                 ? "Choose Save As; unnamed scenes remain in recovery only"
+                             : save_state == "disabled"
+                                 ? "Autosave is off in Project settings; use Save manually"
+                                 : "Scene autosave status";
+        ui.find("autosave-save-as")->visible =
+            save_state == "conflict" || save_state == "failed" ||
+            save_state == "save_as_required";
         ui.find("renderer-status")->text =
             "Vulkan 1.3  |  " + std::to_string(resolved.at("entities").size()) + " objects";
     }
@@ -2179,7 +2238,7 @@ struct EditorUI::Impl {
         refresh_project_settings();
         const bool modal = palette || !recovery.empty() || simulation_open ||
                            project_switch_warning || project_settings_open;
-        for (const auto* id : {"menubar", "toolbar", "workspace", "bottom_panel"})
+        for (const auto* id : {"menubar", "toolbar", "workspace", "bottom_panel", "statusbar"})
             ui.find(id)->enabled = !modal;
         const bool file = menu == "File" || menu == "Faset",
                    edit = menu == "Edit" || menu == "Scene",
@@ -2234,6 +2293,8 @@ struct EditorUI::Impl {
         project_settings_state = result;
         const auto& settings = result.at("settings");
         project_settings_dimension = settings.value("dimension", 3);
+        project_settings_autosave = settings.at("editor").at("autosave").get<bool>();
+        ui.find("project-settings-autosave")->checked = project_settings_autosave;
         ui.update_text("project-settings-name", settings.value("name", std::string()), true);
         ui.update_text("project-settings-start", settings.value("start_scene", std::string()),
                        true);
@@ -2300,7 +2361,9 @@ struct EditorUI::Impl {
             project_settings_error = "Enter a project name.";
             return;
         }
-        Json changes = {{"name", name}, {"dimension", project_settings_dimension}};
+        Json changes = {{"name", name},
+                        {"dimension", project_settings_dimension},
+                        {"editor", {{"autosave", project_settings_autosave}}}};
         if (!start.empty() ||
             !project_settings_state.at("settings").value("start_scene", std::string()).empty())
             changes["start_scene"] = start;
@@ -2314,7 +2377,7 @@ struct EditorUI::Impl {
         project_settings_state = result;
         project_settings_open = false;
         project_settings_error.clear();
-        status = "Project settings saved for the next project open";
+        status = "Project settings saved; autosave preference applies now";
     }
     void refresh_project_settings() {
         auto* panel = ui.find("project-settings-panel");
@@ -2325,6 +2388,7 @@ struct EditorUI::Impl {
         panel->layout.y = std::max(0.f, (logical_height() - panel->layout.height) * .5f);
         ui.find("project-settings-2d")->selected = project_settings_dimension == 2;
         ui.find("project-settings-3d")->selected = project_settings_dimension == 3;
+        ui.find("project-settings-autosave")->checked = project_settings_autosave;
         ui.find("project-settings-error")->text = project_settings_error;
         for (auto& choice : ui.find("project-settings-scenes")->children)
             if (choice->kind == Kind::TreeRow)

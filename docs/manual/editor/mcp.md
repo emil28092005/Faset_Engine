@@ -67,6 +67,20 @@ resume and single-step process controls; it cannot read or modify game entities.
 scenes that have never been saved. Restoring an already open document requires its
 current revision. Recovery refuses to overwrite an externally changed scene file.
 
+Long-lived headless and graphical Editor sessions also poll the same autosave
+controller. With `editor.autosave` enabled (the default), a named dirty scene is
+saved after two seconds idle. `faset_autosave_status {}` reports `enabled` and each
+open document's `state`, `revision`, `path`, and `error`. States include `saved`,
+`pending`, `saving`, `conflict`, `failed`, `save_as_required`, and `disabled`.
+An unnamed scene remains in recovery until you give it an explicit path. An
+external disk edit produces `conflict` without overwriting that edit. For scripted
+workflows, use `faset_document_save` with `expected_revision` when you need a
+definite save boundary instead of waiting for idle autosave. If a conflict occurs,
+save to a new project-relative path and compare the two files. Change the
+preference through `faset_project_settings_get` and `faset_project_settings_set`
+with the returned project revision and `{"editor":{"autosave":false}}`; the
+new value applies to the current session and persists for the next Editor launch.
+
 ## Single-command CLI
 
 The CLI is useful for scripts that do not need an MCP session:

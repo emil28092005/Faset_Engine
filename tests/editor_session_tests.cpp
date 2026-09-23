@@ -4,7 +4,7 @@
 #include <iostream>
 #include <thread>
 
-int main(int argc, char** argv) {
+int test_main(int argc, char** argv) {
     using namespace faset;
     if (argc >= 3 && std::string_view(argv[1]) == "--editor-probe") {
         Json arguments = Json::array();
@@ -36,6 +36,8 @@ int main(int argc, char** argv) {
         require(!session.play_pending() && !session.playing(), "test",
                 "Stop must cancel a pending Play build");
         const auto initial = commands.call("faset_project_settings_get", Json::object());
+        require(initial.at("settings").at("editor").at("autosave") == true, "test",
+                "Missing autosave setting must read as enabled");
         auto changed = commands.call("faset_project_settings_set",
                                      {{"revision", initial.at("revision")},
                                       {"settings",
@@ -75,15 +77,57 @@ int main(int argc, char** argv) {
         atomic_write_json(root / "project.faset.json", external);
         rejects({{"revision", changed.at("revision")}, {"settings", {{"name", "Race"}}}},
                 "revision.conflict");
-        const auto reloaded = commands.call("faset_project_settings_get", Json::object());
+        auto reloaded = commands.call("faset_project_settings_get", Json::object());
+        auto explicit_default = external;
+        explicit_default["editor"]["autosave"] = true;
+        atomic_write_json(root / "project.faset.json", explicit_default);
+        rejects({{"revision", reloaded.at("revision")},
+                 {"settings", {{"name", "Lost external write"}}}},
+                "revision.conflict");
+        reloaded = commands.call("faset_project_settings_get", Json::object());
         changed =
             commands.call("faset_project_settings_set", {{"revision", reloaded.at("revision")},
                                                          {"settings", {{"name", "Preserved"}}}});
         require(changed.at("settings").at("custom_tool").at("keep") == true, "test",
                 "Saving settings erased unknown project metadata");
         require(changed.at("settings").at("scripting") == external.at("scripting") &&
-                    changed.at("settings").at("editor") == external.at("editor"),
+                    changed.at("settings").at("editor").at("script_editor") ==
+                        external.at("editor").at("script_editor"),
                 "test", "Project settings erased Lua configuration or external editor command");
+        const auto autosave_off = commands.call(
+            "faset_project_settings_set",
+            {{"revision", changed.at("revision")},
+             {"settings", {{"editor", {{"autosave", false}}}}}});
+        require(autosave_off.at("settings").at("editor").at("autosave") == false &&
+                    session.project().at("editor").at("script_editor") ==
+                        external.at("editor").at("script_editor"),
+                "test", "Autosave setting must merge without erasing the editor command");
+        session.poll();
+        require(commands.call("faset_autosave_status", Json::object()).at("enabled") == false,
+                "test", "Autosave disable must take effect in the current session");
+        {
+            editor::Session reopened({root, path_from_utf8(FASET_TEST_ENGINE), {}});
+            reopened.poll();
+            require(reopened.commands()
+                            .call("faset_autosave_status", Json::object())
+                            .at("enabled") == false,
+                    "test", "Autosave setting must survive Editor reopen");
+        }
+        rejects({{"revision", changed.at("revision")},
+                 {"settings", {{"editor", {{"autosave", true}}}}}},
+                "revision.conflict");
+        rejects({{"revision", autosave_off.at("revision")},
+                 {"settings", {{"editor", {{"autosave", "sometimes"}}}}}},
+                "project.autosave");
+        rejects({{"revision", autosave_off.at("revision")},
+                 {"settings", {{"editor", {{"script_editor", {"other"}}}}}}},
+                "project.setting");
+        changed = commands.call("faset_project_settings_set",
+                                {{"revision", autosave_off.at("revision")},
+                                 {"settings", {{"editor", {{"autosave", true}}}}}});
+        session.poll();
+        require(commands.call("faset_autosave_status", Json::object()).at("enabled") == true,
+                "test", "Autosave enable must take effect in the current session");
         const auto setup = commands.call("faset_lua_setup", Json::object());
         require(setup.at("configuration_created") == true &&
                     setup.at("scripts_configuration_created") == true &&
@@ -193,3 +237,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    return run_utf8_main(argc, argv, test_main);
+}
+#else
+int main(int argc, char** argv) {
+    return test_main(argc, argv);
+}
+#endif

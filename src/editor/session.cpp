@@ -23,6 +23,52 @@ BuildConfig build_config(const SessionConfig& config) {
     result.cache_root = config.project_root / ".faset/cache";
     return result;
 }
+struct ProjectState {
+    Json value;
+    std::string revision;
+};
+ProjectState read_project_state(const std::filesystem::path& project_root) {
+    const auto path = project_root / "project.faset.json";
+    if (std::filesystem::exists(path)) {
+        auto value = read_json(path);
+        // The revision represents persisted content, including whether a
+        // default-valued setting was explicitly written by another client.
+        const auto revision = sha256(value.dump());
+        require(value.is_object() && value.value("format", "") == "faset.project" &&
+                    value.value("version", 0) == 1,
+                "project.version", "Unsupported project format or version");
+        require(value.contains("name") && value.at("name").is_string() &&
+                    !value.at("name").get<std::string>().empty(),
+                "project.name", "Project name must be a nonempty string");
+        const auto dimension = value.value("dimension", 3);
+        require(dimension == 2 || dimension == 3, "project.dimension",
+                "Project dimension must be 2 or 3");
+        if (value.contains("start_scene")) {
+            require(value.at("start_scene").is_string(), "project.start_scene",
+                    "Project start_scene must be a relative path");
+            const auto scene = value.at("start_scene").get<std::string>();
+            if (!scene.empty())
+                project_path(project_root, path_from_utf8(scene));
+        }
+        if (value.contains("editor"))
+            require(value.at("editor").is_object(), "project.editor",
+                    "Project editor settings must be an object");
+        else
+            value["editor"] = Json::object();
+        if (value["editor"].contains("autosave"))
+            require(value["editor"]["autosave"].is_boolean(), "project.autosave",
+                    "Project autosave setting must be true or false");
+        else
+            value["editor"]["autosave"] = true;
+        return {std::move(value), revision};
+    }
+    Json value = {{"format", "faset.project"},
+                  {"version", 1},
+                  {"name", path_to_utf8(project_root.filename())},
+                  {"dimension", 3},
+                  {"editor", {{"autosave", true}}}};
+    return {value, sha256(value.dump())};
+}
 Json resolved_or_throw(Commands& commands, const std::string& id) {
     const auto resolved = commands.resolved_scene(id);
     if (!resolved.at("conflicts").empty())
@@ -56,6 +102,9 @@ Session::Session(SessionConfig config)
       autosave_([this](const std::string& document, std::uint64_t revision) {
           return authoring_.save(document, {}, revision);
       }) {
+    autosave_enabled_ = project().at("editor").at("autosave").get<bool>();
+    autosave_.observe(authoring_.documents(), AutosaveController::Clock::now(),
+                      autosave_enabled_);
     register_commands();
     plugins_ = std::make_unique<PluginManager>(
         commands_, [this](std::string message) { log(std::move(message)); });
@@ -86,31 +135,7 @@ void Session::log(std::string value) {
         logs_.erase(logs_.begin(), logs_.begin() + 100);
 }
 Json Session::project() const {
-    const auto path = config_.project_root / "project.faset.json";
-    if (std::filesystem::exists(path)) {
-        const auto value = read_json(path);
-        require(value.is_object() && value.value("format", "") == "faset.project" &&
-                    value.value("version", 0) == 1,
-                "project.version", "Unsupported project format or version");
-        require(value.contains("name") && value.at("name").is_string() &&
-                    !value.at("name").get<std::string>().empty(),
-                "project.name", "Project name must be a nonempty string");
-        const auto dimension = value.value("dimension", 3);
-        require(dimension == 2 || dimension == 3, "project.dimension",
-                "Project dimension must be 2 or 3");
-        if (value.contains("start_scene")) {
-            require(value.at("start_scene").is_string(), "project.start_scene",
-                    "Project start_scene must be a relative path");
-            const auto scene = value.at("start_scene").get<std::string>();
-            if (!scene.empty())
-                project_path(config_.project_root, path_from_utf8(scene));
-        }
-        return value;
-    }
-    return {{"format", "faset.project"},
-            {"version", 1},
-            {"name", path_to_utf8(config_.project_root.filename())},
-            {"dimension", 3}};
+    return read_project_state(config_.project_root).value;
 }
 void Session::scaffold(const std::string& name, int dimension) {
     builds_.scaffold(name, dimension);
@@ -346,23 +371,25 @@ void Session::register_commands() {
         "faset_project_settings_get", "Read project settings and their content revision.",
         schema(Json::object()),
         [&](const Json&) {
-            const auto value = project();
-            return Json{{"settings", value}, {"revision", sha256(value.dump())}};
+            const auto state = read_project_state(config_.project_root);
+            return Json{{"settings", state.value}, {"revision", state.revision}};
         },
         true);
     commands_.add(
         "faset_project_settings_set",
-        "Save project name, initial scene dimension or start scene with an expected content "
-        "revision. Applies on the next project open; does not change the active scene or its Undo "
-        "history.",
+        "Save project name, initial scene dimension, start scene or editor.autosave with an "
+        "expected content revision. Autosave applies immediately; other settings apply on the "
+        "next project open without changing scene Undo history.",
         schema({{"revision", text}, {"settings", {{"type", "object"}}}}, {"revision", "settings"}),
         [&](const Json& args) {
-            auto value = project();
-            require(args.at("revision") == sha256(value.dump()), "revision.conflict",
+            auto state = read_project_state(config_.project_root);
+            auto value = std::move(state.value);
+            require(args.at("revision") == state.revision, "revision.conflict",
                     "Project settings changed; reload them before saving");
             const auto& changes = args.at("settings");
             for (const auto& [key, field] : changes.items()) {
-                require(key == "name" || key == "dimension" || key == "start_scene",
+                require(key == "name" || key == "dimension" || key == "start_scene" ||
+                            key == "editor",
                         "project.setting", "Unknown editable project setting: " + key);
                 if (key == "name")
                     require(field.is_string() && !field.get<std::string>().empty(), "project.name",
@@ -370,7 +397,15 @@ void Session::register_commands() {
                 else if (key == "dimension")
                     require(field.is_number_integer() && (field == 2 || field == 3),
                             "project.dimension", "Initial scene dimension must be 2 or 3");
-                else {
+                else if (key == "editor") {
+                    require(field.is_object() && field.size() == 1 &&
+                                field.contains("autosave"),
+                            "project.setting", "Only editor.autosave can be changed here");
+                    require(field.at("autosave").is_boolean(), "project.autosave",
+                            "Autosave must be enabled or disabled");
+                    value["editor"]["autosave"] = field.at("autosave");
+                    continue;
+                } else {
                     require(field.is_string() && !field.get<std::string>().empty(),
                             "project.start_scene", "Choose a saved scene inside the project");
                     const auto file = project_path(config_.project_root,
@@ -388,7 +423,10 @@ void Session::register_commands() {
             if (!value.contains("id"))
                 value["id"] = new_id();
             atomic_write_json(config_.project_root / "project.faset.json", value);
-            log("Project settings saved; changes apply on next project open");
+            autosave_enabled_ = value.at("editor").at("autosave").get<bool>();
+            autosave_.observe(authoring_.documents(), AutosaveController::Clock::now(),
+                              autosave_enabled_);
+            log("Project settings saved; autosave preference applies immediately");
             return Json{{"settings", value}, {"revision", sha256(value.dump())}};
         });
     commands_.add(
