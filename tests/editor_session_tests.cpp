@@ -177,12 +177,17 @@ int test_main(int argc, char** argv) {
                                      "{file}:{line}:{column}", "{project}"})}});
         for (int attempt = 0; attempt < 100 && !std::filesystem::exists(probe); ++attempt)
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        const auto canonical_root = std::filesystem::weakly_canonical(root);
+        const auto expected_source = project_path(root, "Scripts/Gameplay.cpp");
+        const auto expected_arguments =
+            Json::array({path_to_utf8(expected_source) + ":17:4", path_to_utf8(canonical_root)});
+        const auto actual_arguments =
+            std::filesystem::is_regular_file(probe) ? read_json(probe) : Json(nullptr);
         require(opened.at("path") == "Scripts/Gameplay.cpp" && opened.at("line") == 17 &&
-                    std::filesystem::is_regular_file(probe) &&
-                    read_json(probe) ==
-                        Json::array({path_to_utf8(root / "Scripts/Gameplay.cpp") + ":17:4",
-                                     path_to_utf8(root)}),
-                "test", "Source navigation passes a Unicode path and location as literal argv");
+                    actual_arguments == expected_arguments,
+                "test", "Source navigation passes a Unicode path and location as literal argv; "
+                        "expected " + expected_arguments.dump() + ", got " +
+                        actual_arguments.dump());
         reject_command("faset_source_open", {{"path", "../outside.cpp"}}, "source.path");
         reject_command("faset_source_open", {{"path", "Scripts/missing.cpp"}}, "source.path");
         reject_command("faset_source_open", {{"path", "Scripts"}}, "source.path");
@@ -233,7 +238,7 @@ int test_main(int argc, char** argv) {
                      "configuration preservation and Lua editor commands passed\n";
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << error.what() << "\nFixture retained at " << root << '\n';
+        std::cerr << error.what() << "\nFixture retained at " << path_to_utf8(root) << '\n';
         return 1;
     }
 }
