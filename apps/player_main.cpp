@@ -253,8 +253,7 @@ int player_main(int argc, char** argv) {
                 else
                     throw std::invalid_argument("--visibility must be direct, gpu-frustum, "
                                                 "or gpu-occlusion");
-            }
-            else if (arg == "--frames")
+            } else if (arg == "--frames")
                 maximumFrames = count(value());
             else if (arg == "--headless")
                 headless = true;
