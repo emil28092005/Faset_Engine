@@ -53,6 +53,27 @@ def vulkan_device_details(summary: str, device: str) -> dict:
     return {}
 
 
+def device_class(device: str, driver: dict) -> str:
+    identity = " ".join((device, driver.get("driverName", ""), driver.get("driverInfo", ""))).lower()
+    if any(name in identity for name in ("swiftshader", "llvmpipe", "lavapipe", "softpipe")):
+        return "software"
+    if any(name in identity for name in ("nvidia", "geforce", "radeon", "amd", "intel", "arc")):
+        return "physical"
+    return "unknown"
+
+
+def git_identity(engine: Path) -> dict:
+    def git(*arguments: str) -> str:
+        return subprocess.run(["git", "-C", str(engine), *arguments], check=True,
+                              capture_output=True, text=True).stdout
+    revision = git("rev-parse", "HEAD").strip()
+    status = git("status", "--porcelain", "--untracked-files=normal")
+    diff = git("diff", "--binary", "HEAD")
+    return {"revision": revision, "dirty": bool(status),
+            "status_lines": status.splitlines(),
+            "diff_sha256": hashlib.sha256(diff.encode("utf-8")).hexdigest() if diff else None}
+
+
 def run(arguments: list[str | Path], cwd: Path, log: Path, timeout: int = 1800) -> dict:
     command = [str(argument) for argument in arguments]
     print(f"{log.stem}: {subprocess.list2cmdline(command)}", flush=True)
@@ -105,6 +126,11 @@ def verify_package(directory: Path) -> dict:
         require(path.is_file() and not path.is_symlink(), f"Missing packaged file: {path}")
         require(path.stat().st_size == entry["size"] and sha256(path) == entry["sha256"],
                 f"Packaged file checksum mismatch: {path}")
+    declared = [entry["path"] for entry in manifest["files"]]
+    actual = {path.relative_to(directory).as_posix() for path in directory.rglob("*")
+              if path.is_file() or path.is_symlink()}
+    require(len(declared) == len(set(declared)) and actual == set(declared) | {"manifest.json"},
+            "Package has undeclared, duplicate or missing files")
     return manifest
 
 
@@ -153,11 +179,18 @@ def verify_lua_export(directory: Path, manifest: dict) -> None:
     require("Notices/lua/LICENSE.txt" in {entry["path"] for entry in manifest["files"]} and
             (directory / "Notices/lua/LICENSE.txt").is_file(),
             "Lua export is missing its license notice")
-    require(not (directory / "Scripts/Gameplay.cpp").exists() and
-            not (directory / "Scripts/Gameplay.hpp").exists(),
+    require(not any(path.startswith("Scripts/") and
+                    path.lower().endswith((".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h"))
+                    for path in (entry["path"] for entry in manifest["files"])),
             "Lua-only export unexpectedly contains C++ gameplay source")
-    require(not (directory / ".luarc.json").exists(),
+    require(not any(path.endswith(".luarc.json") for path in
+                    (entry["path"] for entry in manifest["files"])),
             "Lua-only export includes Editor language-server configuration")
+
+
+def verify_lua_execution(stderr: str) -> None:
+    require("Lua player ready: A/D move, Space jump, E reset" in stderr,
+            "Lua gameplay on_start did not execute in the relocated Player")
 
 
 def main() -> int:
@@ -189,8 +222,7 @@ def main() -> int:
     evidence, projects = output / "evidence", workspace / "Faset Café 世界"
     evidence.mkdir()
     projects.mkdir()
-    revision = subprocess.run(["git", "-C", str(engine), "rev-parse", "HEAD"],
-                              capture_output=True, text=True, check=True).stdout.strip()
+    source_identity = git_identity(engine)
     vulkan_summary = ""
     if shutil.which("vulkaninfo"):
         try:
@@ -208,7 +240,11 @@ def main() -> int:
     report = {"format": "faset.playable-export-verification", "version": 1,
               "started_utc": datetime.now(timezone.utc).isoformat(), "platform": sys.platform,
               "engine": str(engine), "editor": str(editor), "standalone_root": str(standalone),
-              "engine_revision": revision, "editor_sha256": sha256(editor),
+              "engine_revision": source_identity["revision"],
+              "engine_dirty": source_identity["dirty"],
+              "engine_git_status": source_identity["status_lines"],
+              "engine_diff_sha256": source_identity["diff_sha256"],
+              "editor_sha256": sha256(editor),
               "project_workspace": str(workspace),
               "vulkaninfo_available": bool(vulkan_summary),
               "driver_override": os.environ.get("VK_DRIVER_FILES") or os.environ.get("VK_ICD_FILENAMES"),
@@ -272,6 +308,8 @@ def main() -> int:
             capture, profile = relocated / "verification.ppm", relocated / "profile.json"
             rendered = run([player, "--headless", "--frames", "120", "--capture", capture,
                             "--profile", profile], working, evidence / f"{name}-run.json", 300)
+            if item["language"] == "lua":
+                verify_lua_execution(rendered["stderr"])
             summary = json.loads(rendered["stdout"].strip().splitlines()[-1])
             require(summary["frames"] == 120 and summary["dimension"] == dimension and
                     summary["validation_errors"] == 0, "Standalone GPU run reported an error")
@@ -282,8 +320,9 @@ def main() -> int:
                     len(measured["samples"]) == 120, "Invalid or incomplete frame profile")
             require(all(frame["gpu_allocated_bytes"] > 0 for frame in measured["samples"]),
                     "Frame profile lacks Vulkan allocation measurements")
-            item.update({"device": measured["device"], "validation_enabled": measured["validation_enabled"],
-                         "driver": vulkan_device_details(vulkan_summary, measured["device"]),
+            driver = vulkan_device_details(vulkan_summary, measured["device"])
+            item.update({"device": measured["device"], "device_class": device_class(measured["device"], driver),
+                         "driver": driver, "validation_enabled": measured["validation_enabled"],
                          "validation_errors": 0, "completed_frames": 120,
                          "summary_ms": measured["summary_ms"],
                          "capture": verify_capture(capture, language=item["language"]),

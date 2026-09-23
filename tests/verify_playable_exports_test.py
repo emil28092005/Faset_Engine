@@ -5,8 +5,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from verify_playable_exports import (project_matrix, project_workspace, verify_capture,
-                                     verify_lua_export, vulkan_device_details)
+from verify_playable_exports import (device_class, project_matrix, project_workspace,
+                                     sha256, verify_capture, verify_lua_export,
+                                     verify_lua_execution, verify_package,
+                                     vulkan_device_details)
 
 
 class ExportProjectMatrixTests(unittest.TestCase):
@@ -42,10 +44,12 @@ class ExportProjectMatrixTests(unittest.TestCase):
             verify_lua_export(root, manifest)
             with self.assertRaisesRegex(RuntimeError, "license"):
                 verify_lua_export(root, {**manifest, "files": manifest["files"][:1]})
-            (root / "Scripts/Gameplay.cpp").write_text("// stray\n", encoding="utf-8")
+            (root / "Scripts/GameplayExtra.cpp").write_text("// stray\n", encoding="utf-8")
+            manifest["files"].append({"path": "Scripts/GameplayExtra.cpp"})
             with self.assertRaisesRegex(RuntimeError, "C\\+\\+"):
                 verify_lua_export(root, manifest)
-            (root / "Scripts/Gameplay.cpp").unlink()
+            (root / "Scripts/GameplayExtra.cpp").unlink()
+            manifest["files"].pop()
             (root / "Notices/lua/LICENSE.txt").unlink()
             with self.assertRaisesRegex(RuntimeError, "license"):
                 verify_lua_export(root, manifest)
@@ -70,6 +74,31 @@ class ExportProjectMatrixTests(unittest.TestCase):
                          {"deviceName": "Discrete GPU", "driverVersion": "123",
                           "driverName": "Vendor", "driverInfo": "1.2.3"})
         self.assertEqual(vulkan_device_details(summary, "Unknown"), {})
+        self.assertEqual(device_class("SwiftShader Device", {}), "software")
+        self.assertEqual(device_class("NVIDIA GeForce RTX 2080 Ti", {}), "physical")
+        self.assertEqual(device_class("Mystery Device", {}), "unknown")
+
+    def test_package_rejects_undeclared_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Scripts").mkdir()
+            (root / "Scripts/player.lua").write_text("return {}\n", encoding="utf-8")
+            file = root / "Scripts/player.lua"
+            manifest = {"format": "faset.export", "version": 1,
+                        "configuration": "Release", "files": [
+                            {"path": "Scripts/player.lua", "size": file.stat().st_size,
+                             "sha256": sha256(file)}]}
+            import json
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            verify_package(root)
+            (root / "Scripts/GameplayExtra.cpp").write_text("// stray\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "undeclared"):
+                verify_package(root)
+
+    def test_lua_execution_requires_on_start_marker(self):
+        verify_lua_execution("Lua player ready: A/D move, Space jump, E reset\n")
+        with self.assertRaisesRegex(RuntimeError, "on_start"):
+            verify_lua_execution("")
 
 
 if __name__ == "__main__":
