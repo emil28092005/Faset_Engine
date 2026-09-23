@@ -97,15 +97,16 @@ Read the fresh value and retry; the stale edit does not silently replace the new
 
 ## Refresh C++ metadata
 
-**Build C++ !** and the status message indicate stale gameplay metadata, for example
-after changing gameplay sources or after a failed build. Choose **Build C++**, then
-check **Jobs** and **Console**. A successful build and schema export refresh the
-Inspector. A failed build retains the previous metadata and reports the failure.
+The status message indicates stale gameplay metadata, for example after changing
+gameplay sources or after a failed build. Hover over **Build** for details, then
+choose **Build** and check **Jobs** and **Console**. A successful build and schema
+export refresh the Inspector. A failed build retains the previous metadata and
+reports the failure.
 
 A missing schema or unsupported component version appears as read-only raw fields
 with **Copy raw fields**. Restore a missing module to make its schema available.
 For an older component, declare [data migration rules](../scripting/api.md#editor-data-migrations),
-choose **Build C++**, then **Migrate to v…** in the Inspector. This is one undoable
+choose **Build**, then **Migrate to v…** in the Inspector. This is one undoable
 authoring edit; save explicitly afterward. Inherited components show **Open source
 to migrate** instead. Top-level local additions migrate in their owning instance.
 Missing rules or conversion errors preserve the data and appear in Console.
@@ -150,6 +151,11 @@ messages and diagnostics. **Jobs** shows build/import/export progress and cancel
 **Conflicts** lists unresolved template records. Drag the bottom tabs to reorder them;
 drag panel dividers to resize the Scene, Inspector, and bottom areas. These choices
 are stored per project in `.faset/editor-layout.json`.
+
+File rows put the filename before its directory; hover to see the full project-relative
+path. Long generated hexadecimal filenames are shortened in the list, while the
+path and underlying asset identity remain intact. The search field filters by the
+full project-relative path.
 
 The current layout supports these panel sizes and bottom-tab ordering. It does not
 provide floating panels or multiple Editor windows. Theme and base layout JSON live

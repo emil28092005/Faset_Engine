@@ -239,9 +239,9 @@ struct EditorUI::Impl {
             } catch (const std::exception& e) {
                 session.log(std::string("Layout reset: ") + e.what());
             }
-        ui.find("scene_panel")->layout.width = dock.size("scene", 224);
-        ui.find("inspector_panel")->layout.width = dock.size("inspector", 300);
-        ui.find("bottom_panel")->layout.height = dock.size("bottom", 184);
+        ui.find("scene_panel")->layout.width = dock.size("scene", 238);
+        ui.find("inspector_panel")->layout.width = dock.size("inspector", 312);
+        ui.find("bottom_panel")->layout.height = dock.size("bottom", 190);
         ui.set_clipboard([this] { return renderer.clipboard(); },
                          [this](const std::string& text) { renderer.set_clipboard(text); });
         ui.set_ime([this](bool enabled) { renderer.set_text_input(enabled); },
@@ -404,58 +404,88 @@ struct EditorUI::Impl {
     }
     void build_static() {
         auto& menurow = ui.find("menubar")->add(Kind::Row, "menuitems");
-        menurow.layout.gap = 2;
-        for (const std::string name : {"Faset", "File", "Edit", "Scene", "View", "Help"})
-            button(
+        menurow.layout.gap = 0;
+        for (const std::string name : {"Faset", "File", "Edit", "Scene", "View", "Help"}) {
+            auto& item = button(
                 menurow, "menu-" + name, name, [this, name] { menu = menu == name ? "" : name; },
-                name == "Faset" ? 72 : 54);
+                name == "Faset" ? 66 : name == "Scene" ? 58 : 50);
+            item.appearance = ui::Appearance::Quiet;
+            if (name == "Faset")
+                item.font_size = 15;
+        }
+        menurow.add(Kind::Label, "menu-space").layout.flex = 1;
         auto& project = menurow.add(Kind::Label, "project-title",
                                     session.project().value("name", std::string("Project")));
-        project.layout.flex = 1;
+        project.layout.width = 350;
+        project.font_size = 12;
+        project.enabled = false;
         auto& toolbar = ui.find("toolbar")->add(Kind::Row, "tools");
-        toolbar.layout.gap = 5;
-        button(toolbar, "save", "Save", [this] { save(); }, 60);
-        button(toolbar, "undo", "Undo", [this] { history(false); }, 56);
-        button(toolbar, "redo", "Redo", [this] { history(true); }, 56);
+        toolbar.layout.gap = 3;
+        auto& file_tools = toolbar.add(Kind::Row, "file-tools");
+        file_tools.layout.width = 180;
+        file_tools.layout.gap = 3;
+        button(file_tools, "save", "Save", [this] { save(); }, 58).appearance =
+            ui::Appearance::Quiet;
+        button(file_tools, "undo", "Undo", [this] { history(false); }, 56).appearance =
+            ui::Appearance::Quiet;
+        button(file_tools, "redo", "Redo", [this] { history(true); }, 56).appearance =
+            ui::Appearance::Quiet;
+        toolbar.add(Kind::Label, "left-tools-space").layout.flex = 1;
+        auto& play_tools = toolbar.add(Kind::Row, "play-tools");
+        play_tools.layout.width = 265;
+        play_tools.layout.gap = 4;
+        button(play_tools, "play", "Play", [this] { call("faset_play", {{"document", document}}); },
+               66)
+            .appearance = ui::Appearance::Primary;
         button(
-            toolbar, "play", "Play", [this] { call("faset_play", {{"document", document}}); }, 58);
-        button(
-            toolbar, "stop", "Stop",
-            [this] {
-                call("faset_stop");
-                paused = false;
-            },
-            56);
-        button(
-            toolbar, "pause", "Pause",
+            play_tools, "pause", "Pause",
             [this] {
                 if (!call("faset_play_control", {{"command", paused ? "resume" : "pause"}})
                          .is_null())
                     paused = !paused;
             },
-            65);
+            68)
+            .appearance = ui::Appearance::Quiet;
         button(
-            toolbar, "step", "Step", [this] { call("faset_play_control", {{"command", "step"}}); },
-            55);
-        button(toolbar, "build", "Build", [this] { call("faset_build"); }, 94);
+            play_tools, "stop", "Stop",
+            [this] {
+                call("faset_stop");
+                paused = false;
+            },
+            60)
+            .appearance = ui::Appearance::Quiet;
         button(
-            toolbar, "export", "Export",
-            [this] { call("faset_export", {{"document", document}, {"output", "Exports"}}); }, 64);
+            play_tools, "step", "Step",
+            [this] { call("faset_play_control", {{"command", "step"}}); }, 56)
+            .appearance = ui::Appearance::Quiet;
+        toolbar.add(Kind::Label, "right-tools-space").layout.flex = 1;
+        auto& build_tools = toolbar.add(Kind::Row, "build-tools");
+        build_tools.layout.width = 354;
+        build_tools.layout.gap = 3;
+        button(build_tools, "build", "Build", [this] { call("faset_build"); }, 76).appearance =
+            ui::Appearance::Quiet;
         button(
-            toolbar, "simulation-settings", "Simulation",
-            [this] { simulation_open = !simulation_open; }, 96);
-        auto& space = toolbar.add(Kind::Label, "toolbar-space", "");
-        space.layout.flex = 1;
-        button(toolbar, "command-palette", "Commands", [this] { palette = !palette; }, 104);
+            build_tools, "export", "Export",
+            [this] { call("faset_export", {{"document", document}, {"output", "Exports"}}); }, 72)
+            .appearance = ui::Appearance::Quiet;
+        button(
+            build_tools, "simulation-settings", "Simulation",
+            [this] { simulation_open = !simulation_open; }, 98)
+            .appearance = ui::Appearance::Quiet;
+        button(build_tools, "command-palette", "Commands", [this] { palette = !palette; }, 99)
+            .appearance = ui::Appearance::Quiet;
         auto& scene = *ui.find("scene_panel");
         scene.add(Kind::Tab, "scene-tab", "Scene").selected = true;
         auto& tools = scene.add(Kind::Row, "scene-tools");
-        tools.layout.height = 28;
+        tools.layout.height = 32;
         tools.layout.padding = 3;
         tools.layout.gap = 3;
-        button(tools, "add-object", "+ Object", [this] { create_object("Object"); }, 80);
-        button(tools, "add-cube", "Cube", [this] { create_object("Cube"); }, 55);
-        button(tools, "add-sprite", "Sprite", [this] { create_object("Sprite"); }, 58);
+        button(tools, "add-object", "+ Object", [this] { create_object("Object"); }, 80)
+            .appearance = ui::Appearance::Quiet;
+        button(tools, "add-cube", "Cube", [this] { create_object("Cube"); }, 55).appearance =
+            ui::Appearance::Quiet;
+        button(tools, "add-sprite", "Sprite", [this] { create_object("Sprite"); }, 58).appearance =
+            ui::Appearance::Quiet;
         auto& tree = scene.add(Kind::Column, "scene-tree");
         tree.layout.flex = 1;
         tree.layout.scroll = true;
@@ -469,26 +499,32 @@ struct EditorUI::Impl {
         auto& body = inspector.add(Kind::Column, "properties");
         body.layout.flex = 1;
         body.layout.padding = 10;
-        body.layout.gap = 7;
+        body.layout.gap = 6;
         body.layout.scroll = true;
         auto& vp = *ui.find("viewport");
-        auto& vptools = vp.add(Kind::Row, "viewport-tools");
-        vptools.layout.absolute = true;
-        vptools.layout.x = 8;
-        vptools.layout.y = 8;
+        auto& tool_surface = vp.add(Kind::Panel, "viewport-tool-surface");
+        tool_surface.layout.absolute = true;
+        tool_surface.layout.x = 8;
+        tool_surface.layout.y = 8;
+        tool_surface.layout.width = 352;
+        tool_surface.layout.height = 36;
+        tool_surface.layout.padding = 4;
+        auto& vptools = tool_surface.add(Kind::Row, "viewport-tools");
         vptools.layout.height = 28;
-        vptools.layout.width = 300;
+        vptools.layout.gap = 4;
         for (const std::string mode : {"Move", "Rotate", "Scale"})
-            button(vptools, "gizmo-" + mode, mode, [this, mode] { gizmo_mode = mode; }, 64);
+            button(vptools, "gizmo-" + mode, mode, [this, mode] { gizmo_mode = mode; }, 64)
+                .appearance = ui::Appearance::Quiet;
         button(
             vptools, "back-document", "Back",
             [this] {
                 if (!last_document.empty())
                     choose_document(last_document);
             },
-            54);
-        vptools.layout.width = 360;
-        button(vptools, "frame-selection", "Frame", [this] { frame_selection(); }, 64);
+            54)
+            .appearance = ui::Appearance::Quiet;
+        button(vptools, "frame-selection", "Frame", [this] { frame_selection(); }, 64)
+            .appearance = ui::Appearance::Quiet;
         vp.on_drop = [this](Widget&, const Json& data) {
             if (data.value("kind", std::string()) == "asset")
                 instantiate_asset(data.at("id").get<std::string>());
@@ -509,12 +545,15 @@ struct EditorUI::Impl {
             tab.on_click = [this, id](Widget&) { active_bottom = id; };
         }
         auto& assetbar = bottom.add(Kind::Row, "asset-toolbar");
-        assetbar.layout.height = 30;
-        assetbar.layout.padding = 2;
+        assetbar.layout.height = 32;
+        assetbar.layout.padding = 3;
         assetbar.layout.gap = 5;
-        label(assetbar, "asset-path", "Project files", 135);
+        label(assetbar, "asset-path", "Project files", 102);
+        assetbar.find("asset-path")->enabled = false;
         auto& search = assetbar.add(Kind::TextField, "asset-search", "");
         search.layout.width = 220;
+        search.placeholder = "Search project files";
+        search.tooltip = "Filter files by project-relative path";
         search.on_preview = [this](Widget& w) {
             asset_filter = w.text;
             assets_dirty = true;
@@ -525,8 +564,10 @@ struct EditorUI::Impl {
                 if (!source_file.empty())
                     call("faset_import", {{"path", source_file}});
             },
-            146);
-        button(assetbar, "asset-open", "Open Scene", [this] { open_source(); }, 104);
+            146)
+            .appearance = ui::Appearance::Quiet;
+        button(assetbar, "asset-open", "Open Scene", [this] { open_source(); }, 104)
+            .appearance = ui::Appearance::Quiet;
         button(
             assetbar, "asset-refresh", "Refresh",
             [this] {
@@ -534,7 +575,8 @@ struct EditorUI::Impl {
                 view.clearCache();
                 picks_key.clear();
             },
-            75);
+            75)
+            .appearance = ui::Appearance::Quiet;
         auto& items = bottom.add(Kind::Column, "asset-items");
         items.layout.flex = 1;
         items.layout.scroll = true;
@@ -554,7 +596,13 @@ struct EditorUI::Impl {
         auto& statusrow = ui.find("statusbar")->add(Kind::Row, "status-row");
         auto& statuslabel = statusrow.add(Kind::Label, "status", "Ready");
         statuslabel.layout.flex = 1;
+        auto& schema_status = statusrow.add(Kind::Label, "schema-status");
+        schema_status.layout.width = 220;
+        schema_status.visible = false;
+        schema_status.enabled = false;
+        schema_status.tooltip = "Choose Build to refresh gameplay fields in Inspector";
         label(statusrow, "renderer-status", "Vulkan", 225);
+        statusrow.find("renderer-status")->enabled = false;
         build_overlays();
     }
     void build_overlays() {
@@ -1173,8 +1221,13 @@ struct EditorUI::Impl {
         ui.find("undo")->enabled = current.value("can_undo", false);
         ui.find("redo")->enabled = current.value("can_redo", false);
         ui.find("pause")->enabled = session.playing();
+        ui.find("stop")->enabled = session.playing() || session.play_pending();
         ui.find("step")->enabled = session.playing();
         ui.find("pause")->text = paused ? "Resume" : "Pause";
+        for (const std::string mode : {"Move", "Rotate", "Scale"})
+            ui.find("gizmo-" + mode)->selected = gizmo_mode == mode;
+        for (const std::string name : {"Faset", "File", "Edit", "Scene", "View", "Help"})
+            ui.find("menu-" + name)->selected = menu == name;
         const auto now = std::chrono::steady_clock::now();
         // Source fingerprints read complete script bytes; do not hash them every render frame.
         if (schema_state.is_null() || now - last_schema_poll >= std::chrono::seconds(1)) {
@@ -1183,17 +1236,27 @@ struct EditorUI::Impl {
         }
         if (!schema_state.is_null()) {
             const bool stale = schema_state.value("stale", false);
-            ui.find("build")->text = stale ? "Build !" : "Build";
-            ui.find("build")->tooltip =
-                stale ? "Gameplay schema is stale: " + schema_state.value("error", std::string())
-                      : "Incremental gameplay build and C++/Lua Inspector metadata refresh";
-            if (stale && status == "Ready")
-                status = "Gameplay schema is stale; Build to refresh Inspector metadata";
+            auto& build = *ui.find("build");
+            build.text = "Build";
+            const auto schema_error = schema_state.value("error", std::string());
+            build.tooltip = stale ? "Gameplay metadata is out of date. Build to refresh Inspector "
+                                    "fields."
+                                  : "Build gameplay code and refresh Inspector metadata";
+            if (stale && !schema_error.empty())
+                build.tooltip += " Last error: " + schema_error;
+            ui.find("schema-status")->visible = stale;
+            ui.find("schema-status")->text = "Gameplay metadata out of date";
         }
 
-        ui.find("project-title")->text = session.project().value("name", std::string("Project")) +
-                                         " / " + current.at("name").get<std::string>() +
+        const auto project_name = session.project().value("name", std::string("Project"));
+        const auto scene_name = current.at("name").get<std::string>();
+        const auto scene_path = current.value("path", std::string());
+        const auto scene_label = scene_path.empty()
+                                     ? scene_name
+                                     : path_to_utf8(path_from_utf8(scene_path).filename());
+        ui.find("project-title")->text = project_name + "  /  " + scene_label +
                                          (current.value("dirty", false) ? " *" : "");
+        ui.find("project-title")->tooltip = project_name + " / " + scene_name;
         ui.find("status")->text = status;
         ui.find("renderer-status")->text =
             "Vulkan 1.3  |  " + std::to_string(resolved.at("entities").size()) + " objects";
@@ -1207,7 +1270,16 @@ struct EditorUI::Impl {
             keep.insert(row.id);
             order[row.id] = sequence++;
         };
-        auto& root = tree.add(Kind::TreeRow, "scene-root", current.at("scene").at("name"));
+        const auto full_scene_name = current.at("scene").at("name").get<std::string>();
+        auto scene_name = full_scene_name;
+        if (ui.font().measure(scene_name, ui.theme().font_size) >
+            ui.find("scene_panel")->layout.width - 18) {
+            const auto path = current.value("path", std::string());
+            if (!path.empty())
+                scene_name = path_to_utf8(path_from_utf8(path).filename());
+        }
+        auto& root = tree.add(Kind::TreeRow, "scene-root", scene_name);
+        root.tooltip = full_scene_name;
         root.selected = selected.empty() && instance_selection.empty();
         root.on_click = [this](Widget&) { select(""); };
         touch(root);
@@ -1400,6 +1472,11 @@ struct EditorUI::Impl {
     void refresh_inspector() {
         auto& body = *ui.find("properties");
         std::set<std::string> keep;
+        std::vector<std::string> ordered;
+        const auto keep_in_order = [&](const std::string& id) {
+            keep.insert(id);
+            ordered.push_back(id);
+        };
         const auto* e = entity(resolved, selected);
         if (!instance_selection.empty()) {
             refresh_instance_inspector(body, keep);
@@ -1407,29 +1484,36 @@ struct EditorUI::Impl {
             return;
         }
         if (!e) {
-            label(body, "inspector-empty", "Select an object to edit its components");
+            label(body, "inspector-empty", "Select an object in Scene to edit it");
+            body.find("inspector-empty")->enabled = false;
             keep.insert("inspector-empty");
             trim_children(body, keep);
             return;
         }
-        auto& name = body.add(Kind::TextField, "object-name");
+        auto& identity = body.add(Kind::Row, "object-identity");
+        keep_in_order(identity.id);
+        identity.layout.height = 30;
+        identity.layout.gap = 4;
+        label(identity, "object-name-label", "Name", 90);
+        identity.find("object-name-label")->enabled = false;
+        auto& name = identity.add(Kind::TextField, "object-name");
+        name.layout.flex = 1;
         ui.update_text(name.id, e->at("name"));
         const bool source_object = inherited(*e), local_addition = owned_addition(*e);
         name.enabled = !source_object || local_addition;
         if (local_addition) {
             label(body, "object-origin", "Local addition to this instance");
-            keep.insert("object-origin");
+            keep_in_order("object-origin");
         } else if (source_object) {
             const auto path = e->at("origin").at("path");
             const auto object = e->at("origin").at("object").get<std::string>();
             label(body, "object-origin",
                   "Source: " + path_to_utf8(path_from_utf8(instance_source(path)).filename()));
-            keep.insert("object-origin");
+            keep_in_order("object-origin");
             button(body, "object-open-source", "Open source",
                    [this, path, object] { open_template_source(path, object); });
-            keep.insert("object-open-source");
+            keep_in_order("object-open-source");
         }
-        keep.insert(name.id);
         name.on_preview = [this](Widget&) {
             edit_revisions.try_emplace("object-name", current.at("revision").get<std::uint64_t>());
         };
@@ -1462,17 +1546,20 @@ struct EditorUI::Impl {
                                                                            : " (schema missing)")},
                                                {"fields", Json::object()}};
             auto& header = body.add(Kind::Row, "component-header-" + cid);
-            keep.insert(header.id);
-            header.layout.height = 28;
+            keep_in_order(header.id);
+            header.layout.height = 32;
+            header.appearance = ui::Appearance::Section;
             auto& title =
                 header.add(Kind::Label, "component-title-" + cid, metadata.value("name", type));
             title.layout.flex = 1;
+            title.font_size = 14;
             button(
                 header, "component-remove-" + cid, "x", [this, cid] { remove_component(cid); }, 25)
-                .enabled = !source_object || local_addition;
+                .appearance = ui::Appearance::Quiet;
+            header.find("component-remove-" + cid)->enabled = !source_object || local_addition;
             if (!known) {
                 label(body, "opaque-note-" + cid, "Schema unavailable. Data is preserved.");
-                keep.insert("opaque-note-" + cid);
+                keep_in_order("opaque-note-" + cid);
                 if (has_schema &&
                     c.value("version", 1) <
                         session.authoring().schemas().schema(type).value("version", 1)) {
@@ -1489,31 +1576,48 @@ struct EditorUI::Impl {
                                           [this, cid] { migrate_component(cid); });
                     action.tooltip =
                         "Apply the schema's declared migration rules. Errors keep all stored data.";
-                    keep.insert(action_id);
+                    keep_in_order(action_id);
                 }
                 auto& raw =
                     body.add(Kind::TextField, "opaque-fields-" + cid, c.at("fields").dump());
                 raw.enabled = false;
-                keep.insert(raw.id);
+                keep_in_order(raw.id);
                 button(body, "opaque-copy-" + cid, "Copy raw fields",
                        [this, fields = c.at("fields")] { renderer.set_clipboard(fields.dump(2)); });
-                keep.insert("opaque-copy-" + cid);
+                keep_in_order("opaque-copy-" + cid);
                 continue;
             }
             for (const auto& [fid, value] : c.at("fields").items()) {
                 const auto descriptor = metadata.at("fields").value(fid, Json::object());
                 const auto key = "field-" + cid + "-" + fid;
-                auto& row = body.add(Kind::Column, key);
-                keep.insert(key);
-                row.layout.gap = 2;
-                label(row, key + "-label",
-                      descriptor.value("name", fid) +
-                          (descriptor.value("unit", std::string()) == "radians" ? " (rad)" : ""));
+                auto& row = body.add(Kind::Row, key);
+                keep_in_order(key);
+                const bool radians = descriptor.value("unit", std::string()) == "radians";
                 const auto& options = descriptor.value("enum", Json::array());
                 const bool vector_value = value.is_array() && value.size() >= 2 &&
                                           value.size() <= 4 &&
                                           std::all_of(value.begin(), value.end(),
                                                       [](const Json& v) { return v.is_number(); });
+                const float label_width = radians ? 108.f : 90.f;
+                const float field_width = vector_value
+                                              ? float(value.size()) * 44.f +
+                                                    float(value.size() - 1) * 3.f
+                                              : 72.f;
+                const float available_width =
+                    ui.find("inspector_panel")->layout.width - 2.f * body.layout.padding;
+                const bool stacked =
+                    available_width < label_width + 4.f + field_width +
+                                          (source_object ? 61.f : 0.f);
+                row.layout.stack_vertical = stacked;
+                row.layout.height = stacked ? (source_object ? 72.f : 48.f) : 28.f;
+                row.layout.gap = stacked ? 2.f : 4.f;
+                label(row, key + "-label",
+                      descriptor.value("name", fid) + (radians ? " (rad)" : ""),
+                      stacked ? -1.f : label_width);
+                auto& field_label = *row.find(key + "-label");
+                field_label.layout.height = stacked ? 18.f : -1.f;
+                field_label.enabled = false;
+                field_label.tooltip = descriptor.value("name", fid);
                 const auto input_id = key + (vector_value ? "-vector" : "-value");
                 const auto input_kind = !options.empty()     ? Kind::Button
                                         : vector_value       ? Kind::Row
@@ -1537,7 +1641,9 @@ struct EditorUI::Impl {
                                                       {"address", address}}}));
                         });
                     revert.enabled = local_override;
-                    revert.layout.height = 23;
+                    revert.appearance = ui::Appearance::Quiet;
+                    revert.layout.width = stacked ? -1.f : 57.f;
+                    revert.layout.height = stacked ? 22.f : -1.f;
                 }
                 trim_children(row, source_object ? std::set<std::string>{key + "-label", input_id,
                                                                          key + "-revert"}
@@ -1554,14 +1660,16 @@ struct EditorUI::Impl {
                                                           options.size();
                                    set_field(cid, fid, options[index], key + "-value");
                                });
-                    input.layout.height = 27;
+                    input.layout.flex = 1;
                 } else if (value.is_boolean()) {
                     auto& input = row.add(Kind::Checkbox, key + "-value", "Enabled");
+                    input.layout.flex = 1;
                     input.checked = value;
                     bind_field(input, cid, fid, value);
                 } else if (vector_value) {
                     auto& vectorrow = row.add(Kind::Row, key + "-vector");
                     vectorrow.layout.gap = 3;
+                    vectorrow.layout.flex = 1;
                     std::set<std::string> axis_ids;
                     for (std::size_t axis = 0; axis < value.size(); ++axis) {
                         auto& input =
@@ -1576,12 +1684,14 @@ struct EditorUI::Impl {
                     trim_children(vectorrow, axis_ids);
                 } else if (value.is_number()) {
                     auto& input = row.add(Kind::NumberField, key + "-value");
+                    input.layout.flex = 1;
                     input.step = value.is_number_integer() ? 1 : .05;
                     input.precision = value.is_number_integer() ? 0 : 3;
                     ui.update_number(input.id, value.get<double>());
                     bind_field(input, cid, fid, value);
                 } else {
                     auto& input = row.add(Kind::TextField, key + "-value");
+                    input.layout.flex = 1;
                     ui.update_text(input.id,
                                    value.is_string() ? value.get<std::string>() : value.dump());
                     bind_field(input, cid, fid, value);
@@ -1591,23 +1701,29 @@ struct EditorUI::Impl {
         auto& add = button(body, "add-component", "+ Add Component",
                            [this] { component_menu = !component_menu; });
         add.enabled = !source_object || local_addition;
-        keep.insert(add.id);
+        keep_in_order(add.id);
         if (source_object) {
             const auto path = e->at("origin").at("path");
             const auto object = e->at("origin").at("object").get<std::string>();
             auto& child = button(body, "instance-add-child", "Add local child",
                                  [this, path, object] { add_instance_child(path, object); });
             child.enabled = path.size() == 1;
-            keep.insert(child.id);
+            keep_in_order(child.id);
         }
         if (component_menu && (!source_object || local_addition))
             for (const auto& schema : schemas.at("types")) {
                 const auto type = schema.at("id").get<std::string>();
                 auto& choice = button(body, "component-choice-" + type, schema.value("name", type),
                                       [this, type] { add_component(type); });
-                keep.insert(choice.id);
+                keep_in_order(choice.id);
             }
         trim_children(body, keep);
+        std::map<std::string, std::size_t> position;
+        for (std::size_t i = 0; i < ordered.size(); ++i)
+            position[ordered[i]] = i;
+        std::stable_sort(body.children.begin(), body.children.end(), [&](const auto& a, const auto& b) {
+            return position.at(a->id) < position.at(b->id);
+        });
     }
     void refresh_assets() {
         const auto now = std::chrono::steady_clock::now();
@@ -1659,9 +1775,21 @@ struct EditorUI::Impl {
         std::set<std::string> keep;
         for (const auto& file : files) {
             const auto path = file.get<std::string>();
-            auto& row = list.add(Kind::TreeRow, "file-" + path, path);
+            const auto file_path = path_from_utf8(path);
+            auto name = path_to_utf8(file_path.filename());
+            const auto stem = path_to_utf8(file_path.stem());
+            if (stem.size() > 24 &&
+                std::all_of(stem.begin(), stem.end(), [](unsigned char c) {
+                    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+                           (c >= 'A' && c <= 'F');
+                }))
+                name = stem.substr(0, 10) + "…" + stem.substr(stem.size() - 6) +
+                       path_to_utf8(file_path.extension());
+            const auto folder = generic_path_to_utf8(file_path.parent_path());
+            auto& row = list.add(Kind::TreeRow, "file-" + path, name + "   /   " + folder);
             row.layout.height = 25;
             row.indent = 1;
+            row.tooltip = path;
             row.selected = source_file == path;
             row.on_click = [this, path](Widget&) {
                 source_file = path;
@@ -1681,9 +1809,10 @@ struct EditorUI::Impl {
                                 : state == "stale" ? "Stale"
                                                    : "Unavailable";
             auto& row =
-                list.add(Kind::TreeRow, "asset-" + id, std::string(prefix) + "  /  " + name);
+                list.add(Kind::TreeRow, "asset-" + id, std::string(prefix) + "   /   " + name);
             row.layout.height = 25;
             row.indent = 1;
+            row.tooltip = "Asset " + id + " — " + state;
             row.drag_payload = {{"kind", "asset"}, {"id", id}, {"label", name}};
             row.on_click = [this, id, asset, freshness, state](Widget&) {
                 renderer.set_clipboard(id);

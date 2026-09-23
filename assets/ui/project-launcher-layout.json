@@ -5,34 +5,54 @@
     "children": [{
       "id": "launcher-body", "kind": "row", "layout": {"flex": 1, "gap": 0},
       "children": [
-        {"id": "launcher-sidebar", "kind": "panel", "layout": {"width": 235, "padding": 16, "gap": 8}, "children": [
-          {"id": "launcher-wordmark", "kind": "label", "text": "Faset", "font_size": 26, "layout": {"height": 66}},
-          {"id": "launcher-open", "kind": "tree_row", "text": "Open project", "layout": {"height": 40}},
-          {"id": "launcher-create", "kind": "tree_row", "text": "Create project", "layout": {"height": 40}},
-          {"id": "launcher-recent-title", "kind": "label", "text": "Recent projects", "layout": {"height": 54}},
-          {"id": "launcher-recents", "kind": "column", "layout": {"flex": 1, "scroll": true, "gap": 6}}
+        {"id": "launcher-sidebar", "kind": "panel", "layout": {"width": 235, "padding": 18, "gap": 0}, "children": [
+          {"id": "launcher-wordmark", "kind": "label", "text": "Faset", "font_size": 24, "layout": {"height": 70}},
+          {"id": "launcher-nav", "kind": "column", "layout": {"gap": 4}, "children": [
+            {"id": "launcher-open", "kind": "tree_row", "text": "Open project", "layout": {"height": 38}},
+            {"id": "launcher-create", "kind": "tree_row", "text": "Create project", "layout": {"height": 38}}
+          ]},
+          {"id": "launcher-sidebar-space", "kind": "row", "layout": {"height": 22}},
+          {"id": "launcher-recent-rule", "kind": "row", "layout": {"height": 1}},
+          {"id": "launcher-recent-title", "kind": "label", "text": "Recent projects", "font_size": 13, "layout": {"height": 48}},
+          {"id": "launcher-recents", "kind": "column", "layout": {"flex": 1, "scroll": true, "gap": 4}}
         ]},
-        {"id": "launcher-main", "kind": "column", "layout": {"flex": 1, "padding": 32, "gap": 12, "scroll": true}, "children": [
+        {"id": "launcher-main", "kind": "column", "layout": {"flex": 1, "padding": 36, "gap": 0, "scroll": true}, "children": [
           {"id": "launcher-heading", "kind": "label", "text": "Open project", "font_size": 26, "layout": {"height": 64}},
-          {"id": "launcher-name-label", "kind": "label", "text": "Project name"},
-          {"id": "launcher-name", "kind": "text_field", "text": "My Game", "layout": {"height": 40}},
-          {"id": "launcher-path-label", "kind": "label", "text": "Project directory"},
-          {"id": "launcher-path-row", "kind": "row", "layout": {"height": 40, "gap": 8}, "children": [
-            {"id": "launcher-path", "kind": "text_field", "layout": {"flex": 1}},
-            {"id": "launcher-browse", "kind": "button", "text": "Browse", "layout": {"width": 84}}
+          {"id": "launcher-heading-rule", "kind": "row", "layout": {"height": 1}},
+          {"id": "launcher-form", "kind": "column", "layout": {"width": 720, "gap": 0}, "children": [
+            {"id": "launcher-form-top", "kind": "row", "layout": {"height": 24}},
+            {"id": "launcher-name-group", "kind": "column", "layout": {"gap": 6}, "children": [
+              {"id": "launcher-name-label", "kind": "label", "text": "Project name", "layout": {"height": 24}},
+              {"id": "launcher-name", "kind": "text_field", "text": "My Game", "layout": {"height": 42}}
+            ]},
+            {"id": "launcher-name-space", "kind": "row", "layout": {"height": 20}},
+            {"id": "launcher-path-group", "kind": "column", "layout": {"gap": 6}, "children": [
+              {"id": "launcher-path-label", "kind": "label", "text": "Project directory", "layout": {"height": 24}},
+              {"id": "launcher-path-row", "kind": "row", "layout": {"height": 42, "gap": 8}, "children": [
+                {"id": "launcher-path", "kind": "text_field", "layout": {"flex": 1}},
+                {"id": "launcher-browse", "kind": "button", "text": "Browse", "layout": {"width": 88}}
+              ]}
+            ]},
+            {"id": "launcher-path-space", "kind": "row", "layout": {"height": 20}},
+            {"id": "launcher-dimension-group", "kind": "column", "layout": {"gap": 6}, "children": [
+              {"id": "launcher-dimension-label", "kind": "label", "text": "Initial scene type", "layout": {"height": 24}},
+              {"id": "launcher-dimensions", "kind": "row", "layout": {"height": 42, "gap": 4}, "children": [
+                {"id": "launcher-2d", "kind": "button", "text": "2D", "layout": {"width": 116}},
+                {"id": "launcher-3d", "kind": "button", "text": "3D", "layout": {"width": 116}}
+              ]}
+            ]},
+            {"id": "launcher-hint", "kind": "label", "text": "Open a directory containing project.faset.json.", "font_size": 13, "layout": {"height": 36}},
+            {"id": "launcher-actions-space", "kind": "row", "layout": {"height": 22}},
+            {"id": "launcher-actions-rule", "kind": "row", "layout": {"height": 1}},
+            {"id": "launcher-actions-top", "kind": "row", "layout": {"height": 18}},
+            {"id": "launcher-actions", "kind": "row", "layout": {"height": 42, "gap": 10}, "children": [
+              {"id": "launcher-submit", "kind": "button", "text": "Open project", "layout": {"width": 176}},
+              {"id": "launcher-cancel", "kind": "button", "text": "Cancel", "layout": {"width": 90}}
+            ]},
+            {"id": "launcher-error", "kind": "label", "layout": {"height": 36}}
           ]},
-          {"id": "launcher-dimension-label", "kind": "label", "text": "Initial scene type"},
-          {"id": "launcher-dimensions", "kind": "row", "layout": {"height": 40, "gap": 0}, "children": [
-            {"id": "launcher-2d", "kind": "tab", "text": "2D", "layout": {"width": 120}},
-            {"id": "launcher-3d", "kind": "tab", "text": "3D", "layout": {"width": 120}}
-          ]},
-          {"id": "launcher-hint", "kind": "label", "text": "Open a directory containing project.faset.json.", "layout": {"height": 36}},
-          {"id": "launcher-actions", "kind": "row", "layout": {"height": 40, "gap": 8}, "children": [
-            {"id": "launcher-submit", "kind": "button", "text": "Open project", "layout": {"width": 180}},
-            {"id": "launcher-cancel", "kind": "button", "text": "Cancel", "layout": {"width": 90}}
-          ]},
-          {"id": "launcher-error", "kind": "label", "layout": {"height": 30}},
-          {"id": "launcher-shortcuts", "kind": "label", "text": "Tab: next field   Ctrl+Enter: continue   Escape: cancel"}
+          {"id": "launcher-main-spacer", "kind": "row", "layout": {"flex": 1}},
+          {"id": "launcher-shortcuts", "kind": "label", "text": "Tab: next field   Ctrl+Enter: continue   Escape: cancel", "font_size": 12, "layout": {"height": 24}}
         ]}
       ]
     }]

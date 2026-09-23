@@ -18,10 +18,11 @@ struct Rect {
     Rect intersection(const Rect&) const noexcept;
 };
 struct Theme {
-    Color background{.075f, .078f, .086f, 1}, surface{.10f, .105f, .115f, 1};
-    Color raised{.135f, .14f, .15f, 1}, hover{.175f, .18f, .20f, 1}, border{.23f, .235f, .255f, 1};
-    Color text{.86f, .875f, .90f, 1}, muted{.55f, .575f, .62f, 1}, accent{.65f, .60f, .88f, 1};
-    Color selection{.26f, .245f, .35f, 1}, danger{.92f, .39f, .38f, 1};
+    Color background{.078f, .078f, .078f, 1}, surface{.110f, .110f, .114f, 1};
+    Color raised{.153f, .153f, .161f, 1}, hover{.196f, .196f, .204f, 1};
+    Color border{.227f, .227f, .239f, 1}, text{.878f, .878f, .886f, 1};
+    Color muted{.604f, .604f, .624f, 1}, accent{.659f, .627f, .761f, 1};
+    Color selection{.220f, .212f, .251f, 1}, danger{.835f, .431f, .420f, 1};
     float font_size = 14, row_height = 28, padding = 8, gap = 4;
     static Theme from_json(const Json&);
     static Theme load(const std::filesystem::path&);
@@ -103,15 +104,18 @@ enum class Kind {
     Divider,
     Viewport
 };
+// Visual emphasis is independent of widget behavior and stable identity.
+enum class Appearance { Default, Quiet, Primary, Section };
 struct Layout {
     float width = -1, height = -1, flex = 0;
     float min_width = 0, min_height = 0, max_width = 100000, max_height = 100000;
     float padding = 0, gap = 4;
-    bool absolute = false, scroll = false, clip = true;
+    bool absolute = false, scroll = false, clip = true, stack_vertical = false;
     float x = 0, y = 0;
 };
 struct Widget {
     Kind kind = Kind::Panel;
+    Appearance appearance = Appearance::Default;
     std::string id, text;
     Layout layout;
     Rect rect, clip;
@@ -120,7 +124,7 @@ struct Widget {
     int precision = 3, indent = 0;
     float font_size = 0; // Zero inherits the theme typography.
     float scroll_y = 0, content_height = 0;
-    std::string error, tooltip;
+    std::string error, tooltip, placeholder;
     Json drag_payload;
     std::string dock_area, dock_panel;
     std::function<void(Widget&)> on_click, on_preview, on_commit, on_cancel;

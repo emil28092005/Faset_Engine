@@ -244,6 +244,19 @@ int main() {
         state = session.authoring().query(ui.current_document());
         check(state["scene"]["entities"][0]["name"] == "Дверь", "Inspector Unicode rename");
         const auto cid = state["scene"]["entities"][0]["components"][0]["id"].get<std::string>();
+        ui.widgets().find("inspector_panel")->layout.width = 210;
+        ui.frame({});
+        const auto* position_row = ui.widgets().find("field-" + cid + "-position");
+        const auto* last_axis = ui.widgets().find("field-" + cid + "-position-2");
+        check(position_row && position_row->layout.stack_vertical,
+              "Narrow Inspector stacks vector fields");
+        check(last_axis && last_axis->rect.width >= 35 &&
+                  last_axis->rect.x + last_axis->rect.width <=
+                      ui.widgets().find("properties")->rect.x +
+                          ui.widgets().find("properties")->rect.width,
+              "Narrow Inspector keeps vector inputs within the panel");
+        ui.widgets().find("inspector_panel")->layout.width = 312;
+        ui.frame({});
         const auto position = "field-" + cid + "-position-0";
         text(ui, position, "3.5");
         state = session.authoring().query(ui.current_document());

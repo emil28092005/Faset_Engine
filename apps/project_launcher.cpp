@@ -10,6 +10,7 @@
 namespace faset::editor {
 namespace {
 namespace fs = std::filesystem;
+using ui::Appearance;
 using ui::Kind;
 using ui::Widget;
 fs::path user_home() {
@@ -129,10 +130,18 @@ struct ProjectLauncher::Impl {
         : renderer(r), ui(engine / "assets/fonts/NotoSans.ttf"),
           recents_file(recents.empty() ? recent_path() : recents) {
         auto theme = ui::Theme::load(engine / "assets/ui/dark.json");
-        theme.font_size = 15;
-        theme.row_height = 30;
+        theme.font_size = 14;
+        theme.row_height = 28;
         ui.set_theme(theme);
         ui.apply_layout(read_json(engine / "assets/ui/project-launcher-layout.json"));
+        for (const auto* id : {"launcher-heading-rule", "launcher-recent-rule",
+                               "launcher-actions-rule"})
+            ui.find(id)->appearance = Appearance::Section;
+        for (const auto* id : {"launcher-browse", "launcher-cancel"})
+            ui.find(id)->appearance = Appearance::Quiet;
+        ui.find("launcher-submit")->appearance = Appearance::Primary;
+        for (const auto* id : {"launcher-recent-title", "launcher-hint", "launcher-shortcuts"})
+            ui.find(id)->enabled = false;
         ui.set_clipboard([this] { return renderer.clipboard(); },
                          [this](const std::string& value) { renderer.set_clipboard(value); });
         ui.set_ime(
@@ -145,7 +154,6 @@ struct ProjectLauncher::Impl {
         ui.find("launcher-create")->on_click = [this](Widget&) { set_mode(true); };
         ui.find("launcher-2d")->on_click = [this](Widget&) { dimension = 2; };
         ui.find("launcher-3d")->on_click = [this](Widget&) { dimension = 3; };
-        ui.find("launcher-submit")->selected = true;
         ui.find("launcher-submit")->on_click = [this](Widget&) { submit(); };
         ui.find("launcher-cancel")->on_click = [this](Widget&) { cancelled = true; };
         ui.find("launcher-name")->on_preview = [this](Widget&) { error.clear(); };
@@ -177,7 +185,7 @@ struct ProjectLauncher::Impl {
                     continue;
                 const auto id = "launcher-recent-" + std::to_string(i++);
                 auto& item = list.add(Kind::TreeRow, id, selection.name);
-                item.layout.height = 40;
+                item.layout.height = 38;
                 item.tooltip = path_to_utf8(selection.path);
                 item.on_click = [this, path = selection.path](Widget&) {
                     ui.update_text("launcher-path", path_to_utf8(path), true);
@@ -187,7 +195,7 @@ struct ProjectLauncher::Impl {
             }
         }
         if (i == 0)
-            list.add(Kind::Label, "launcher-recents-empty", "No recent projects");
+            list.add(Kind::Label, "launcher-recents-empty", "No recent projects").enabled = false;
     }
     void submit() {
         ui.clear_focus();
@@ -223,18 +231,22 @@ struct ProjectLauncher::Impl {
     void build_browser() {
         auto& panel = ui.root().add(Kind::Panel, "launcher-browser");
         panel.layout.absolute = true;
-        panel.layout.padding = 16;
-        panel.layout.gap = 10;
+        panel.layout.padding = 20;
+        panel.layout.gap = 8;
         panel.visible = false;
         auto& title = panel.add(Kind::Label, "browser-heading", "Choose project directory");
         title.font_size = 20;
-        title.layout.height = 35;
+        title.layout.height = 44;
         auto& nav = panel.add(Kind::Row, "browser-navigation");
-        nav.layout.height = 36;
-        button(nav, "browser-up", "Up", [this] {
+        nav.layout.height = 38;
+        auto& up = button(nav, "browser-up", "Up", [this] {
             browse_to(browse_path.parent_path());
-        }).layout.width = 60;
-        button(nav, "browser-home", "Home", [this] { browse_to(user_home()); }).layout.width = 76;
+        });
+        up.appearance = Appearance::Quiet;
+        up.layout.width = 60;
+        auto& home = button(nav, "browser-home", "Home", [this] { browse_to(user_home()); });
+        home.appearance = Appearance::Quiet;
+        home.layout.width = 76;
         auto& path = nav.add(Kind::TextField, "browser-path");
         path.layout.flex = 1;
         path.on_preview = [this](Widget&) { browser_valid = false; };
@@ -250,14 +262,18 @@ struct ProjectLauncher::Impl {
         list.layout.scroll = true;
         list.layout.gap = 2;
         auto& actions = panel.add(Kind::Row, "browser-actions");
-        actions.layout.height = 36;
-        button(actions, "browser-choose", "Choose directory", [this] {
+        actions.layout.height = 42;
+        auto& choose = button(actions, "browser-choose", "Choose directory", [this] {
             if (browser_valid) {
                 ui.update_text("launcher-path", path_to_utf8(browse_path), true);
                 close_browser();
             }
-        }).layout.width = 180;
-        button(actions, "browser-cancel", "Cancel", [this] { close_browser(); }).layout.width = 90;
+        });
+        choose.appearance = Appearance::Primary;
+        choose.layout.width = 180;
+        auto& cancel = button(actions, "browser-cancel", "Cancel", [this] { close_browser(); });
+        cancel.appearance = Appearance::Quiet;
+        cancel.layout.width = 90;
         panel.add(Kind::Label, "browser-error");
     }
     void browse_to(const fs::path& path) {
@@ -285,14 +301,14 @@ struct ProjectLauncher::Impl {
             for (const auto& child : children) {
                 auto& row = list.add(Kind::TreeRow, "browser-entry-" + std::to_string(index++),
                                      "[Folder]  " + path_to_utf8(child.filename()));
-                row.layout.height = 34;
+                row.layout.height = 36;
                 row.on_click = [this, child](Widget&) {
                     ui.clear_focus();
                     browse_to(child);
                 };
             }
             if (children.empty())
-                list.add(Kind::Label, "browser-empty", "No subdirectories");
+                list.add(Kind::Label, "browser-empty", "No subdirectories").enabled = false;
         } catch (const fs::filesystem_error&) {
             error = "Cannot access this directory.";
         } catch (const std::exception& e) {
@@ -335,8 +351,14 @@ struct ProjectLauncher::Impl {
         ui.find("launcher-create")->selected = create;
         ui.find("launcher-2d")->selected = dimension == 2;
         ui.find("launcher-3d")->selected = dimension == 3;
+        ui.find("launcher-2d")->appearance =
+            dimension == 2 ? Appearance::Quiet : Appearance::Default;
+        ui.find("launcher-3d")->appearance =
+            dimension == 3 ? Appearance::Quiet : Appearance::Default;
         for (const auto* id : {"launcher-name-label", "launcher-name", "launcher-dimension-label",
-                               "launcher-dimensions"})
+                               "launcher-dimensions", "launcher-name-group",
+                               "launcher-name-space", "launcher-path-space",
+                               "launcher-dimension-group"})
             ui.find(id)->visible = create;
         ui.find("launcher-heading")->text = create ? "Create project" : "Open project";
         ui.find("launcher-submit")->text = create ? "Create project" : "Open project";
@@ -352,9 +374,13 @@ struct ProjectLauncher::Impl {
         dialog->layout.height = std::max(300.f, std::min(540.f, logical_height() - 40));
         dialog->layout.x = (logical_width() - dialog->layout.width) * .5f;
         dialog->layout.y = (logical_height() - dialog->layout.height) * .5f;
-        ui.find("launcher-sidebar")->layout.width =
-            std::clamp(logical_width() * .24f, 180.f, 235.f);
-        ui.find("launcher-main")->layout.padding = logical_width() < 850 ? 16 : 32;
+        const auto sidebar_width = std::clamp(logical_width() * .24f, 180.f, 235.f);
+        const auto main_padding = logical_width() < 850 ? 20.f : 36.f;
+        ui.find("launcher-sidebar")->layout.width = sidebar_width;
+        ui.find("launcher-sidebar")->layout.padding = logical_width() < 850 ? 14.f : 18.f;
+        ui.find("launcher-main")->layout.padding = main_padding;
+        ui.find("launcher-form")->layout.width =
+            std::min(720.f, std::max(0.f, logical_width() - sidebar_width - main_padding * 2));
     }
     void frame(const std::vector<render::Event>& events) {
         refresh();

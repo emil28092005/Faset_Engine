@@ -20,6 +20,12 @@ int main() {
                 "test", "Unicode scene was saved under the wrong filename");
         session.commands().call("faset_document_open", {{"path", "Scenes/Начало 世界.scene.json"}});
         auto& commands = session.commands();
+        const auto play = commands.call("faset_play", {{"document", document.at("id")}});
+        require(play.value("play_pending", false) && session.play_pending() && !session.playing(),
+                "test", "Play must expose its cancellable build phase before Player starts");
+        commands.call("faset_stop", Json::object());
+        require(!session.play_pending() && !session.playing(), "test",
+                "Stop must cancel a pending Play build");
         const auto initial = commands.call("faset_project_settings_get", Json::object());
         auto changed = commands.call("faset_project_settings_set",
                                      {{"revision", initial.at("revision")},

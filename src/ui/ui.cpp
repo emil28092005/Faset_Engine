@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <faset/core/io.hpp>
 #include <faset/ui/ui.hpp>
@@ -108,6 +109,7 @@ Layout parse_layout(const Json& j, Layout l = {}) {
     l.absolute = j.value("absolute", l.absolute);
     l.scroll = j.value("scroll", l.scroll);
     l.clip = j.value("clip", l.clip);
+    l.stack_vertical = j.value("stack_vertical", l.stack_vertical);
     if (l.flex < 0 || l.padding < 0 || l.gap < 0 || l.min_width < 0 || l.min_height < 0 ||
         l.max_width < l.min_width || l.max_height < l.min_height)
         throw std::runtime_error("Invalid layout constraints");
@@ -243,6 +245,7 @@ struct Context::Impl {
     FontAtlas font;
     float width = 0, height = 0, scale = 1, mouse_x = 0, mouse_y = 0;
     std::string focused, hovered, captured;
+    std::chrono::steady_clock::time_point hover_started = std::chrono::steady_clock::now();
     struct Edit {
         TextBuffer buffer;
         std::string original, composition;
@@ -285,18 +288,19 @@ struct Context::Impl {
             return 80 * scale;
         }
         if (w.kind == Kind::Panel || w.kind == Kind::Column || w.kind == Kind::Row) {
+            const bool horizontal = w.kind == Kind::Row && !w.layout.stack_vertical;
             float total = 0;
             std::size_t count = 0;
             for (auto& child : w.children)
                 if (child->visible && !child->layout.absolute) {
                     const auto value = intrinsic(*child, false);
-                    if (w.kind == Kind::Row)
+                    if (horizontal)
                         total = std::max(total, value);
                     else
                         total += value;
                     ++count;
                 }
-            if (w.kind != Kind::Row && count)
+            if (!horizontal && count)
                 total += float(count - 1) * w.layout.gap * scale;
             return total + w.layout.padding * 2 * scale;
         }
@@ -310,7 +314,7 @@ struct Context::Impl {
         const auto pad = w.layout.padding * scale;
         Rect inner{rect.x + pad, rect.y + pad, std::max(0.f, rect.width - 2 * pad),
                    std::max(0.f, rect.height - 2 * pad)};
-        const bool horizontal = w.kind == Kind::Row;
+        const bool horizontal = w.kind == Kind::Row && !w.layout.stack_vertical;
         const float available = horizontal ? inner.width : inner.height;
         std::vector<Widget*> flow;
         float fixed = 0, flex = 0;
@@ -557,17 +561,30 @@ struct Context::Impl {
         const auto& rect = w.rect;
         if (w.kind == Kind::Panel) {
             fill(frame, rect, theme.surface, w.clip);
-            outline(frame, rect, theme.border, w.clip);
+            if (w.layout.absolute)
+                outline(frame, rect, theme.border, w.clip);
         } else if (w.kind == Kind::Button) {
-            fill(frame, rect,
-                 hover && w.enabled ? theme.hover
-                 : w.selected       ? theme.selection
-                                    : theme.raised,
-                 w.clip);
-            outline(frame, rect, focus ? theme.accent : theme.border, w.clip);
+            if (w.appearance == Appearance::Primary && w.enabled) {
+                fill(frame, rect, theme.accent, w.clip);
+                ink = theme.background;
+            } else if (w.appearance == Appearance::Quiet) {
+                if (w.selected || (hover && w.enabled))
+                    fill(frame, rect, w.selected ? theme.selection : theme.hover, w.clip);
+            } else {
+                fill(frame, rect,
+                     hover && w.enabled ? theme.hover
+                     : w.selected       ? theme.selection
+                                        : theme.raised,
+                     w.clip);
+                outline(frame, rect, focus ? theme.accent : theme.border, w.clip);
+            }
+            if (focus && w.appearance != Appearance::Default)
+                outline(frame, rect, theme.accent, w.clip);
         } else if (w.kind == Kind::Tab || w.kind == Kind::TreeRow) {
-            if (w.selected || hover)
+            if (w.kind == Kind::TreeRow && (w.selected || hover))
                 fill(frame, rect, w.selected ? theme.selection : theme.hover, w.clip);
+            else if (w.kind == Kind::Tab && hover && !w.selected)
+                fill(frame, rect, theme.hover, w.clip);
             if (w.selected) {
                 if (w.kind == Kind::Tab)
                     fill(frame, {rect.x, rect.y + rect.height - 2 * scale, rect.width, 2 * scale},
@@ -575,8 +592,12 @@ struct Context::Impl {
                 else
                     fill(frame, {rect.x, rect.y, 2 * scale, rect.height}, theme.accent, w.clip);
             }
+            if (w.kind == Kind::Tab && !w.selected)
+                ink = theme.muted;
             if (focus)
                 outline(frame, rect, theme.accent, w.clip);
+        } else if (w.kind == Kind::Row && w.appearance == Appearance::Section) {
+            fill(frame, {rect.x, rect.y, rect.width, scale}, theme.border, w.clip);
         } else if (field(w)) {
             fill(frame, rect, theme.background, w.clip);
             outline(frame, rect,
@@ -585,7 +606,7 @@ struct Context::Impl {
                                      : theme.border,
                     w.clip);
         } else if (w.kind == Kind::Divider) {
-            fill(frame, rect, hover || w.id == captured ? theme.accent : theme.background, w.clip);
+            fill(frame, rect, hover || w.id == captured ? theme.border : theme.background, w.clip);
         }
         float tx = rect.x + theme.padding * scale + w.indent * 14 * scale;
         const auto font_size = (w.font_size > 0 ? w.font_size : theme.font_size) * scale;
@@ -673,7 +694,11 @@ struct Context::Impl {
             }
             fill(frame, {tx + caret, rect.y + 5 * scale, scale, rect.height - 10 * scale},
                  theme.accent, text_clip);
-        } else if (w.kind != Kind::Divider && w.kind != Kind::Viewport && !w.text.empty())
+        } else if (field(w) && w.text.empty() && !w.placeholder.empty())
+            font.draw(frame, w.placeholder, tx, ty, font_size, theme.muted,
+                      w.clip.intersection(
+                          {rect.x + 2 * scale, rect.y, rect.width - 4 * scale, rect.height}));
+        else if (w.kind != Kind::Divider && w.kind != Kind::Viewport && !w.text.empty())
             font.draw(frame, w.kind == Kind::NumberField ? number(w.value, w.precision) : w.text,
                       tx, ty, font_size, ink,
                       w.clip.intersection(
@@ -805,6 +830,14 @@ void Context::layout(float width, float height, float scale) {
     check(root());
     impl_->arrange(root(), {0, 0, impl_->width, impl_->height},
                    {0, 0, impl_->width, impl_->height});
+    if (!impl_->hovered.empty()) {
+        const auto* hit = impl_->hit(root(), impl_->mouse_x, impl_->mouse_y);
+        const auto current_hover = hit ? hit->id : "";
+        if (current_hover != impl_->hovered) {
+            impl_->hovered = current_hover;
+            impl_->hover_started = std::chrono::steady_clock::now();
+        }
+    }
     std::erase_if(impl_->edits, [&](const auto& entry) { return !ids.contains(entry.first); });
     auto* focused = impl_->find(impl_->focused);
     if (!focused || !focusable(*focused))
@@ -814,6 +847,58 @@ void Context::layout(float width, float height, float scale) {
 }
 void Context::draw(render::Snapshot& snapshot) {
     impl_->draw_widget(root(), snapshot);
+    if (impl_->payload.is_null() && impl_->captured.empty() &&
+        std::chrono::steady_clock::now() - impl_->hover_started >=
+            std::chrono::milliseconds(450)) {
+        const auto* widget = impl_->find(impl_->hovered);
+        if (widget && widget->visible && !widget->tooltip.empty() && impl_->width > 100) {
+            const auto font_size = impl_->theme.font_size * impl_->scale;
+            const auto padding = 8.f * impl_->scale;
+            const auto max_line_width =
+                std::max(40.f, std::min(480.f * impl_->scale, impl_->width - 24.f * impl_->scale) -
+                                   2.f * padding);
+            std::vector<std::string> lines;
+            std::string line;
+            for (std::size_t i = 0; i < widget->tooltip.size();) {
+                const auto first = static_cast<unsigned char>(widget->tooltip[i]);
+                std::size_t bytes = first < 0x80 ? 1 : first < 0xe0 ? 2 : first < 0xf0 ? 3 : 4;
+                bytes = std::min(bytes, widget->tooltip.size() - i);
+                const auto character = widget->tooltip.substr(i, bytes);
+                i += bytes;
+                if (character == "\n") {
+                    lines.push_back(line);
+                    line.clear();
+                    continue;
+                }
+                if (!line.empty() &&
+                    impl_->font.measure(line + character, font_size) > max_line_width) {
+                    lines.push_back(line);
+                    line.clear();
+                }
+                line += character;
+            }
+            lines.push_back(line);
+            float line_width = 0;
+            for (const auto& value : lines)
+                line_width = std::max(line_width, impl_->font.measure(value, font_size));
+            const auto line_height = font_size + 5.f * impl_->scale;
+            const float width = line_width + 2.f * padding;
+            const float height = float(lines.size()) * line_height + 2.f * padding;
+            const Rect viewport{0, 0, impl_->width, impl_->height};
+            const Rect tooltip{
+                std::clamp(impl_->mouse_x + 12.f * impl_->scale, 4.f,
+                           std::max(4.f, impl_->width - width - 4.f)),
+                std::clamp(impl_->mouse_y + 18.f * impl_->scale, 4.f,
+                           std::max(4.f, impl_->height - height - 4.f)),
+                width, height};
+            fill(snapshot, tooltip, impl_->theme.raised, viewport);
+            outline(snapshot, tooltip, impl_->theme.border, viewport);
+            for (std::size_t i = 0; i < lines.size(); ++i)
+                impl_->font.draw(snapshot, lines[i], tooltip.x + padding,
+                                 tooltip.y + padding + float(i) * line_height, font_size,
+                                 impl_->theme.text, viewport);
+        }
+    }
     if (!impl_->payload.is_null()) {
         const Rect viewport{0, 0, impl_->width, impl_->height};
         const auto text =
@@ -890,6 +975,7 @@ bool Context::handle(const render::Event& event) {
     using Type = render::Event::Type;
     if (event.type == Type::FocusLost) {
         p.cancel_capture();
+        p.hovered.clear();
         if (auto found = p.edits.find(p.focused); found != p.edits.end())
             found->second.composition.clear();
         p.unfocus(true);
@@ -901,6 +987,7 @@ bool Context::handle(const render::Event& event) {
         p.mouse_y = event.y;
         auto* hit = p.hit(p.root, event.x, event.y);
         p.hovered = hit ? hit->id : "";
+        p.hover_started = std::chrono::steady_clock::now();
     }
     if (event.type == Type::Wheel) {
         auto* w = p.hit(p.root, p.mouse_x, p.mouse_y);
@@ -911,6 +998,7 @@ bool Context::handle(const render::Event& event) {
                                std::max(0.f, w->content_height - w->rect.height +
                                                  2 * w->layout.padding * p.scale));
                 layout(p.width, p.height, p.scale);
+                p.hover_started = std::chrono::steady_clock::now();
                 return true;
             }
         return false;

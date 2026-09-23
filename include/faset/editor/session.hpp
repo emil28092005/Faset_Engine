@@ -39,6 +39,9 @@ class Session {
     bool playing() const {
         return bool(player_);
     }
+    bool play_pending() const {
+        return !pending_play_job_.empty();
+    }
     void log(std::string message);
 
   private:

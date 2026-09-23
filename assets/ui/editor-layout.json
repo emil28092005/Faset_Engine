@@ -2,18 +2,18 @@
   "root": {
     "id": "root", "kind": "column", "layout": {"gap": 1},
     "children": [
-      {"id": "menubar", "kind": "panel", "layout": {"height": 34, "padding": 3}},
-      {"id": "toolbar", "kind": "panel", "layout": {"height": 40, "padding": 5}},
+      {"id": "menubar", "kind": "panel", "layout": {"height": 36, "padding": 3}},
+      {"id": "toolbar", "kind": "panel", "layout": {"height": 44, "padding": 7}},
       {"id": "workspace", "kind": "row", "layout": {"flex": 1, "gap": 1}, "children": [
-        {"id": "scene_panel", "kind": "panel", "layout": {"width": 224, "min_width": 150, "gap": 0}},
+        {"id": "scene_panel", "kind": "panel", "layout": {"width": 238, "min_width": 150, "gap": 0}},
         {"id": "left_divider", "kind": "divider", "layout": {"width": 5}},
         {"id": "viewport", "kind": "viewport", "layout": {"flex": 1, "min_width": 180}},
         {"id": "right_divider", "kind": "divider", "layout": {"width": 5}},
-        {"id": "inspector_panel", "kind": "panel", "layout": {"width": 300, "min_width": 210, "gap": 0}}
+        {"id": "inspector_panel", "kind": "panel", "layout": {"width": 312, "min_width": 210, "gap": 0}}
       ]},
       {"id": "bottom_divider", "kind": "divider", "layout": {"height": 5}},
-      {"id": "bottom_panel", "kind": "panel", "layout": {"height": 184, "min_height": 90, "gap": 0}},
-      {"id": "statusbar", "kind": "panel", "layout": {"height": 26, "padding": 0}}
+      {"id": "bottom_panel", "kind": "panel", "layout": {"height": 190, "min_height": 90, "gap": 0}},
+      {"id": "statusbar", "kind": "panel", "layout": {"height": 25, "padding": 0}}
     ]
   }
 }
