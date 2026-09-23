@@ -179,6 +179,12 @@ void benchmark(const Options& options) {
         const auto stats = renderer.stats();
         if (stats.validation_errors != 0)
             throw std::runtime_error("Vulkan validation error during benchmark");
+        if (stats.submitted_local_lights != options.lights || stats.omitted_local_lights != 0)
+            throw std::runtime_error("Renderer did not submit every requested local light");
+        if (stats.effective_visibility_mode != options.visibility)
+            throw std::runtime_error("Requested visibility path fell back during benchmark");
+        if (stats.gpu_main_raster_ms <= 0 || stats.gpu_ms <= 0)
+            throw std::runtime_error("GPU raster or frame timestamp was unavailable");
         csv << options.lights << ',' << (options.shadows ? "on" : "off") << ','
             << mode_name(options.visibility) << ',' << mode_name(stats.effective_visibility_mode)
             << ",forward," << options.run_index << ',' << frame << ',';

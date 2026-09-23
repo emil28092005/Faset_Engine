@@ -91,7 +91,12 @@ if(BUILD_TESTING)
   add_executable(faset_p3_lighting_benchmark
     "${PROJECT_SOURCE_DIR}/examples/renderer/p3_lighting_benchmark.cpp")
   target_link_libraries(faset_p3_lighting_benchmark PRIVATE faset_render faset_core)
-  add_test(NAME render_lighting_benchmark_schema COMMAND faset_p3_lighting_benchmark --list-runs)
-  set_tests_properties(render_lighting_benchmark_schema PROPERTIES LABELS "gpu;p3" TIMEOUT 90)
+  add_test(NAME render_lighting_benchmark_schema COMMAND
+    "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_p3_lighting_benchmark.py")
+  set_tests_properties(render_lighting_benchmark_schema PROPERTIES LABELS "p3" TIMEOUT 90)
+  add_test(NAME render_lighting_benchmark_smoke COMMAND
+    "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_p3_lighting_benchmark.py"
+    --real-executable "$<TARGET_FILE:faset_p3_lighting_benchmark>")
+  set_tests_properties(render_lighting_benchmark_smoke PROPERTIES LABELS "gpu;p3" TIMEOUT 90)
 endif()
 install(FILES ${FASET_SHADER_OUTPUTS} DESTINATION shaders)
