@@ -45,24 +45,25 @@ bool finite_camera(const TemporalHistoryKey& key) noexcept {
     return true;
 }
 
-std::array<float, 3> view_direction(const TemporalHistoryKey& key) noexcept {
-    // A perspective VP encodes view forward in its fourth row. An orthographic
-    // projection has a constant fourth row; its third row carries direction.
-    std::array<float, 3> direction{key.view_projection[3], key.view_projection[7],
-                                   key.view_projection[11]};
-    float length_squared = direction[0] * direction[0] + direction[1] * direction[1] +
-                           direction[2] * direction[2];
-    if (length_squared < 1e-12f) {
-        direction = {key.view_projection[2], key.view_projection[6], key.view_projection[10]};
-        length_squared = direction[0] * direction[0] + direction[1] * direction[1] +
-                         direction[2] * direction[2];
-    }
+std::array<float, 3> normalized_view_row(const TemporalHistoryKey& key, int row) noexcept {
+    std::array<float, 3> direction{key.view_projection[row], key.view_projection[row + 4],
+                                   key.view_projection[row + 8]};
+    const float length_squared = direction[0] * direction[0] +
+                                 direction[1] * direction[1] + direction[2] * direction[2];
     if (!std::isfinite(length_squared) || length_squared < 1e-12f)
         return {};
     const float reciprocal = 1.f / std::sqrt(length_squared);
     for (float& component : direction)
         component *= reciprocal;
     return direction;
+}
+
+bool large_axis_turn(const std::array<float, 3>& a,
+                     const std::array<float, 3>& b) noexcept {
+    if (a == std::array<float, 3>{} || b == std::array<float, 3>{})
+        return true;
+    const float dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    return !std::isfinite(dot) || dot < 0.70710678f; // turn greater than 45 degrees
 }
 
 bool camera_discontinuity(const TemporalHistoryKey& previous,
@@ -78,11 +79,21 @@ bool camera_discontinuity(const TemporalHistoryKey& previous,
     // camera motion and smaller view changes are handled by motion vectors.
     if (!std::isfinite(translation_squared) || translation_squared > 25.f)
         return true;
-    const auto a = view_direction(previous), b = view_direction(current);
-    if (a == std::array<float, 3>{} || b == std::array<float, 3>{})
-        return true;
-    const float dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    return !std::isfinite(dot) || dot < 0.70710678f; // turn greater than 45 degrees
+    // Compare horizontal and vertical camera axes too: comparing only forward
+    // cannot detect a sudden roll about the unchanged viewing direction.
+    for (int row = 0; row < 2; ++row)
+        if (large_axis_turn(normalized_view_row(previous, row),
+                            normalized_view_row(current, row)))
+            return true;
+    // Perspective VP encodes forward in row four. Orthographic projection has
+    // a constant fourth row, so its third row carries the viewing direction.
+    auto a = normalized_view_row(previous, 3);
+    auto b = normalized_view_row(current, 3);
+    if (a == std::array<float, 3>{} && b == std::array<float, 3>{}) {
+        a = normalized_view_row(previous, 2);
+        b = normalized_view_row(current, 2);
+    }
+    return large_axis_turn(a, b);
 }
 } // namespace
 
@@ -90,6 +101,9 @@ TemporalHistoryDecision
 evaluate_temporal_history(const std::optional<TemporalHistoryKey>& previous,
                           const TemporalHistoryKey& current) noexcept {
     auto reset = [](TemporalResetReason reason) { return TemporalHistoryDecision{false, reason}; };
+    if (current.mode == TemporalMode::Off)
+        return reset(previous && previous->mode != TemporalMode::Off
+                         ? TemporalResetReason::ModeChanged : TemporalResetReason::None);
     if (current.camera_cut)
         return reset(TemporalResetReason::CameraCut);
     if (!previous)
@@ -106,8 +120,6 @@ evaluate_temporal_history(const std::optional<TemporalHistoryKey>& previous,
         return reset(TemporalResetReason::ScaleChanged);
     if (before.mode != current.mode)
         return reset(TemporalResetReason::ModeChanged);
-    if (current.mode == TemporalMode::Off)
-        return reset(TemporalResetReason::Unsupported);
     if (before.scene_rect != current.scene_rect)
         return reset(TemporalResetReason::ViewportChanged);
     if (before.projection != current.projection)

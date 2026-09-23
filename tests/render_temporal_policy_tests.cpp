@@ -75,6 +75,19 @@ void rendered_history_and_camera_motion() {
                 TemporalResetReason::CameraDiscontinuity,
             "A large camera turn must invalidate history");
     current = previous;
+    current.view_projection[0] = -1;
+    current.view_projection[5] = -1;
+    require(evaluate_temporal_history(previous, current).reason ==
+                TemporalResetReason::CameraDiscontinuity,
+            "A 180-degree roll must invalidate history even when forward is unchanged");
+    current = previous;
+    current.view_projection[0] = 0.98480775f;
+    current.view_projection[1] = 0.17364818f;
+    current.view_projection[4] = -0.17364818f;
+    current.view_projection[5] = 0.98480775f;
+    require(evaluate_temporal_history(previous, current).valid,
+            "An ordinary small camera roll must retain compatible history");
+    current = previous;
     current.view_projection[0] = std::numeric_limits<float>::quiet_NaN();
     require(evaluate_temporal_history(previous, current).reason ==
                 TemporalResetReason::CameraDiscontinuity,
@@ -121,6 +134,17 @@ void incompatible_view_state() {
             "A changed shading generation invalidates history");
 }
 
+void intentionally_disabled_temporal_mode() {
+    auto off = steady_view();
+    off.mode = TemporalMode::Off;
+    const auto first = evaluate_temporal_history(std::nullopt, off);
+    require(!first.valid && first.reason == TemporalResetReason::None,
+            "Explicit Off has no temporal history to reset or unsupported fallback to report");
+    const auto later = evaluate_temporal_history(off, off);
+    require(!later.valid && later.reason == TemporalResetReason::None,
+            "Continuing in Off must remain a deliberate non-temporal mode");
+}
+
 void deterministic_jitter() {
     const auto first = temporal_jitter(0, 320, 240);
     const auto second = temporal_jitter(1, 320, 240);
@@ -151,6 +175,7 @@ void deterministic_jitter() {
 
 int main() {
     capability_fallback();
+    intentionally_disabled_temporal_mode();
     rendered_history_and_camera_motion();
     incompatible_view_state();
     deterministic_jitter();

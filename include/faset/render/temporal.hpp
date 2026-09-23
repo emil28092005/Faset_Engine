@@ -66,8 +66,9 @@ TemporalHistoryDecision
 evaluate_temporal_history(const std::optional<TemporalHistoryKey>& previous,
                           const TemporalHistoryKey& current) noexcept;
 
-// Sixteen-phase Halton(2,3) offset in clip-space units, for the scene raster
-// projection only. UI, picking, culling, and history keys use unjittered space.
+// Sixteen-phase Halton(2,3) offset in clip-space units for scene rasterization.
+// UI, picking and history keys use unjittered space. Culling must account for
+// this jitter with a conservative edge; HZB depth must match jittered geometry.
 // A zero viewport extent throws std::invalid_argument.
 std::array<float, 2> temporal_jitter(std::uint64_t frame_index,
                                      std::uint32_t viewport_width,
