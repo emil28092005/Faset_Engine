@@ -142,6 +142,12 @@ void nearest_depth_motion_dilation() {
     prior.depth[4] = .1f; // Undilated center motion would fail this depth check.
     prior.depth[3] = .2f;
     prior.color[3] = {.1f, .1f, .1f, 1};
+    const auto exposed_background = temporal_reference_resolve(frame, &prior);
+    require(!exposed_background.accepted[4] &&
+                exposed_background.history.color[4] == frame.pixels[4].color,
+            "A newly exposed deep background pixel must not borrow foreground motion");
+    frame.pixels[4].depth = .203f;
+    frame.pixels[4].previous_depth = .203f;
     const auto dilated = temporal_reference_resolve(frame, &prior);
     require(dilated.accepted[4] && dilated.history.color[4][0] < .5f,
             "Nearest-depth foreground motion should fill a valid silhouette pixel");

@@ -86,9 +86,11 @@ TemporalReferenceResult temporal_reference_resolve(const TemporalReferenceFrame&
             if (!previous || !valid_motion(center))
                 continue;
 
-            // Dilate the nearest opaque depth's motion at a silhouette, but
-            // never resurrect a center pixel with no previous transform.
+            // Dilate from the nearest compatible depth at a silhouette, but
+            // never borrow foreground motion for newly exposed background or
+            // resurrect a center pixel with no previous transform.
             const TemporalReferencePixel* selected = &center;
+            const float current_depth_tolerance = .002f + .01f * center.depth;
             const auto min_y = y ? y - 1 : y;
             const auto min_x = x ? x - 1 : x;
             const auto max_y = std::min(y + 1, current.height - 1);
@@ -96,7 +98,9 @@ TemporalReferenceResult temporal_reference_resolve(const TemporalReferenceFrame&
             for (auto sy = min_y; sy <= max_y; ++sy)
                 for (auto sx = min_x; sx <= max_x; ++sx) {
                     const auto& candidate = current.pixels[std::size_t(sy) * current.width + sx];
-                    if (valid_motion(candidate) && candidate.depth < selected->depth)
+                    if (valid_motion(candidate) &&
+                        std::abs(candidate.depth - center.depth) <=
+                            current_depth_tolerance && candidate.depth < selected->depth)
                         selected = &candidate;
                 }
             const float u = (static_cast<float>(x) + .5f) / current.width - selected->motion[0];
