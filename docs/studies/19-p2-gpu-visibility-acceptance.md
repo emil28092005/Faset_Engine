@@ -32,7 +32,7 @@ ctest --test-dir build/linux-debug --output-on-failure -L p2
 
 The pixel comparison allows at most 0.5% of pixels to differ by more than 16 RGB levels and a mean RGB error of at most 2. Capacity checks also inspect each cube center; the shadow case compares every pixel affected by the reference shadow. These targeted checks catch small omissions that a whole-frame tolerance could miss. A failing scene should be inspected by saving both full frames and a difference image before relaxing a threshold.
 
-These cases are the automatic minimum. Before accepting occlusion or LOD, also run a scripted pan, teleport, near-plane crossing, spawned/deleted mesh, newly imported mesh, overlapping bins, two view IDs, and a long open-scene sequence. Compare final color and depth/ID debug views where available. Assert no indirect buffer overflow or validation errors at the advertised capacity. Stable IDs must survive reordering; reused slots need a generation change. 2D sprites and editor UI retain their authored order.
+These cases are the automatic minimum. Manual follow-up should cover newly imported meshes, overlapping material bins, shader reloads, and final color plus depth/ID debug views where available. Assert no indirect buffer overflow or validation errors at the advertised capacity. Stable IDs must survive reordering; reused slots need a generation change. 2D sprites and editor UI retain their authored order.
 
 ## Benchmark command and interpretation
 
@@ -42,24 +42,10 @@ The standalone executable writes per-frame CSV without declaring a speedup:
 build/linux-debug/faset_render_gpu_acceptance_tests --benchmark /tmp/faset-p2-dense.csv
 ```
 
-It warms each mode for 10 frames, then records 30 frames for each of three fixed scenes: a frustum-heavy grid, an open scene with almost all instances visible, and a wall hiding a dense group. It repeats these workloads for direct, GPU frustum, and GPU occlusion. All benchmark objects disable shadows so shadow draw submission does not dominate the visibility comparison. The harness enables visibility diagnostics so that GPU counters are observable; this may add synchronization/readback cost. Columns include end-to-end CPU/GPU frame times, CPU readback time, pass-level GPU times (main cull/raster, HZB, post cull/raster), live Vulkan allocation bytes, submitted draw calls, visibility counters, LOD counts, and validation errors. Summarize median and p95 per scene/mode; retain the raw CSV. Run each configuration at least three times and report run-to-run variation. The harness intentionally has no performance assertion because gains depend on GPU, driver, scene and capture overhead.
+It warms each mode for 10 frames, then records 30 frames for each of three fixed scenes: a frustum-heavy grid, an open scene with almost all instances visible, and a wall hiding a dense group. It repeats these workloads for direct, GPU frustum, and GPU occlusion. All benchmark objects disable shadows so shadow draw submission does not dominate the visibility comparison. The harness enables visibility diagnostics so that GPU counters are observable; this adds host mapping/readback overhead. Columns include whole-render-call CPU time, GPU command time, CPU readback time, pass-level GPU times (main cull/raster, HZB, post cull/raster), live Vulkan allocation bytes, submitted draw calls, visibility counters, LOD counts, and validation errors. Summarize median and p95 per scene/mode; retain the raw CSV. Run each configuration at least three times and report run-to-run variation. The harness intentionally has no performance assertion because gains depend on GPU, driver, scene and capture overhead.
 
-The current renderer performs a full-image readback and waits for frame completion every frame. Its `cpu_ms` and `gpu_ms` describe that end-to-end implementation, not isolated culling cost. Pass-level timestamps expose the cost of `MainCull`, `MainRaster`, `HZB`, `PostCull`, and `PostRaster`, but CPU extraction/upload/submission are not individually timed. The benchmark's diagnostic counter readback adds more synchronization than a normal Player frame. Compare a closed, heavily occluded scene **and** an open scene in which most instances remain visible. Record identical geometry, camera path, window extent, shader bundle, validation setting and capture mode. Avoid benchmarking during shader compilation, texture uploads, first-use allocations or GPU frequency transitions.
-
-Record the following before publishing any result:
-
-| Field | Result |
-| --- | --- |
-| Commit and shader bundle hash | _not measured_ |
-| OS, GPU and driver | _not measured_ |
-| Vulkan validation enabled | _not measured_ |
-| Resolution and scene seed | _not measured_ |
-| Visible / occluded / deferred instances | _not measured_ |
-| Direct CPU p50 / p95 and GPU p50 / p95 | _not measured_ |
-| GPU-frustum CPU p50 / p95 and GPU p50 / p95 | _not measured_ |
-| GPU-occlusion CPU p50 / p95 and GPU p50 / p95 | _not measured_ |
-| Pass-level GPU times | _not measured_ |
-| Peak renderer allocation bytes | _not measured_ |
-| Correctness images / validation errors | _not measured_ |
+The current renderer performs a full-image readback and waits for frame completion every frame. `cpu_ms` measures the whole synchronous `Renderer::render` call, including that wait and the host copy. `gpu_ms` measures the timestamp interval around GPU commands, including the image-to-buffer copy but excluding the later host map/copy. `readback_cpu_ms` measures only the host map/copy. Pass-level timestamps expose the cost of `MainCull`, `MainRaster`, `HZB`, `PostCull`, and `PostRaster`, but CPU extraction/upload/submission are not individually timed. The benchmark's diagnostic counter readback adds host work beyond a normal Player frame. Compare a closed, heavily occluded scene **and** an open scene in which most instances remain visible. Record identical geometry, camera path, window extent, shader bundle, validation setting and capture mode. Avoid benchmarking during shader compilation, texture uploads, first-use allocations or GPU frequency transitions.
 
 Keep data from software Vulkan implementations separate from physical GPU data. A visibility feature is accepted by image correctness and lifecycle tests even if it is slower in a particular scene; retain the measured regression and decide whether to use the direct path there.
+
+The first recorded three-run result, including source hashes, device metadata, p50/p95 tables, counter values, limitations, and links to all 810 raw frame records, is in [the 2026-09-23 benchmark report](20-p2-gpu-visibility-benchmark-2026-09-23.md). The GPU cull pass is much slower than the direct path's GPU work in this Debug/validation configuration, even as CPU submission time falls. Treat the result as a profiling lead, not a shipping performance verdict.
