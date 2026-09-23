@@ -207,6 +207,36 @@ void render_scale_policy() {
     }
     require(zero_rejected, "Zero output width is not a valid temporal target");
 }
+
+void completed_frames_only_become_history() {
+    TemporalHistoryState history;
+    auto frame = steady_view();
+    require(history.prepare(frame).reason == TemporalResetReason::FirstFrame,
+            "A prepared first frame has no committed history");
+    history.complete(frame);
+    require(history.prepare(frame).valid,
+            "A successfully completed frame becomes reusable history");
+
+    auto failed_frame = frame;
+    failed_frame.view_id = "failed-submit-view";
+    require(history.prepare(failed_frame).reason == TemporalResetReason::ViewChanged,
+            "A candidate view switch is detected before submission");
+    try {
+        throw std::runtime_error("synthetic queue submit failure");
+    } catch (const std::runtime_error&) {
+        // The caller never invokes complete() on a failed submission.
+    }
+    require(history.prepare(frame).valid,
+            "A failed submission must not replace the last completed history key");
+    require(history.prepare(failed_frame).reason == TemporalResetReason::ViewChanged,
+            "An uncommitted frame must not become the next frame's predecessor");
+
+    frame.mode = TemporalMode::Off;
+    history.complete(frame);
+    frame.mode = TemporalMode::TAA;
+    require(history.prepare(frame).reason == TemporalResetReason::FirstFrame,
+            "Completing an Off frame discards temporal history");
+}
 } // namespace
 
 int main() {
@@ -216,4 +246,5 @@ int main() {
     incompatible_view_state();
     deterministic_jitter();
     render_scale_policy();
+    completed_frames_only_become_history();
 }

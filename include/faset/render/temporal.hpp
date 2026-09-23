@@ -73,6 +73,18 @@ TemporalHistoryDecision
 evaluate_temporal_history(const std::optional<TemporalHistoryKey>& previous,
                           const TemporalHistoryKey& current) noexcept;
 
+// The renderer calls prepare before recording and complete only after a
+// successful GPU submission. An exception or failed submission leaves the
+// previously completed key intact. This state is independent of P2 HZB.
+class TemporalHistoryState {
+  public:
+    TemporalHistoryDecision prepare(const TemporalHistoryKey& current) const noexcept;
+    void complete(const TemporalHistoryKey& rendered);
+
+  private:
+    std::optional<TemporalHistoryKey> completed_;
+};
+
 // Sixteen-phase Halton(2,3) offset in clip-space units for scene rasterization.
 // UI, picking and history keys use unjittered space. Culling must account for
 // this jitter with a conservative edge; HZB depth must match jittered geometry.

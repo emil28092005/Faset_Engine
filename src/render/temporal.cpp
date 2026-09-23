@@ -151,6 +151,18 @@ evaluate_temporal_history(const std::optional<TemporalHistoryKey>& previous,
     return {true, TemporalResetReason::None};
 }
 
+TemporalHistoryDecision
+TemporalHistoryState::prepare(const TemporalHistoryKey& current) const noexcept {
+    return evaluate_temporal_history(completed_, current);
+}
+
+void TemporalHistoryState::complete(const TemporalHistoryKey& rendered) {
+    if (rendered.mode == TemporalMode::Off)
+        completed_.reset();
+    else
+        completed_ = rendered;
+}
+
 std::array<float, 2> temporal_jitter(std::uint64_t frame_index,
                                      std::uint32_t viewport_width,
                                      std::uint32_t viewport_height) {
