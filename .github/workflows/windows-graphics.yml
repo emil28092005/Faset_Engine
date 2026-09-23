@@ -72,8 +72,8 @@ jobs:
         run: ctest --preset windows-debug --timeout 180
       - name: Real Release exports, 2D and 3D execution, incremental Debug rebuild
         run: build/windows-debug/faset_build_service_tests.exe --integration .cache/windows-export-e2e
-      - name: Export and relocate both checked-in playable games
-        run: python tools/verify_playable_exports.py --editor build/windows-debug/faset_editor.exe --output .cache/windows-playable-exports
+      - name: Export and relocate C++ and Lua playable games
+        run: python tools/verify_playable_exports.py --editor build/windows-debug/faset_editor.exe --output .cache/windows-playable-exports --include-lua
       - name: Preserve graphics and export evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
