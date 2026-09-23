@@ -14,6 +14,16 @@ void validate(const Bounds& bounds) {
 }
 } // namespace
 
+VisibilityMode select_effective_visibility_mode(VisibilityMode requested,
+                                                bool gpu_available,
+                                                bool hzb_available) noexcept {
+    if (!gpu_available || requested == VisibilityMode::Direct)
+        return VisibilityMode::Direct;
+    if (requested == VisibilityMode::GpuOcclusion && hzb_available)
+        return VisibilityMode::GpuOcclusion;
+    return VisibilityMode::GpuFrustum;
+}
+
 Bounds local_bounds(const Mesh& mesh) {
     if (mesh.vertices.empty())
         throw std::invalid_argument("Empty mesh has no bounds");

@@ -150,6 +150,9 @@ struct FrameStats {
     std::uint32_t texture_count{};
     std::uint32_t vertices{}, draw_calls{}, culled_meshes{}, validation_errors{};
     bool gpu_visibility_active{}, hzb_valid{};
+    // Requested and actual paths for the last frame; actual may be less capable.
+    VisibilityMode requested_visibility_mode{VisibilityMode::Direct};
+    VisibilityMode effective_visibility_mode{VisibilityMode::Direct};
     bool visibility_counters_valid{};
     std::uint32_t gpu_bins{}, gpu_visible_instances{}, gpu_frustum_rejected{};
     std::uint32_t gpu_occlusion_deferred{}, gpu_post_visible{};

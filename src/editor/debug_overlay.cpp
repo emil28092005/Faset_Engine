@@ -17,6 +17,17 @@ struct CurrentContext {
         ImGui::SetCurrentContext(previous);
     }
 };
+const char* visibility_label(render::VisibilityMode mode) {
+    switch (mode) {
+    case render::VisibilityMode::Direct:
+        return "Direct";
+    case render::VisibilityMode::GpuFrustum:
+        return "GPU frustum";
+    case render::VisibilityMode::GpuOcclusion:
+        return "GPU occlusion";
+    }
+    return "Unknown";
+}
 ImGuiKey key(std::string_view name) {
     if (name.size() == 1 && name[0] >= 'A' && name[0] <= 'Z')
         return static_cast<ImGuiKey>(ImGuiKey_A + name[0] - 'A');
@@ -272,7 +283,10 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                         stats.texture_count);
             ImGui::Separator();
             ImGui::TextUnformatted("GPU visibility");
-            ImGui::Text("Path: %s", stats.gpu_visibility_active ? "active" : "inactive");
+            ImGui::Text("Effective path: %s", visibility_label(stats.effective_visibility_mode));
+            if (stats.requested_visibility_mode != stats.effective_visibility_mode)
+                ImGui::TextDisabled("Fallback from %s",
+                                    visibility_label(stats.requested_visibility_mode));
             ImGui::Text("Indirect bins: %u", stats.gpu_bins);
             if (stats.gpu_visibility_active && stats.visibility_counters_valid) {
                 ImGui::Text("Visible: %u   Frustum rejected: %u",

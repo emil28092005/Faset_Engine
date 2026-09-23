@@ -1,8 +1,11 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <faset/render/renderer.hpp>
+#include <faset/render/visibility.hpp>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -13,6 +16,49 @@ namespace {
 void require(bool condition, const std::string& message) {
     if (!condition)
         throw std::runtime_error(message);
+}
+
+void stable_gpu_identity_metadata() {
+    auto mesh = cube_mesh();
+    auto replacement = std::make_shared<Mesh>(*mesh);
+    const Bounds bounds{{-1, -1, -1}, {1, 1, 1}};
+    InstanceTracker tracker;
+    const auto first = tracker.update("first", mesh, identity, bounds, "game");
+    const auto second = tracker.update("second", mesh, identity, bounds, "game");
+    const auto first_metadata = gpu_instance_metadata(first, true);
+    const auto second_metadata = gpu_instance_metadata(second, true);
+    require(first_metadata[0] == 0 && first_metadata[1] == first.slot &&
+                first_metadata[2] == 1 && first_metadata[3] == 0 &&
+                second_metadata[1] == second.slot && first_metadata[1] != second_metadata[1],
+            "New tracked instances need distinct stable GPU identities without history");
+    tracker.finish_frame();
+
+    const auto reordered_second = tracker.update("second", mesh, identity, bounds, "game");
+    const auto reordered_first = tracker.update("first", mesh, identity, bounds, "game");
+    const auto reordered_metadata = gpu_instance_metadata(reordered_first, true);
+    require(reordered_metadata[0] == 1 && reordered_metadata[1] == first_metadata[1] &&
+                reordered_metadata[2] == first_metadata[2] &&
+                reordered_metadata[3] == first_metadata[3] &&
+                gpu_instance_metadata(reordered_second, true)[1] == second_metadata[1],
+            "Reordering must preserve stable GPU identity and enable valid history");
+    require(gpu_instance_metadata(reordered_first, false)[0] == 0,
+            "Incompatible history must clear only the history-valid lane");
+
+    const auto changed = tracker.update("first", replacement, identity, bounds, "game");
+    const auto changed_metadata = gpu_instance_metadata(changed, true);
+    require(changed_metadata[1] == first_metadata[1] &&
+                changed_metadata[2] != first_metadata[2] && changed_metadata[0] == 0,
+            "Replacing a mesh must advance the stable GPU identity generation");
+
+    InstanceUpdate wide_generation{};
+    wide_generation.slot = 17;
+    wide_generation.generation = 0x12345678abcdef01ULL;
+    const auto wide_metadata = gpu_instance_metadata(wide_generation, true);
+    require(wide_metadata[1] == 17 && wide_metadata[2] == 0xabcdef01U &&
+                wide_metadata[3] == 0x12345678U,
+            "GPU metadata must preserve all 64 generation bits");
+    require(gpu_instance_metadata({}, true) == std::array<std::uint32_t, 4>{0, 0, 0, 0},
+            "Anonymous draws have generation zero and are untracked");
 }
 
 RendererConfig config(VisibilityMode mode) {
@@ -60,12 +106,15 @@ std::size_t different_pixels(const std::vector<std::uint8_t>& a,
 
 int main() {
     try {
+        stable_gpu_identity_metadata();
         Renderer direct(config(VisibilityMode::Direct));
         Renderer gpu(config(VisibilityMode::GpuFrustum));
         auto frame = scene();
         direct.render(frame);
         gpu.render(frame);
         require(gpu.stats().gpu_visibility_active, "GPU visibility path did not run");
+        require(gpu.stats().effective_visibility_mode == VisibilityMode::GpuFrustum,
+                "GPU frustum request did not use the frustum path");
         require(gpu.stats().gpu_bins == 1 && gpu.stats().gpu_visible_instances == 1 &&
                     gpu.stats().gpu_frustum_rejected == 1,
                 "GPU frustum/indirect counts are wrong");
@@ -94,6 +143,8 @@ int main() {
                 "Visibility counters can be enabled for diagnostics");
         Renderer occlusion(config(VisibilityMode::GpuOcclusion));
         occlusion.render(scene());
+        require(occlusion.stats().effective_visibility_mode == VisibilityMode::GpuOcclusion,
+                "GPU occlusion request silently selected another path");
         auto hzb = occlusion.hzb_debug_image(0);
         if (occlusion.stats().gpu_ms > 0)
             require(occlusion.stats().gpu_hzb_ms > 0 &&

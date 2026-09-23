@@ -47,6 +47,9 @@ with tempfile.TemporaryDirectory(prefix="faset-player-diagnostics-") as temporar
         assert selected.returncode == 0, (mode, selected.stdout, selected.stderr)
         mode_report = json.loads(mode_profile.read_text(encoding="utf-8"))
         assert mode_report["visibility_mode"] == mode, mode_report
+        assert mode_report["effective_visibility_mode"] == mode, mode_report
+        assert all(sample["effective_visibility_mode"] == mode
+                   for sample in mode_report["samples"]), mode_report["samples"]
         assert all(sample["gpu_visibility_active"] is active
                    for sample in mode_report["samples"]), mode_report["samples"]
 

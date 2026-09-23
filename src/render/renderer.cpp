@@ -1634,10 +1634,12 @@ struct Renderer::Impl {
             it = it->second.owner.expired() ? bounds_cache.erase(it) : std::next(it);
         for (auto it = opacity_cache.begin(); it != opacity_cache.end();)
             it = it->second.owner.expired() ? opacity_cache.erase(it) : std::next(it);
-        const bool gpu_active = scene.available &&
-            config.visibility_mode != VisibilityMode::Direct;
-        const bool occlusion = gpu_active && scene.hzb_supported && scene.hzb_mips &&
-            config.visibility_mode == VisibilityMode::GpuOcclusion;
+        statistics.requested_visibility_mode = config.visibility_mode;
+        statistics.effective_visibility_mode = select_effective_visibility_mode(
+            config.visibility_mode, scene.available, scene.hzb_supported && scene.hzb_mips);
+        const bool gpu_active = statistics.effective_visibility_mode != VisibilityMode::Direct;
+        const bool occlusion = statistics.effective_visibility_mode ==
+            VisibilityMode::GpuOcclusion;
         statistics.gpu_visibility_active = gpu_active;
         statistics.hzb_valid = false;
         bool can_present = surface != VK_NULL_HANDLE;
@@ -1831,7 +1833,7 @@ struct Renderer::Impl {
                     (previous.previous_bounds.max[axis] -
                      previous.previous_bounds.min[axis]) * .5f;
             }
-            instance.metadata[0] = previous.previous_valid && history_compatible ? 1 : 0;
+            instance.metadata = gpu_instance_metadata(previous, history_compatible);
             if (gpu_frame.instances.size() >= UINT32_MAX)
                 throw std::overflow_error("GPU scene instance capacity exceeded");
             bin_it->instances.push_back(static_cast<std::uint32_t>(gpu_frame.instances.size()));

@@ -28,6 +28,17 @@ using Json = nlohmann::json;
 double milliseconds(Clock::time_point begin, Clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
 }
+const char* visibility_mode_name(faset::render::VisibilityMode mode) {
+    switch (mode) {
+    case faset::render::VisibilityMode::Direct:
+        return "direct";
+    case faset::render::VisibilityMode::GpuFrustum:
+        return "gpu-frustum";
+    case faset::render::VisibilityMode::GpuOcclusion:
+        return "gpu-occlusion";
+    }
+    return "unknown";
+}
 struct ProfileSample {
     double wall{}, simulation{}, snapshot{}, render{}, rendererCpu{}, gpu{}, readbackCpu{};
     faset::runtime::FrameStats runtime;
@@ -36,6 +47,7 @@ struct ProfileSample {
     std::uint32_t textureCount{};
     bool physicsDebug{};
     bool gpuVisibilityActive{};
+    faset::render::VisibilityMode effectiveVisibilityMode{faset::render::VisibilityMode::Direct};
 };
 Json distribution(std::vector<double> values) {
     if (values.empty())
@@ -82,7 +94,9 @@ Json profileFrames(const std::vector<ProfileSample>& samples) {
                           {"gpu_allocated_bytes", sample.gpuAllocatedBytes},
                           {"texture_count", sample.textureCount},
                           {"physics_debug", sample.physicsDebug},
-                          {"gpu_visibility_active", sample.gpuVisibilityActive}});
+                          {"gpu_visibility_active", sample.gpuVisibilityActive},
+                          {"effective_visibility_mode",
+                           visibility_mode_name(sample.effectiveVisibilityMode)}});
     }
     return {{"samples", std::move(frames)},
             {"summary_ms",
@@ -555,10 +569,12 @@ int player_main(int argc, char** argv) {
             printGameplayLogs();
             const auto renderStarted = Clock::now();
             renderer.render(snapshot);
-            if (frames == 0 && visibilityMode != faset::render::VisibilityMode::Direct &&
-                !renderer.stats().gpu_visibility_active)
-                std::cerr << "Requested GPU visibility is unavailable on this device; "
-                             "using Direct rendering.\n";
+            if (frames == 0 &&
+                visibilityMode != renderer.stats().effective_visibility_mode)
+                std::cerr << "Requested " << visibilityName << " visibility is unavailable; "
+                          << "using "
+                          << visibility_mode_name(renderer.stats().effective_visibility_mode)
+                          << " rendering.\n";
             const auto frameFinished = Clock::now();
             if (frames == 0)
                 firstFrameMs = milliseconds(started, frameFinished);
@@ -571,7 +587,7 @@ int player_main(int argc, char** argv) {
                      milliseconds(renderStarted, frameFinished), measured.cpu_ms, measured.gpu_ms,
                      measured.readback_cpu_ms, runtimeStats, measured.draw_calls, measured.vertices,
                      measured.gpu_allocated_bytes, measured.texture_count, debugPhysics,
-                     measured.gpu_visibility_active});
+                     measured.gpu_visibility_active, measured.effective_visibility_mode});
             }
             ++frames;
         }
@@ -601,6 +617,8 @@ int player_main(int argc, char** argv) {
                  {"validation_errors", stats.validation_errors},
                  {"presentation_mode", headless ? "offscreen" : "windowed"},
                  {"visibility_mode", visibilityName},
+                 {"effective_visibility_mode",
+                  visibility_mode_name(stats.effective_visibility_mode)},
                  {"simulation_mode", "synthetic_fixed_timestep"},
                  {"fixed_delta_seconds", config.fixedDelta},
                  {"percentile_method", "nearest_rank_all_completed_frames_no_warmup_exclusion"},
@@ -627,6 +645,8 @@ int player_main(int argc, char** argv) {
                                     {"dimension", document.value("dimension", 3)},
                                     {"device", stats.device},
                                     {"visibility_mode", visibilityName},
+                                    {"effective_visibility_mode",
+                                     visibility_mode_name(stats.effective_visibility_mode)},
                                     {"gpu_visibility_active", stats.gpu_visibility_active},
                                     {"validation_errors", stats.validation_errors}}
                          .dump()

@@ -119,6 +119,23 @@ void lod_thresholds_have_hysteresis_and_fallback() {
     rejects([&] { select_lod(std::numeric_limits<float>::quiet_NaN(), 0, thresholds, .1f); },
             "Nonfinite projected size cannot silently select a level");
 }
+void effective_mode_exposes_device_fallback() {
+    require(select_effective_visibility_mode(VisibilityMode::Direct, true, true) ==
+                VisibilityMode::Direct,
+            "Direct request stays Direct even on a fully capable device");
+    require(select_effective_visibility_mode(VisibilityMode::GpuFrustum, false, true) ==
+                VisibilityMode::Direct,
+            "Missing GPU culling profile falls back to Direct");
+    require(select_effective_visibility_mode(VisibilityMode::GpuFrustum, true, false) ==
+                VisibilityMode::GpuFrustum,
+            "GPU frustum does not depend on HZB support");
+    require(select_effective_visibility_mode(VisibilityMode::GpuOcclusion, true, false) ==
+                VisibilityMode::GpuFrustum,
+            "Missing HZB exposes a frustum-only effective mode");
+    require(select_effective_visibility_mode(VisibilityMode::GpuOcclusion, true, true) ==
+                VisibilityMode::GpuOcclusion,
+            "Supported occlusion keeps the requested effective mode");
+}
 } // namespace
 int main() {
     try {
@@ -126,6 +143,7 @@ int main() {
         ids_track_rendered_frames_and_generation();
         owned_mesh_identity_outlives_reimport_gap();
         lod_thresholds_have_hysteresis_and_fallback();
+        effective_mode_exposes_device_fallback();
         std::cout << "Visibility bounds, instance identity and LOD policy passed\n";
         return 0;
     } catch (const std::exception& error) {

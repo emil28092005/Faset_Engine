@@ -26,7 +26,8 @@ struct InstanceRecord {
     float4 currentExtent;         // 160..175: world AABB half extents
     float4 previousCenter;        // 176..191
     float4 previousExtent;        // 192..207
-    uint4 metadata;               // 208..223: x=previousValid, others reserved
+    uint4 metadata;               // 208..223: x=previousValid, y=stableSlot,
+                                  // z=generation low 32, w=generation high 32 (zero = untracked)
 };
 struct ViewRecord {
     column_major float4x4 currentViewProjection;  // 0..63

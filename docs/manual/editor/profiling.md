@@ -80,10 +80,11 @@ bounded run:
 ```
 
 Accepted values are `direct`, `gpu-frustum`, and `gpu-occlusion`; Direct is the
-default. The profile records the requested `visibility_mode` and each frame's
-`gpu_visibility_active` state. Check that state when interpreting a GPU run: a
-requested mode can fall back if the required device profile is unavailable. The
-Editor reports the same distinction as **Path: active**. See
+default. The profile records the requested `visibility_mode`, the run's and each
+frame's `effective_visibility_mode`, and each frame's `gpu_visibility_active` state.
+Compare requested and effective modes before interpreting a GPU run: a missing GPU
+profile falls back to Direct, while missing HZB can reduce GPU occlusion to GPU
+frustum. The Editor shows the **Effective path** and any **Fallback from** line. See
 [Diagnostics](diagnostics.md) for the counters and HZB preview.
 
 For a repeatable offscreen comparison, build and run the P2 benchmark harness:

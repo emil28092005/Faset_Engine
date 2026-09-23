@@ -1,5 +1,6 @@
 #pragma once
 #include <faset/render/renderer.hpp>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -22,6 +23,12 @@ Bounds local_bounds(const Mesh& mesh);
 Bounds transformed_bounds(const Bounds& local, const Mat4& model);
 Bounds transformed_bounds(const Mesh& mesh, const Mat4& model);
 
+// Resolve a requested mode against the current device and target capabilities.
+// Missing HZB retains GPU frustum culling, but callers must report that fallback.
+VisibilityMode select_effective_visibility_mode(VisibilityMode requested,
+                                                bool gpu_available,
+                                                bool hzb_available) noexcept;
+
 struct InstanceUpdate {
     std::uint32_t slot{};
     std::uint64_t generation{};
@@ -29,6 +36,15 @@ struct InstanceUpdate {
     Bounds previous_bounds{};
     bool previous_valid{};
 };
+
+// GPU instance metadata: history valid, stable slot, then generation low/high.
+// A zero generation identifies an anonymous, untracked draw.
+constexpr std::array<std::uint32_t, 4>
+gpu_instance_metadata(const InstanceUpdate& update, bool history_compatible) noexcept {
+    return {update.previous_valid && history_compatible ? 1U : 0U, update.slot,
+            static_cast<std::uint32_t>(update.generation),
+            static_cast<std::uint32_t>(update.generation >> 32)};
+}
 
 // One update per logical instance per rendered frame. finish_frame() promotes the
 // current state to *rendered* history and retires keys absent from that frame.
