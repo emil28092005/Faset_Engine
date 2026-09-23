@@ -4,7 +4,7 @@ This protocol exercises the post-MVP GPU-driven renderer against the retained di
 
 ## Correctness gate
 
-`cmake/GpuVisibilityAcceptance.cmake` registers eight offscreen Vulkan cases. Each renders a controlled `Snapshot` through `VisibilityMode::Direct` and a GPU mode, compares the expected final RGB image with a small tolerance for floating-point raster differences, and requires zero Vulkan validation errors. GPU cases also require `FrameStats::gpu_visibility_active`; a silent direct fallback cannot pass.
+`cmake/GpuVisibilityAcceptance.cmake` registers fifteen offscreen Vulkan cases. Each renders a controlled `Snapshot` through `VisibilityMode::Direct` and a GPU mode, compares the expected final RGB image with a small tolerance for floating-point raster differences, and requires zero Vulkan validation errors. GPU cases also require `FrameStats::gpu_visibility_active`; a silent direct fallback cannot pass. Acceptance enables `RendererConfig::visibility_diagnostics`, which reads GPU counters back for assertions.
 
 | Case | Regression caught |
 | --- | --- |
@@ -16,6 +16,13 @@ This protocol exercises the post-MVP GPU-driven renderer against the retained di
 | `cut` | A camera cut reuses incompatible HZB history. |
 | `resize` | Odd-sized target recreation retains stale HZB extents or reads out of bounds. |
 | `lod` | A prepared coarse mesh is not selected at distance, small scale jitter switches it back, or a large scale change fails to restore the fine mesh. The direct reference explicitly renders the expected prepared mesh at each level. |
+| `teleport` | A sudden camera move without an explicit cut marker leaves an object hidden; post-cull must recover it with the previous HZB still valid. |
+| `near` | Frustum/HZB wrongly rejects bounds crossing the near plane or containing the camera. |
+| `lifecycle` | Mass spawn/despawn, buffer growth, reused stable key, or replacement mesh reuses stale indirect counts or temporal bounds. |
+| `views` | Two viewport IDs incorrectly share temporal HZB history. |
+| `projection` | FOV/projection changes retain incompatible HZB history despite an unchanged view ID. |
+| `open_sequence` | A long camera pan over an open scene loses otherwise visible instances or leaks stale history. |
+| `transparent` | A transparent foreground draw contaminates the HZB and hides opaque geometry behind it. |
 
 Run all acceptance tests after building:
 
@@ -35,9 +42,9 @@ The standalone executable writes per-frame CSV without declaring a speedup:
 build/linux-debug/faset_render_gpu_acceptance_tests --benchmark /tmp/faset-p2-dense.csv
 ```
 
-It warms each mode for 10 frames, then records 30 frames for each of three fixed scenes: a frustum-heavy grid, an open scene with almost all instances visible, and a wall hiding a dense group. It repeats these workloads for direct, GPU frustum, and GPU occlusion. All benchmark objects disable shadows so shadow draw submission does not dominate the visibility comparison. Columns include CPU and GPU frame times, CPU readback time, live Vulkan allocation bytes, submitted draw calls, visibility counters, LOD counts, and validation errors. Summarize median and p95 per scene/mode; retain the raw CSV. Run each configuration at least three times and report run-to-run variation. The harness intentionally has no performance assertion because gains depend on GPU, driver, scene and capture overhead.
+It warms each mode for 10 frames, then records 30 frames for each of three fixed scenes: a frustum-heavy grid, an open scene with almost all instances visible, and a wall hiding a dense group. It repeats these workloads for direct, GPU frustum, and GPU occlusion. All benchmark objects disable shadows so shadow draw submission does not dominate the visibility comparison. The harness enables visibility diagnostics so that GPU counters are observable; this may add synchronization/readback cost. Columns include end-to-end CPU/GPU frame times, CPU readback time, pass-level GPU times (main cull/raster, HZB, post cull/raster), live Vulkan allocation bytes, submitted draw calls, visibility counters, LOD counts, and validation errors. Summarize median and p95 per scene/mode; retain the raw CSV. Run each configuration at least three times and report run-to-run variation. The harness intentionally has no performance assertion because gains depend on GPU, driver, scene and capture overhead.
 
-The current renderer performs a full-image readback and waits for frame completion every frame. Its `cpu_ms` and `gpu_ms` describe that end-to-end implementation, not isolated culling cost. A claim that GPU culling itself is faster requires pass-level GPU timestamps for `MainCull`, `MainRaster`, `HZB`, `PostCull`, and `PostRaster`, alongside CPU extraction/upload/submission times. Compare a closed, heavily occluded scene **and** an open scene in which most instances remain visible. Record identical geometry, camera path, window extent, shader bundle, validation setting and capture mode. Avoid benchmarking during shader compilation, texture uploads, first-use allocations or GPU frequency transitions.
+The current renderer performs a full-image readback and waits for frame completion every frame. Its `cpu_ms` and `gpu_ms` describe that end-to-end implementation, not isolated culling cost. Pass-level timestamps expose the cost of `MainCull`, `MainRaster`, `HZB`, `PostCull`, and `PostRaster`, but CPU extraction/upload/submission are not individually timed. The benchmark's diagnostic counter readback adds more synchronization than a normal Player frame. Compare a closed, heavily occluded scene **and** an open scene in which most instances remain visible. Record identical geometry, camera path, window extent, shader bundle, validation setting and capture mode. Avoid benchmarking during shader compilation, texture uploads, first-use allocations or GPU frequency transitions.
 
 Record the following before publishing any result:
 

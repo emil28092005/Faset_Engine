@@ -28,6 +28,7 @@ Renderer make_renderer(VisibilityMode mode, std::uint32_t width = 320,
     config.headless = true;
     config.validation = true;
     config.visibility_mode = mode;
+    config.visibility_diagnostics = true;
     return Renderer(config);
 }
 
@@ -47,9 +48,12 @@ void compare(const Frame& reference, const Frame& gpu, std::string_view name,
             std::string(name) + ": render target dimensions differ");
     require(reference.stats.validation_errors == 0 && gpu.stats.validation_errors == 0,
             std::string(name) + ": Vulkan validation reported an error");
-    if (expect_gpu)
+    if (expect_gpu) {
         require(gpu.stats.gpu_visibility_active,
                 std::string(name) + ": GPU visibility silently fell back to direct rendering");
+        require(gpu.stats.visibility_counters_valid,
+                std::string(name) + ": GPU counter readback was unavailable");
+    }
     std::size_t bad_pixels = 0;
     std::uint64_t absolute_error = 0;
     for (std::size_t i = 0; i < reference.rgba.size(); i += 4) {
@@ -245,6 +249,47 @@ void camera_cut() {
     compare(frame(direct, scene), frame(gpu, scene), "camera cut");
 }
 
+void unmarked_teleport() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    auto scene = doorway(false);
+    frame(gpu, scene);
+    frame(gpu, scene);
+    scene.eye = {0, 0, -8};
+    scene.view_projection = multiply(perspective(.85f, 320.f / 240.f, .1f, 100),
+                                     look_at(scene.eye, {0, 0, 0}));
+    // Some clients cannot label a teleport immediately. The previous HZB may be reused,
+    // but post-cull must fail open and restore anything it incorrectly deferred.
+    const auto actual = frame(gpu, scene);
+    compare(frame(direct, scene), actual, "unmarked camera teleport");
+    require(actual.stats.hzb_valid && actual.stats.gpu_post_visible > 0,
+            "teleport reused HZB without post-cull recovery (post=" +
+                std::to_string(actual.stats.gpu_post_visible) + ")");
+}
+
+void near_plane_and_camera_inside() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    Snapshot scene;
+    scene.view_id = "acceptance-near-plane";
+    scene.eye = {0, 0, 0};
+    scene.view_projection = multiply(perspective(.85f, 320.f / 240.f, .1f, 100),
+                                     look_at(scene.eye, {0, 0, -1}));
+    auto near = cube("near-object", {0, 0, -.2f}, {.4f, .4f, .4f});
+    near.cast_shadow = false;
+    scene.draws.push_back(std::move(near));
+    auto actual = frame(gpu, scene);
+    compare(frame(direct, scene), actual, "mesh crossing near plane");
+    require(actual.stats.gpu_visible_instances == 1,
+            "near-plane bounds were wrongly rejected by GPU frustum culling");
+
+    scene.draws.front().model = transform({0, 0, 0}, {}, {4, 4, 4});
+    actual = frame(gpu, scene);
+    compare(frame(direct, scene), actual, "camera inside mesh bounds");
+    require(actual.stats.gpu_visible_instances == 1,
+            "camera-inside bounds were wrongly rejected using HZB history");
+}
+
 void odd_resize() {
     auto direct = make_renderer(VisibilityMode::Direct, 319, 241);
     auto gpu = make_renderer(VisibilityMode::GpuOcclusion, 319, 241);
@@ -271,6 +316,138 @@ std::shared_ptr<const Mesh> coarse_cube() {
         return result;
     }();
     return mesh;
+}
+
+void spawn_despawn_and_key_reuse() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    auto populated = grid(512, 16, 1.5f);
+    compare(frame(direct, populated), frame(gpu, populated), "mass spawn");
+    auto empty = grid(0);
+    const auto retired = frame(gpu, empty);
+    compare(frame(direct, empty), retired, "mass despawn");
+    require(retired.stats.gpu_visible_instances == 0,
+            "despawn left stale indirect counts or visible IDs");
+    auto respawn = grid(513, 16, 1.5f);
+    for (auto& draw : respawn.draws)
+        draw.model[12] += .75f;
+    compare(frame(direct, respawn), frame(gpu, respawn), "mass respawn after capacity growth");
+
+    auto reuse_direct = make_renderer(VisibilityMode::Direct);
+    auto reuse_gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    auto closed = doorway(false);
+    frame(reuse_gpu, closed);
+    frame(reuse_gpu, closed);
+    closed.draws.pop_back();
+    frame(reuse_gpu, closed); // Remove the old key for a complete submitted frame.
+    auto replacement = doorway(false);
+    replacement.draws.back().mesh = coarse_cube();
+    replacement.draws.back().model = transform({0, 0, 2}, {}, {3, 3, 3});
+    const auto reused = frame(reuse_gpu, replacement);
+    compare(frame(reuse_direct, replacement), reused, "reused key with a different mesh");
+    require(reused.stats.hzb_valid && reused.stats.gpu_visible_instances >= 1,
+            "reused key/mesh inherited invalid previous visibility");
+}
+
+void independent_view_ids() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    auto a = doorway(false);
+    a.view_id = "acceptance-view-A";
+    frame(gpu, a);
+    frame(gpu, a);
+    auto b = doorway(true);
+    b.view_id = "acceptance-view-B";
+    auto first_b = frame(gpu, b);
+    compare(frame(direct, b), first_b, "first frame of a second view");
+    require(!first_b.stats.hzb_valid,
+            "second view inherited the first view's HZB history");
+    auto next_b = frame(gpu, b);
+    compare(frame(direct, b), next_b, "second frame of a second view");
+    require(next_b.stats.hzb_valid,
+            "second view failed to establish its own HZB history");
+    compare(frame(direct, a), frame(gpu, a), "return to first view");
+}
+
+void projection_change() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    auto scene = doorway(false);
+    scene.view_id = "acceptance-projection";
+    scene.projection = perspective(.85f, 320.f / 240.f, .1f, 100);
+    scene.view_projection = multiply(scene.projection, look_at(scene.eye, {0, 0, 0}));
+    frame(gpu, scene);
+    const auto settled = frame(gpu, scene);
+    require(settled.stats.hzb_valid, "projection fixture failed to establish HZB history");
+
+    scene.projection = perspective(1.2f, 320.f / 240.f, .1f, 100);
+    scene.view_projection = multiply(scene.projection, look_at(scene.eye, {0, 0, 0}));
+    const auto changed = frame(gpu, scene);
+    compare(frame(direct, scene), changed, "FOV change");
+    require(!changed.stats.hzb_valid,
+            "FOV/projection change retained incompatible HZB history");
+    const auto next = frame(gpu, scene);
+    require(next.stats.hzb_valid,
+            "new projection failed to establish fresh HZB history");
+}
+
+void long_open_sequence() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    auto scene = grid(64);
+    scene.view_id = "acceptance-open-sequence";
+    for (auto& draw : scene.draws)
+        draw.cast_shadow = false;
+    for (int index = 0; index < 96; ++index) {
+        const float pan = .8f * std::sin(float(index) * .17f);
+        scene.eye = {pan, 0, 20};
+        scene.view_projection = multiply(orthographic(-9, 9, -8, 8, .1f, 100),
+                                          look_at(scene.eye, {pan, 0, 0}));
+        const auto actual = frame(gpu, scene);
+        compare(frame(direct, scene), actual,
+                "open scene frame " + std::to_string(index));
+        require(actual.stats.gpu_visible_instances == scene.draws.size(),
+                "open scene lost an instance on frame " + std::to_string(index));
+        if (index > 0)
+            require(actual.stats.hzb_valid,
+                    "stable open view lost HZB history on frame " + std::to_string(index));
+    }
+}
+
+void transparent_foreground() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuOcclusion);
+    auto scene = doorway(true);
+    scene.view_id = "acceptance-transparent";
+    scene.draws.clear();
+    auto opaque = cube("opaque-behind", {0, 0, -2}, {1.8f, 1.8f, 1.8f},
+                       {.9f, .15f, .12f, 1});
+    opaque.cast_shadow = false;
+    scene.draws.push_back(std::move(opaque));
+    auto glass = cube("transparent-foreground", {0, 0, 0}, {7, 7, .4f},
+                      {.1f, .35f, .9f, .28f});
+    glass.cast_shadow = false;
+    scene.draws.push_back(std::move(glass));
+    const auto reference = frame(direct, scene);
+    auto without_opaque = scene;
+    without_opaque.draws.erase(without_opaque.draws.begin());
+    const auto glass_only = frame(direct, without_opaque);
+    std::size_t affected = 0;
+    for (std::size_t i = 0; i < reference.rgba.size(); i += 4)
+        if (std::abs(int(reference.rgba[i]) - int(glass_only.rgba[i])) > 20)
+            ++affected;
+    require(affected > 100,
+            "transparent fixture does not reveal the opaque object behind it");
+    for (int index = 0; index < 3; ++index) {
+        const auto actual = frame(gpu, scene);
+        compare(reference, actual,
+                "transparent foreground frame " + std::to_string(index));
+        require(actual.stats.gpu_visible_instances >= 1,
+                "transparent foreground hid the opaque GPU instance");
+    }
+    scene.draws.pop_back();
+    compare(frame(direct, scene), frame(gpu, scene),
+            "opaque object after transparent foreground disappears");
 }
 
 Snapshot lod_scene(float scale) {
@@ -336,9 +513,12 @@ void csv_field(std::ostream& output, std::string_view value) {
 void benchmark(const std::filesystem::path& output) {
     std::ofstream csv(output);
     require(bool(csv), "cannot open benchmark output: " + output.string());
-    csv << "scenario,mode,frame,device,cpu_ms,gpu_ms,readback_cpu_ms,gpu_bytes,draw_calls,"
+    csv << "scenario,mode,frame,device,cpu_ms,gpu_ms,readback_cpu_ms,"
+           "gpu_main_cull_ms,gpu_main_raster_ms,gpu_hzb_ms,gpu_post_cull_ms,"
+           "gpu_post_raster_ms,gpu_bytes,draw_calls,"
            "gpu_bins,gpu_visible,gpu_frustum_rejected,gpu_deferred,gpu_post_visible,"
-           "lod0,lod1,lod2,lod3,hzb_valid,gpu_visibility_active,validation_errors\n";
+           "lod0,lod1,lod2,lod3,hzb_valid,gpu_visibility_active,"
+           "visibility_diagnostics,visibility_counters_valid,validation_errors\n";
     auto frustum = grid(1024, 32, .7f);
     auto open = grid(0);
     open.view_id = "benchmark-open";
@@ -378,13 +558,17 @@ void benchmark(const std::filesystem::path& output) {
                 csv << workload.name << ',' << name << ',' << sample << ',';
                 csv_field(csv, s.device);
                 csv << ',' << s.cpu_ms << ',' << s.gpu_ms << ',' << s.readback_cpu_ms << ','
+                    << s.gpu_main_cull_ms << ',' << s.gpu_main_raster_ms << ',' << s.gpu_hzb_ms
+                    << ',' << s.gpu_post_cull_ms << ',' << s.gpu_post_raster_ms << ','
                     << s.gpu_allocated_bytes << ',' << s.draw_calls << ',' << s.gpu_bins << ','
                     << s.gpu_visible_instances << ',' << s.gpu_frustum_rejected << ','
                     << s.gpu_occlusion_deferred << ',' << s.gpu_post_visible;
                 for (auto count : s.lod_counts)
                     csv << ',' << count;
                 csv << ',' << (s.hzb_valid ? 1 : 0) << ','
-                    << (s.gpu_visibility_active ? 1 : 0) << ',' << s.validation_errors << '\n';
+                    << (s.gpu_visibility_active ? 1 : 0) << ",1,"
+                    << (s.visibility_counters_valid ? 1 : 0) << ','
+                    << s.validation_errors << '\n';
             }
         }
     }
@@ -413,6 +597,20 @@ int main(int argc, char** argv) {
             offscreen_shadow();
         else if (name == "cut")
             camera_cut();
+        else if (name == "teleport")
+            unmarked_teleport();
+        else if (name == "near")
+            near_plane_and_camera_inside();
+        else if (name == "lifecycle")
+            spawn_despawn_and_key_reuse();
+        else if (name == "views")
+            independent_view_ids();
+        else if (name == "projection")
+            projection_change();
+        else if (name == "open_sequence")
+            long_open_sequence();
+        else if (name == "transparent")
+            transparent_foreground();
         else if (name == "resize")
             odd_resize();
         else if (name == "lod")
