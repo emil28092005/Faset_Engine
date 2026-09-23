@@ -338,3 +338,51 @@ GPU/driver families. Widget composition/DPI, SDL text-input boundaries, XWayland
 Windows window lifecycle have their own passing evidence. The narrow static-mesh,
 root-level box-physics, one-window/C++ MVP profile remains explicit. Lua and advanced
 graphics are later work. UI references guide appearance; they do not define behavior.
+
+## Post-MVP checkpoint — P2 GPU visibility and prepared mesh LOD
+
+The historical MVP statement above describes the `v0.1.0-mvp` scope. Subsequent
+work added the optional Lua module and the P2 visibility path. The P2 renderer keeps
+`VisibilityMode::Direct` as its default and reference. Scene extraction supplies
+stable per-primitive keys and view metadata. `DrawItem` accepts optional prepared
+coarse meshes. The renderer tracks generation-checked temporal identity and previous
+rendered transforms, derives conservative bounds, and selects a prepared LOD by
+projected size with hysteresis. There is no automatic mesh
+decimator or cluster/streaming geometry system.
+
+For opaque static meshes, `GpuFrustum` groups compatible geometry/material into
+fixed bins and fills indirect instance counts/visible IDs on the GPU. `GpuOcclusion`
+adds previous-frame HZB classification, Main raster, a current forward-Z furthest-depth
+HZB, and Post culling/raster so a newly revealed object can appear in the same final
+frame. History resets on camera cut, changed view/extent/projection, and incompatible
+instance identity. Shadow casters, transparent meshes, sprites and UI remain on their
+independent paths; they are not hidden by the camera's opaque HZB. The GPU modes are
+lazy-initialized and require the checked Vulkan capabilities and shader bundle.
+Shader reload rebuilds both direct and GPU scene pipelines, preserving the working
+pipelines on failure.
+
+The Editor's ImGui diagnostics can select Direct, GPU frustum or GPU occlusion,
+inspect pass timings/counters and request a current-HZB preview. Counter and HZB
+readback are opt-in diagnostics; the visibility decision itself stays on the GPU.
+The existing framebuffer capture still waits for completion and reads back each
+frame. Consequently, full-frame benchmark times include that path and must not be
+presented as isolated culling costs.
+
+At renderer checkpoint `ae537c0`, the Linux reference build's full CTest suite
+reported 57 registered tests, zero failures and one existing native-window lifecycle
+skip. Fifteen offscreen P2 acceptance cases passed with Vulkan validation active and
+zero reported errors, including capacity boundaries, door reveal, camera changes,
+multi-view history, LOD hysteresis, shadow independence and transparency. Shader
+reflection/export and GPU shader reload have focused tests. The
+[P2 acceptance protocol](studies/19-p2-gpu-visibility-acceptance.md) contains the
+command, tolerance and scene definitions. The
+[three-run benchmark report](studies/20-p2-gpu-visibility-benchmark-2026-09-23.md)
+retains all 810 raw frame records, device/build details, p50/p95 values and limits.
+In that Debug build with validation and diagnostic counters, GPU `MainCull` took
+about 3.9–18.2 ms p50 across the three synthetic scenes, far above the direct
+path's 0.24–0.50 ms whole-GPU p50. The GPU route reduced synchronous CPU render-call
+time, but this is not evidence of a shipping-frame speedup. Profile the cull pass
+and repeat in Release before considering a different default. These checks establish
+the tested Linux configuration; they do not
+establish P2 behavior on a physical Windows GPU or a broad driver matrix. The
+[profiling manual](manual/editor/profiling.md) explains how to interpret the timings.

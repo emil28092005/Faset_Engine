@@ -1,6 +1,6 @@
 # Faset Engine — архитектура
 
-Редакция 1.1 · 18 сентября 2026 · **принятый проект, реализация MVP в процессе**.
+Редакция 1.2 · 23 сентября 2026 · **MVP принят; реализация P2 описана отдельно от исходных решений**.
 
 Этот файл фиксирует решения пользователя. **Принято** означает выбранное направление реализации, а не автоматически завершённую возможность движка. Работающий код, выполненные проверки и текущие ограничения перечислены в [журнале реализации](IMPLEMENTATION.md). Этапы до MVP и после него, зависимости работ и критерии готовности находятся в [PLAN.md](../PLAN.md).
 
@@ -83,11 +83,13 @@ Catch-up ограничен числом ticks за проход главног�
 
 2D и 3D имеют отдельные миры и spatial-типы. Для динамического тела итоговым transform владеет физика; teleport и кинематическое управление — отдельные операции. Физическое тело связано с entity через проверяемый handle. Миры 2D и 3D не сталкиваются автоматически. Внутренние substeps solver настраиваются отдельно от частоты gameplay ticks; начальная настройка — четыре substeps с проверкой на сценах проекта.
 
-Собственный Vulkan 1.3 renderer получает подготовленный snapshot, не обходит изменяемый EnTT registry с render thread. RenderGraph описывает reads/writes ресурсов, порядок проходов, barriers и lifetimes. Первым нужен проверяемый raster-путь 2D/3D без обязательных RT/mesh shaders; GPU-driven visibility и другие передовые механизмы добавляются по измеримым этапам из [плана](../PLAN.md).
+Собственный Vulkan 1.3 renderer получает подготовленный snapshot, не обходит изменяемый EnTT registry с render thread. RenderGraph описывает reads/writes ресурсов, порядок проходов, barriers и lifetimes. MVP создал проверяемый raster-путь 2D/3D без обязательных RT/mesh shaders. P2 добавил выбираемые GPU frustum и GPU occlusion режимы для opaque static meshes; Direct остаётся начальным режимом и эталоном. Scene extraction задаёт устойчивые keys для постоянных объектов; renderer отслеживает generation и консервативные bounds. `DrawItem` может содержать заранее подготовленные LOD meshes. CPU формирует фиксированные совместимые bins, GPU заполняет visible IDs и `instanceCount` для indirect draws. В occlusion-режиме previous HZB даёт предварительное решение, а current HZB и PostCull возвращают объекты, которые открылись в этом кадре. Camera cut, несовместимые view/projection/extent и смена instance generation инвалидируют историю. Тени, прозрачные meshes, спрайты и UI не теряют независимый порядок из-за camera culling. Точная реализованная область и проверка приведены в [P2 acceptance](studies/19-p2-gpu-visibility-acceptance.md).
 
 **Vulkan API вызывается напрямую внутри собственного backend Faset.** Он владеет Vulkan handles, созданием GPU-ресурсов и pipelines, записью команд, синхронизацией и отправкой в очереди. Renderer и RenderGraph используют небольшой внутренний интерфейс ресурсов и команд Faset; Vulkan-типы и вызовы `vk*` не входят в gameplay API или команды редактора. SDL3 обеспечивает окно и создание Vulkan surface, но не заменяет графический backend; Slang отвечает за компиляцию шейдеров. Универсальная абстракция нескольких графических API не является задачей MVP.
 
 Slang компилирует шейдеры в SPIR-V и выдаёт сведения для согласования CPU/GPU данных. Совместимый HLSL проходит выбранный pipeline; поддержка любого существующего HLSL-кода не обещается. Cook учитывает compiler/version, includes, defines и GPU profile. Nanite/Lumen-подобные системы остаются исследовательскими направлениями, не готовыми возможностями MVP.
+
+P2 не требует синхронного чтения GPU-счётчиков для решения видимости: readback включается редакторской диагностикой. Current HZB preview также читается только по запросу. Существующий путь полного framebuffer capture всё ещё ждёт GPU, поэтому измерения полной длительности кадра включают эту стоимость; `gpu_ms` и времена отдельных проходов не заменяют полную CPU/GPU-профилировку. [Первое измерение](studies/20-p2-gpu-visibility-benchmark-2026-09-23.md) обнаружило дорогой MainCull на Linux reference GPU в Debug/validation, несмотря на сокращение CPU-времени вызова renderer; архитектура не объявляет GPU-режим новым performance default. Mesh LOD выбирается среди заранее подготовленных вариантов с hysteresis; генерация LOD, streaming и cluster geometry пока не реализованы. GPU-режимы дополнительно проверяют необходимые limits/formats устройства и не считаются доступными на любом Vulkan 1.3 GPU без такой проверки.
 
 ## 8. Blender и ассеты — принято
 
@@ -111,5 +113,6 @@ Development и release Player содержат runtime, выбранные иг�
 - **18.09.2026:** принят порядок C++ → Lua, затем EnTT, собственный retained UI, SDL3, Vulkan 1.3/RenderGraph/Slang и CMake/Ninja/Clang.
 - **18.09.2026:** утверждены процессы и linkage, явная metadata registration/schema export, JSON/binary formats, вложенные шаблоны/sparse overrides, lifecycle, фиксированный tick и последовательный scheduler; граница MCP ограничена Editor/headless authoring services.
 - **18.09.2026:** английский принят основным языком интерфейса, диагностик и публичного API; уточнена граница прямых Vulkan-вызовов внутри собственного backend.
+- **23.09.2026:** после принятого MVP выполнен P2 GPU visibility/LOD на Linux reference GPU; direct renderer сохранён как начальный режим и эталон, ограничения и измерения вынесены в отдельный [протокол](studies/19-p2-gpu-visibility-acceptance.md).
 
 Реализация идёт по [PLAN.md](../PLAN.md). Последующие изменения принятых контрактов фиксируются здесь с причиной и способом проверки.

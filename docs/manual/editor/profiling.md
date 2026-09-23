@@ -67,11 +67,49 @@ report. A dirty source checkout is explicitly identified.
 relocated Release packages and records their Player profiles. Its assertions test
 correct execution, not a frame-time threshold.
 
+## Compare P2 GPU visibility modes
+
+The Editor diagnostics panel (**F12**) can switch its current viewport between
+**Direct**, **GPU frustum**, and **GPU occlusion**. Direct is the default reference.
+The selector is an Editor viewport setting; it does not change the saved scene or
+automatically change an exported Player. Check **Path: active** in the panel before
+interpreting a GPU-mode measurement: a selected mode alone does not prove that the
+GPU path ran. See [Diagnostics](diagnostics.md) for the counters and HZB preview.
+
+For a repeatable offscreen comparison, build and run the P2 benchmark harness:
+
+```sh
+build/linux-debug/faset_render_gpu_acceptance_tests --benchmark /tmp/faset-p2.csv
+```
+
+It records 10 warm-up and 30 measured frames for Direct, GPU frustum and GPU
+occlusion in fixed frustum-heavy, open and occluded scenes. Run it three times and
+compare median/p95 by scene and mode. Keep the raw CSV, hardware/driver, resolution,
+shader bundle, validation state and source revision with any published result. The
+[P2 acceptance protocol](../../studies/19-p2-gpu-visibility-acceptance.md)
+documents the scenes and CSV columns. The
+[first measured report](../../studies/20-p2-gpu-visibility-benchmark-2026-09-23.md)
+retains three raw runs, p50/p95 and limits. Its Debug/validation profile found
+GPU MainCull substantially more expensive than direct GPU work, even though the
+GPU route reduced synchronous CPU render-call time.
+
+The harness enables GPU visibility counters, so diagnostic readback is part of its
+timings. In the Editor, opening diagnostics likewise enables these counters, and
+**Show HZB** adds an on-demand image copy and preview upload. Close the panel and
+disable the HZB preview for ordinary gameplay timing. GPU pass timestamps separate
+MainCull, MainRaster, HZB, PostCull and PostRaster when supported; they are not a
+measure of CPU extraction/upload. The renderer still waits for frame completion
+and reads back the full image, so `cpu_ms` is wall time including waits, not CPU
+utilization. An open scene can run slower with HZB; visibility correctness and
+full-frame speed are separate findings.
+
 ## Current performance scope
 
-The MVP renderer is intentionally conservative: direct draws, CPU culling, one
-graphics queue and synchronous capture/readback. Use the measurements to find the
-next bottleneck before introducing parallel jobs or GPU-driven rendering. Neither
-an offscreen capture benchmark nor a tiny demo is a promise of a production frame
-budget. Observed measurements and follow-up targets belong in the implementation
-acceptance report with their source revision and method.
+The accepted MVP path uses direct draws and CPU culling; P2 adds optional GPU
+visibility for opaque static meshes, with prepared LODs supplied by the project.
+Both paths currently use one graphics queue and synchronous full-image
+capture/readback. Use measurements to find the next bottleneck before introducing
+parallel jobs or expanding GPU-driven rendering. Neither an offscreen capture
+benchmark nor a tiny demo is a promise of a production frame budget. Observed
+measurements and follow-up targets belong in the implementation acceptance report
+with their source revision and method.

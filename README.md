@@ -2,7 +2,7 @@
 
 Faset is an independent engine project for desktop **2D and 3D games on Linux and Windows**. Its priorities are a custom editor that is comfortable to use by hand and through MCP, integration with Blender, and a path toward advanced graphics.
 
-**Current status: the C++ MVP is implemented and accepted for the recorded Linux and Windows test profiles.** It includes the native Editor, shared GUI/MCP authoring, gameplay builds, Vulkan Player, Blender import and standalone export. Both playable games passed Release export and relocated execution on both operating systems. Windows graphics acceptance used software Vulkan; physical Windows GPUs, system IME and mixed-monitor transitions need additional coverage. See the [acceptance dossier](docs/validation/mvp-acceptance.md) for exact revisions, checks and limits, and the [implementation checkpoints](docs/IMPLEMENTATION.md) for the development record.
+**Current status: the C++ MVP is accepted for the recorded Linux and Windows test profiles; Lua and P2 GPU visibility were added afterward.** The MVP includes the native Editor, shared GUI/MCP authoring, gameplay builds, Vulkan Player, Blender import and standalone export. Both playable games passed Release export and relocated execution on both operating systems. P2 adds optional GPU frustum and two-pass HZB occlusion modes, fixed indirect mesh bins, prepared mesh LOD selection, and an Editor HZB diagnostic view. The direct renderer remains the default and comparison reference. P2 GPU acceptance and measurements cover the Linux reference device; Windows P2 and additional physical GPUs need separate validation. The first Debug/validation benchmark found GPU culling substantially slower than direct GPU work, so the optional modes are not presented as a performance win. Windows MVP graphics acceptance used software Vulkan. See the [MVP acceptance dossier](docs/validation/mvp-acceptance.md), [P2 acceptance protocol](docs/studies/19-p2-gpu-visibility-acceptance.md), [measured P2 results](docs/studies/20-p2-gpu-visibility-benchmark-2026-09-23.md), and [implementation checkpoints](docs/IMPLEMENTATION.md) for exact scope and limits.
 
 ## Start here
 
@@ -39,7 +39,7 @@ This README is in English. The current planning documents, studies, and research
 - **Editor-only MCP:** authoring, assets, import, builds, export, Play/Stop, and editor diagnostics. MCP is absent from the Player and exported games.
 - Standard, **unmodified Blender**, glTF/GLB import, and an optional add-on for convenient export and stable IDs.
 
-The MVP provides two small games, one 2D and one 3D, with scene editing, C++ behavior, physics, Play and standalone export. A [Lua-only example](examples/lua) demonstrates the optional scripting module. GPU-driven rendering, HZB, advanced shadows, temporal reconstruction and dynamic global illumination follow this baseline.
+The MVP provides two small games, one 2D and one 3D, with scene editing, C++ behavior, physics, Play and standalone export. A [Lua-only example](examples/lua) demonstrates the optional scripting module. P2 GPU visibility applies to opaque static meshes; ordered sprites/UI and the shadow pass keep their separate rendering paths. Its LOD policy chooses among meshes supplied by the project; automatic LOD generation, advanced shadows, temporal reconstruction and dynamic global illumination remain future work. See [profiling guidance](docs/manual/editor/profiling.md) before interpreting full-frame measurements.
 
 ## Run the research map
 

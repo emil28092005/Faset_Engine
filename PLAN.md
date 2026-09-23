@@ -1,8 +1,8 @@
 # План разработки Faset Engine
 
-Версия 1.2 · 18 сентября 2026 года.
+Версия 1.3 · 23 сентября 2026 года.
 
-**Статус:** C++ MVP реализован и принят; первый tag — **v0.1.0-mvp**. Исходники движка проверены на `4cb82556de31268d2bde73948dd1ff1b6c02f162`; финальная публикация добавляет документацию и свидетельства, сохраняя код движка. [Досье M0–M9](docs/validation/mvp-acceptance.md) связывает каждый этап с проверками и точными revisions. Linux проверен на RTX 2080 Ti, Windows — в native CI через SwiftShader; это не сертификация всех GPU/драйверов. Системный IME и физические переходы между мониторами не проверены, native Wayland restore имеет явный skip; XWayland и Windows lifecycle прошли. Текст/DPI проверены на уровне widgets и SDL. Эти границы покрытия сохраняются открыто и не выдаются за пройденные сценарии. Контракты находятся в [ARCHITECTURE.md](docs/ARCHITECTURE.md), история — в [журнале реализации](docs/IMPLEMENTATION.md).
+**Статус:** C++ MVP реализован и принят; первый tag — **v0.1.0-mvp**. Его исходники проверены на `4cb82556de31268d2bde73948dd1ff1b6c02f162`; [досье M0–M9](docs/validation/mvp-acceptance.md) связывает этапы с проверками и revisions. После MVP реализованы Lua-модуль и P2 GPU visibility/mesh LOD. Для P2 сохранён direct-эталон; [протокол приёмки](docs/studies/19-p2-gpu-visibility-acceptance.md) и [первое измерение](docs/studies/20-p2-gpu-visibility-benchmark-2026-09-23.md) описывают Linux GPU-проверки и границы производительности. В Debug/validation GPU MainCull пока значительно дороже direct GPU-пути, поэтому P2 не означает готовое ускорение. Windows P2 и дополнительные семейства GPU/драйверов не подтверждены этим протоколом. Для MVP Linux проверен на RTX 2080 Ti, Windows — в native CI через SwiftShader; это не сертификация всех GPU/драйверов. Системный IME и физические переходы между мониторами не проверены, native Wayland restore имеет явный skip; XWayland и Windows lifecycle прошли. Контракты находятся в [ARCHITECTURE.md](docs/ARCHITECTURE.md), история — в [журнале реализации](docs/IMPLEMENTATION.md).
 
 ## 1. Результат MVP
 
@@ -179,15 +179,21 @@ Lua, C++ hot reload, Blender live link, встроенное изображен�
 
 Начальные бюджеты отслеживания для конкретных демо и Linux reference host: frame p95 ≤ 4 мс, GPU/readback p95 ≤ 1 мс, simulation/snapshot p95 ≤ 0,5 мс, явные Vulkan allocations ≤ 20 MiB, startup от `main()` ≤ 500 мс. [Методика и исходные измерения](docs/validation/linux-release-2026-09-18/README.md) ограничивают область этих чисел; для других сцен/ОС нужны отдельные baselines. Это бюджеты P1, а не обещание такой производительности любой игры.
 
-Добавить Lua runtime/editor пакет поверх публичного API, проверяемых handles и схем. Предусмотреть диагностику, отладку, Inspector и явный lifecycle перезагрузки. Сохранение состояния при reload проектируется отдельно. Проверка: C++ и Lua используют одни данные/фазы; C++-only export не включает Lua.
+Lua runtime/editor пакет реализован как необязательный модуль поверх публичного API, проверяемых handles и схем. Доступны Inspector, диагностика и явный lifecycle development reload; сохранение состояния при reload проектируется отдельно. [Проверка Lua-модуля](docs/validation/lua-module.md) подтверждает Linux CPU-контракты и отключение модуля для C++-only проекта; Windows и независимый graphical/release профиль модуля остаются отдельными проверками. Таким образом, Lua-часть P1 появилась после MVP, но это не закрывает весь этап скорости итераций.
 
 Улучшать schema/build cache, сообщения компилятора, шаблоны проектов, переход к коду, autosave и измеренное время «изменение → результат». Dynamic gameplay loading рассматривать при подтверждённой проблеме линковки.
 
 ### P2. GPU-driven visibility и LOD
 
-Сохранить direct renderer как эталон. Порядок: GPU instance IDs → GPU frustum culling → fixed indirect batches → current HZB/debug view → two-pass occlusion с контролем истории → подготовленный mesh LOD с hysteresis.
+**Реализовано для opaque static meshes на Linux reference GPU; остальные платформы/устройства требуют отдельной проверки.** Direct renderer остался выбираемым эталоном. Реализованы устойчивые instance IDs с generation, GPU frustum culling, фиксированные indirect bins, current HZB и его редакторский preview, main/post occlusion с проверяемой историей, выбор заранее подготовленного mesh LOD по проецируемому размеру и hysteresis. Прозрачные meshes, спрайты, UI и shadow pass сохраняют свои упорядоченные/независимые пути. Система не генерирует LOD-модели из исходного mesh автоматически.
 
-Проверять пустую сцену, рост/переполнение буферов, массовое удаление, открывающуюся дверь, исчезновение заслона, camera cut, teleport и resize. Не требовать синхронного GPU readback. Сравнивать полный кадр на закрытых и открытых сценах: HZB может быть дороже эталона. Основа — [исследование 15](docs/studies/15-renderer-implementation-notes.md).
+- [x] GPU instance records, frustum culling и fixed indirect draws без CPU feedback для решения видимости.
+- [x] Current HZB, двухпроходное исправление ошибочной previous-frame occlusion и инвалидация истории при cut, resize, смене view/projection/instance.
+- [x] Подготовленные LOD с hysteresis и диагностикой LOD counts; direct reference остаётся доступен.
+- [x] Автоматические adversarial-сценарии: пустота, граница ёмкости, дверь/телепорт, тени, near plane, resize, несколько views, lifecycle, прозрачность и открытая сцена.
+- [x] Профиль direct/frustum/occlusion на закрытой и открытой сценах с raw samples и без обещания универсального ускорения.
+
+Основой проектирования было [исследование 15](docs/studies/15-renderer-implementation-notes.md); фактическая проверка и методика — в [P2 acceptance](docs/studies/19-p2-gpu-visibility-acceptance.md), [результаты и raw samples](docs/studies/20-p2-gpu-visibility-benchmark-2026-09-23.md), реализация — в [журнале](docs/IMPLEMENTATION.md). Счётчики GPU и HZB preview включаются только для диагностики; существующий framebuffer capture по-прежнему синхронен, поэтому end-to-end benchmark отражает этот путь. Первое измерение выявило дорогой MainCull в Debug/validation на reference GPU; до выбора GPU-режима по умолчанию нужны разбор затрат и Release-повтор. Открытые сцены и дополнительная стоимость HZB публикуются наравне с закрытыми.
 
 ### P3. Освещение, тени и temporal reconstruction
 
