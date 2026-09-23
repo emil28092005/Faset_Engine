@@ -52,7 +52,10 @@ struct Session::ImportTask {
 };
 Session::Session(SessionConfig config)
     : config_(std::move(config)), authoring_(config_.project_root), commands_(authoring_),
-      assets_(config_.project_root / ".faset/cache"), builds_(build_config(config_)) {
+      assets_(config_.project_root / ".faset/cache"), builds_(build_config(config_)),
+      autosave_([this](const std::string& document, std::uint64_t revision) {
+          return authoring_.save(document, {}, revision);
+      }) {
     register_commands();
     plugins_ = std::make_unique<PluginManager>(
         commands_, [this](std::string message) { log(std::move(message)); });
@@ -297,12 +300,19 @@ void Session::poll() {
         if (status == "failed" || status == "conflict")
             log("Asset import " + status + ": " + value.value("error", std::string()));
     }
+    autosave_.observe(authoring_.documents(), AutosaveController::Clock::now(),
+                      autosave_enabled_);
 }
 void Session::register_commands() {
     const Json text = {{"type", "string"}}, boolean = {{"type", "boolean"}};
     auto schema = [](Json properties, Json required = Json::array()) {
         return Commands::object_schema(std::move(properties), std::move(required));
     };
+    commands_.add("faset_autosave_status",
+                  "Read revision-aware scene autosave state. Unnamed scenes remain in recovery "
+                  "until explicitly saved with a path.",
+                  schema(Json::object()),
+                  [this](const Json&) { return autosave_.status(); }, true);
     commands_.add(
         "faset_capabilities", "Inspect available Editor services and rendering capabilities.",
         schema(Json::object()),

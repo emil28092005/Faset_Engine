@@ -573,9 +573,12 @@ Json AuthoringService::undo(const std::string& id, std::uint64_t revision) {
 Json AuthoringService::redo(const std::string& id, std::uint64_t revision) {
     return history(id, revision, true);
 }
-Json AuthoringService::save(const std::string& id, const std::filesystem::path& relative) {
+Json AuthoringService::save(const std::string& id, const std::filesystem::path& relative,
+                            std::optional<std::uint64_t> expected_revision) {
     std::lock_guard lock(mutex_);
     auto& current = state(id);
+    if (expected_revision)
+        check_revision(current.revision, *expected_revision);
     const auto selected = relative.empty() ? current.path : relative.lexically_normal();
     require(!selected.empty(), "save.path", "Choose a scene path before saving");
     const auto path = project_path(root_, selected);

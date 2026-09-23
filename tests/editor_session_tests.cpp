@@ -157,6 +157,24 @@ int main(int argc, char** argv) {
         require(invalid_lua_status.at("stale") == true &&
                     !invalid_lua_status.at("error").get<std::string>().empty(),
                 "test", "Invalid Lua manifest did not mark schema stale with diagnostics");
+        const auto autosave_id = document.at("id").get<std::string>();
+        const auto autosave_revision =
+            session.authoring().query(autosave_id).at("revision").get<std::uint64_t>();
+        session.authoring().transact(
+            autosave_id, autosave_revision,
+            Json::array({{{"op", "scene.rename"}, {"name", "Saved by MCP polling"}}}));
+        reject_command("faset_document_save",
+                       {{"document", autosave_id},
+                        {"expected_revision", autosave_revision}},
+                       "revision.conflict");
+        session.poll();
+        require(commands.call("faset_autosave_status", Json::object()).at("enabled") == true,
+                "test", "Autosave status is available through Editor commands");
+        std::this_thread::sleep_for(std::chrono::milliseconds(2100));
+        session.poll();
+        require(read_json(root / path_from_utf8("Scenes/Начало 世界.scene.json")).at("name") ==
+                    "Saved by MCP polling",
+                "test", "A long-lived headless Editor poll saves a named scene after idle");
         external["version"] = 999;
         atomic_write_json(root / "project.faset.json", external);
         bool rejected = false;

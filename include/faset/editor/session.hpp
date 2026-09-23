@@ -2,6 +2,7 @@
 #include <faset/assets/asset_pipeline.hpp>
 #include <faset/core/process.hpp>
 #include <faset/editor/build_service.hpp>
+#include <faset/editor/autosave.hpp>
 #include <faset/editor/commands.hpp>
 #include <faset/editor/plugins.hpp>
 #include <memory>
@@ -62,6 +63,8 @@ class Session {
     Commands commands_;
     assets::AssetPipeline assets_;
     BuildService builds_;
+    AutosaveController autosave_;
+    bool autosave_enabled_ = true;
     std::map<std::string, std::shared_ptr<ImportTask>> imports_;
     std::vector<std::jthread> workers_;
     std::vector<std::string> logs_;

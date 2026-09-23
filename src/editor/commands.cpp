@@ -103,9 +103,13 @@ Commands::Commands(authoring::AuthoringService& authoring) : authoring_(authorin
         [&](const Json& args) { return authoring_.query(args.at("document")); }, true);
     add("faset_document_save",
         "Atomically save an authoring document. Refuses to overwrite an externally modified file.",
-        object_schema({{"document", text}, {"path", text}}, {"document"}), [&](const Json& args) {
+        object_schema({{"document", text}, {"path", text},
+                       {"expected_revision", integer}}, {"document"}), [&](const Json& args) {
+            std::optional<std::uint64_t> expected;
+            if (args.contains("expected_revision"))
+                expected = args.at("expected_revision").get<std::uint64_t>();
             return authoring_.save(args.at("document"),
-                                   path_from_utf8(args.value("path", std::string())));
+                                   path_from_utf8(args.value("path", std::string())), expected);
         });
     add(
         "faset_schema",

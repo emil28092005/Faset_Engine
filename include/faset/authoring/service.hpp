@@ -25,7 +25,8 @@ class AuthoringService {
                   const Json& operations, const std::string& idempotency_key = "");
     Json undo(const std::string& document, std::uint64_t expected_revision);
     Json redo(const std::string& document, std::uint64_t expected_revision);
-    Json save(const std::string& document, const std::filesystem::path& relative = {});
+    Json save(const std::string& document, const std::filesystem::path& relative = {},
+              std::optional<std::uint64_t> expected_revision = std::nullopt);
     Json recovery_documents() const;
     Json recover(const std::string& document,
                  std::optional<std::uint64_t> expected_revision = std::nullopt);
