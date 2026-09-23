@@ -39,6 +39,11 @@ struct DrawItem {
     float metallic{0.0f};
     bool cast_shadow{true};
     std::shared_ptr<const Texture> texture{};
+    // Empty means an ad-hoc draw without temporal visibility state. Scene extraction
+    // derives this from persistent object and primitive identities, not draw order.
+    std::string instance_key{};
+    // Optional prepared coarser meshes: element zero is LOD 1; mesh is LOD 0.
+    std::vector<std::shared_ptr<const Mesh>> lod_meshes{};
 };
 struct Sprite {
     Vec3 position{};
@@ -88,6 +93,9 @@ struct Snapshot {
     std::vector<Quad> ui_quads;
     std::vector<Text> ui_text;
     std::vector<UiTriangles> ui_triangles;
+    // Distinguishes temporal histories when one Renderer displays different views.
+    std::string view_id{};
+    bool camera_cut{};
 };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.
 void validate_shader_bundle(const std::filesystem::path& directory);

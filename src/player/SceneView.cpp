@@ -6,6 +6,7 @@
 #include <numbers>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 #include <unordered_map>
 #if defined(FASET_HAS_STB)
 #define STB_IMAGE_IMPLEMENTATION
@@ -16,6 +17,15 @@
 namespace faset::player {
 namespace {
 using Json = nlohmann::json;
+std::string render_key(std::initializer_list<std::string_view> parts) {
+    std::string key;
+    for (const auto part : parts) {
+        key += std::to_string(part.size());
+        key += ':';
+        key += part;
+    }
+    return key;
+}
 Json properties(const Json& entity, const std::string& name) {
     if (entity.contains("components")) {
         for (const auto& component : entity["components"])
@@ -144,10 +154,11 @@ struct SceneView::Impl {
         throw std::runtime_error("Texture subasset does not exist: " + ref);
     }
     void imported(render::Snapshot& out, const std::string& ref, const render::Mat4& model,
-                  render::Color tint) {
+                  render::Color tint, std::string_view entity_id) {
         const auto [id, selector] = reference(ref);
         auto& asset = bundle(id);
-        auto emit = [&](std::size_t meshIndex, const render::Mat4& local) {
+        auto emit = [&](std::size_t meshIndex, const render::Mat4& local,
+                        std::string_view node_id) {
             if (meshIndex >= asset.meshes.size())
                 throw std::runtime_error("Invalid cooked mesh index");
             for (std::size_t p = 0; p < asset.meshes[meshIndex].size(); ++p) {
@@ -155,6 +166,10 @@ struct SceneView::Impl {
                 draw.mesh = asset.meshes[meshIndex][p];
                 draw.model = render::multiply(model, local);
                 draw.color = tint;
+                const auto primitive_id = std::to_string(p);
+                draw.instance_key = render_key(
+                    {entity_id, "asset", ref, node_id, asset.data.meshes[meshIndex].id,
+                     primitive_id});
                 const auto material = asset.data.meshes[meshIndex].primitives[p].material;
                 if (material >= 0) {
                     if (std::size_t(material) >= asset.data.materials.size())
@@ -181,7 +196,7 @@ struct SceneView::Impl {
         if (!selector.empty())
             for (std::size_t i = 0; i < asset.data.meshes.size(); ++i)
                 if (asset.data.meshes[i].id == selector) {
-                    emit(i, render::identity);
+                    emit(i, render::identity, "direct-mesh");
                     return;
                 }
         std::unordered_map<std::string, const assets::Node*> nodes;
@@ -208,7 +223,7 @@ struct SceneView::Impl {
         };
         if (asset.data.nodes.empty())
             for (std::size_t i = 0; i < asset.meshes.size(); ++i)
-                emit(i, render::identity);
+                emit(i, render::identity, "unparented-mesh");
         for (const auto& node : asset.data.nodes)
             if (node.mesh >= 0) {
                 bool selected = selector.empty();
@@ -220,7 +235,7 @@ struct SceneView::Impl {
                     current = parent == nodes.end() ? nullptr : parent->second;
                 }
                 if (selected)
-                    emit(static_cast<std::size_t>(node.mesh), world(world, node));
+                    emit(static_cast<std::size_t>(node.mesh), world(world, node), node.id);
             }
     }
 };
@@ -238,6 +253,8 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
         throw std::invalid_argument("Viewport aspect must be positive");
     impl_->messages.clear();
     render::Snapshot out;
+    const auto scene_id = scene.value("id", std::string{});
+    std::string camera_id = camera.overrideSceneCamera ? "override" : "default";
     const auto& entities = scene.at("entities");
     if (!entities.is_array())
         throw std::invalid_argument("Scene entities must be an array");
@@ -295,6 +312,7 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
             camera.nearPlane = fields.value("near", 0.1f);
             camera.farPlane = fields.value("far", 1000.0f);
             foundCamera = true;
+            camera_id = entity.at("id").get<std::string>();
         }
         if (auto fields = properties(entity, "light"); !fields.is_null())
             out.light_direction = direction(model, {-0.5f, -1, -0.3f});
@@ -331,20 +349,22 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
                                            : asset.substr(8);
                 if (primitive != "plane" && primitive != "cube")
                     throw std::invalid_argument("Unsupported builtin mesh: " + primitive);
-                out.draws.push_back({primitive == "plane" ? plane() : render::cube_mesh(),
-                                     model,
-                                     tint,
-                                     0.65f,
-                                     0.0f,
-                                     true,
-                                     {}});
+                render::DrawItem draw{primitive == "plane" ? plane() : render::cube_mesh(),
+                                      model, tint, 0.65f, 0.0f, true, {}};
+                const auto entity_id = entity.at("id").get<std::string>();
+                draw.instance_key = render_key({entity_id, "builtin", primitive});
+                out.draws.push_back(std::move(draw));
             } else
                 try {
-                    impl_->imported(out, asset, model, tint);
+                    impl_->imported(out, asset, model, tint,
+                                    entity.at("id").get<std::string>());
                 } catch (const std::exception& e) {
                     impl_->messages.push_back("error: " + std::string(e.what()));
-                    out.draws.push_back(
-                        {render::cube_mesh(), model, {1, 0, 1, 1}, 0.65f, 0.0f, true, {}});
+                    render::DrawItem draw{render::cube_mesh(), model, {1, 0, 1, 1},
+                                          0.65f, 0.0f, true, {}};
+                    const auto entity_id = entity.at("id").get<std::string>();
+                    draw.instance_key = render_key({entity_id, "error", asset});
+                    out.draws.push_back(std::move(draw));
                 }
         }
     }
@@ -393,6 +413,7 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
     std::sort(impl_->messages.begin(), impl_->messages.end());
     impl_->messages.erase(std::unique(impl_->messages.begin(), impl_->messages.end()),
                           impl_->messages.end());
+    out.view_id = render_key({scene_id, "camera", camera_id});
     return out;
 }
 void SceneView::appendPhysicsDebug(render::Snapshot& snapshot, const Json& scene,

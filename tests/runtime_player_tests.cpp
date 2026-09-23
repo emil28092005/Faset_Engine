@@ -162,6 +162,22 @@ void run() {
     physicsDebug(view);
     auto snapshot = view.build(scene, 16.f / 9.f);
     check(snapshot.draws.size() == 1, "SceneView builtin mesh");
+    check(!snapshot.draws[0].instance_key.empty(),
+          "Persistent scene entity gives its builtin mesh a stable render key");
+    const auto builtin_key = snapshot.draws[0].instance_key;
+    auto second_mesh = scene;
+    second_mesh["entities"].push_back(
+        entity("other-mesh", nullptr,
+               Json::array({component("faset.mesh", {{"asset", "builtin:cube"}})})));
+    const auto two_meshes = view.build(second_mesh, 1);
+    check(two_meshes.draws.size() == 2 && two_meshes.draws[0].instance_key == builtin_key &&
+              two_meshes.draws[1].instance_key != builtin_key,
+          "A second instance of the same mesh has a distinct key without renumbering the first");
+    std::swap(second_mesh["entities"][1], second_mesh["entities"][2]);
+    const auto reordered_meshes = view.build(second_mesh, 1);
+    check(reordered_meshes.draws[0].instance_key == two_meshes.draws[1].instance_key &&
+              reordered_meshes.draws[1].instance_key == builtin_key,
+          "Render instance identity follows entity identity, not draw order");
     check(snapshot.draws[0].model[12] == 3 && snapshot.draws[0].model[13] == 2 &&
               snapshot.draws[0].model[14] == 3,
           "hierarchy local transforms composed");
@@ -269,6 +285,10 @@ void run() {
     check(view.diagnostics().empty(), "valid cooked texture/material produces no error");
     check(snapshot.draws.size() == 1 && snapshot.draws[0].mesh->vertices.size() == 3,
           "cooked mesh reaches render snapshot");
+    check(!snapshot.draws[0].instance_key.empty() &&
+              snapshot.draws[0].instance_key != builtin_key &&
+              view.build(importedScene, 1).draws[0].instance_key == snapshot.draws[0].instance_key,
+          "Imported primitive identity is stable across scene extraction");
     check(snapshot.draws[0].model[12] == 5, "asset node transform composed with scene hierarchy");
     check(snapshot.draws[0].texture && snapshot.draws[0].texture->srgb &&
               snapshot.draws[0].texture->rgba == std::vector<std::uint8_t>({240, 80, 20, 255}),
