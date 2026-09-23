@@ -608,14 +608,11 @@ struct Renderer::Impl {
             vkGetPhysicalDeviceProperties(gpu, &properties);
             if (properties.apiVersion < VK_API_VERSION_1_3)
                 continue;
-            VkPhysicalDeviceVulkan11Features f11{};
-            f11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
             VkPhysicalDeviceVulkan13Features f13{};
             f13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-            f11.pNext = &f13;
             VkPhysicalDeviceFeatures2 features{};
             features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-            features.pNext = &f11;
+            features.pNext = &f13;
             vkGetPhysicalDeviceFeatures2(gpu, &features);
             if (!f13.synchronization2 || !f13.dynamicRendering)
                 continue;
@@ -651,7 +648,6 @@ struct Renderer::Impl {
                     max_storage_buffer_range = properties.limits.maxStorageBufferRange;
                     max_image_dimension = properties.limits.maxImageDimension2D;
                     scene.available = (queues[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
-                                      f11.shaderDrawParameters &&
                                       properties.limits.maxPerStageDescriptorStorageBuffers >= 8 &&
                                       properties.limits.maxDescriptorSetStorageBuffers >= 8 &&
                                       properties.limits.maxComputeWorkGroupInvocations >= 64 &&
@@ -679,17 +675,13 @@ struct Renderer::Impl {
         qi.queueFamilyIndex = queue_family;
         qi.queueCount = 1;
         qi.pQueuePriorities = &priority;
-        VkPhysicalDeviceVulkan11Features f11{};
-        f11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        f11.shaderDrawParameters = scene.available ? VK_TRUE : VK_FALSE;
         VkPhysicalDeviceVulkan13Features f13{};
         f13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
         f13.synchronization2 = VK_TRUE;
         f13.dynamicRendering = VK_TRUE;
-        f11.pNext = &f13;
         VkDeviceCreateInfo di{};
         di.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        di.pNext = &f11;
+        di.pNext = &f13;
         di.queueCreateInfoCount = 1;
         di.pQueueCreateInfos = &qi;
         const char* swap_extension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -1858,6 +1850,8 @@ struct Renderer::Impl {
                                       static_cast<std::uint32_t>(bin.instances.size()),
                                       visible_base,
                                       static_cast<std::uint32_t>(bin.instances.size())});
+            // gpuVertexMain/gpuShadowMain read raw Vulkan InstanceIndex.
+            // Keep firstInstance at zero; visible_base is supplied separately.
             gpu_frame.commands.push_back({bin.vertex_count, 0, bin.first_vertex, 0});
             gpu_frame.textures.push_back(bin.texture);
         }

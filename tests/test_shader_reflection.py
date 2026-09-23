@@ -36,6 +36,33 @@ def parameter(name: str, index: int, shape: str, access: str, stride: int | None
 
 
 class ReflectionTests(unittest.TestCase):
+    def test_gpu_vertex_paths_do_not_require_shader_draw_parameters(self):
+        # SV_InstanceID makes Slang subtract BaseInstance and emit DrawParameters.
+        # Our indirect commands always use firstInstance=0, so the Vulkan instance
+        # index is sufficient and also runs on devices without that optional feature.
+        compiler = os.environ["FASET_TEST_SLANGC"]
+        with tempfile.TemporaryDirectory(prefix="faset-gpu-instance-index-") as directory:
+            for entry in ("gpuVertexMain", "gpuShadowMain"):
+                process = subprocess.run(
+                    [sys.executable, str(SCRIPT), "--compiler", compiler, "--source",
+                     str(SCRIPT.parents[1] / "shaders" / "gpu_scene.slang"), "--entry",
+                     entry, "--define", "FASET_GPU_GRAPHICS=1", "--output", directory],
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(process.returncode, 0, process.stderr)
+                bytecode = (Path(directory) / f"{entry}.spv").read_bytes()
+                words = struct.unpack(f"<{len(bytecode) // 4}I", bytecode)
+                capabilities = set()
+                offset = 5
+                while offset < len(words):
+                    count, opcode = words[offset] >> 16, words[offset] & 0xffff
+                    self.assertGreater(count, 0)
+                    if opcode == 17:  # OpCapability
+                        capabilities.add(words[offset + 1])
+                    offset += count
+                self.assertIn(1, capabilities)  # Shader
+                self.assertNotIn(4427, capabilities)  # DrawParameters
+
     def test_gpu_storage_resources_keep_kind_and_stride(self):
         parameters = [
             parameter("instances", 0, "structuredBuffer", "read", 224),

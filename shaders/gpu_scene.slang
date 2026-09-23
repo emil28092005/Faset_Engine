@@ -60,8 +60,10 @@ struct GpuFrameParameters {
 [[vk::binding(1,1)]] StructuredBuffer<uint> gfxVisibleIds;
 [[vk::binding(2,1)]] StructuredBuffer<ViewRecord> gfxViews;
 
+// All indirect commands use firstInstance=0. The raw Vulkan index avoids the
+// BaseInstance read that Slang adds for SV_InstanceID (DrawParameters feature).
 [shader("vertex")]
-GpuSceneOutput gpuVertexMain(GpuSceneVertex vertex, uint drawInstance : SV_InstanceID) {
+GpuSceneOutput gpuVertexMain(GpuSceneVertex vertex, uint drawInstance : SV_VulkanInstanceID) {
     InstanceRecord instance = gfxInstances[gfxVisibleIds[gpuFrame.drawInfo.x + drawInstance]];
     float4 world = mul(instance.model, float4(vertex.position, 1));
     GpuSceneOutput output;
@@ -79,7 +81,7 @@ GpuSceneOutput gpuVertexMain(GpuSceneVertex vertex, uint drawInstance : SV_Insta
 }
 
 [shader("vertex")]
-float4 gpuShadowMain(GpuSceneVertex vertex, uint drawInstance : SV_InstanceID) : SV_Position {
+float4 gpuShadowMain(GpuSceneVertex vertex, uint drawInstance : SV_VulkanInstanceID) : SV_Position {
     InstanceRecord instance = gfxInstances[gfxVisibleIds[gpuFrame.drawInfo.x + drawInstance]];
     return mul(gpuFrame.lightViewProjection, mul(instance.model, float4(vertex.position, 1)));
 }
