@@ -11,7 +11,9 @@ and how those functions interact with scenes, physics, and the editor.
     [acceptance dossier](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/mvp-acceptance.md)
     for exact source revisions and coverage limits. The optional Lua module is
     documented separately; those historical acceptance results do not certify later
-    changes. Advanced graphics remain later milestones.
+    changes. GPU visibility and prepared mesh LOD arrived after that MVP; see the
+    [visibility guide](editor/visibility-lod.md). Advanced lighting and geometry
+    systems remain later milestones.
 
 Start with [how gameplay works](scripting/index.md), then read
 [frame and physics updates](scripting/lifecycle.md). See

@@ -86,9 +86,9 @@ It records 10 warm-up and 30 measured frames for Direct, GPU frustum and GPU
 occlusion in fixed frustum-heavy, open and occluded scenes. Run it three times and
 compare median/p95 by scene and mode. Keep the raw CSV, hardware/driver, resolution,
 shader bundle, validation state and source revision with any published result. The
-[P2 acceptance protocol](../../studies/19-p2-gpu-visibility-acceptance.md)
+[P2 acceptance protocol](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/19-p2-gpu-visibility-acceptance.md)
 documents the scenes and CSV columns. The
-[first measured report](../../studies/20-p2-gpu-visibility-benchmark-2026-09-23.md)
+[first measured report](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/20-p2-gpu-visibility-benchmark-2026-09-23.md)
 retains three raw runs, p50/p95 and limits. Its Debug/validation profile found
 GPU MainCull substantially more expensive than direct GPU work, even though the
 GPU route reduced synchronous CPU render-call time.
