@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <chrono>
@@ -6,6 +7,7 @@
 #include <faset/assets/asset_data.hpp>
 #include <faset/assets/asset_pipeline.hpp>
 #include <faset/authoring/schema.hpp>
+#include <faset/authoring/service.hpp>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
@@ -90,6 +92,102 @@ fs::path build_executable(const fs::path& build, const std::string& configuratio
             return file;
     }
     throw std::runtime_error("Build did not produce " + target);
+}
+Json starter_scene(const std::string& name, int dimension, std::string_view language) {
+    const auto schemas = authoring::builtin_schemas();
+    auto scene = authoring::make_scene(name + " — Starter", dimension);
+    scene["simulation"] = authoring::default_simulation_settings();
+    auto add_component = [&](Json& entity, std::string type, Json fields) {
+        entity["components"].push_back({{"id", new_id()},
+                                        {"type", std::move(type)},
+                                        {"version", 1},
+                                        {"fields", std::move(fields)}});
+    };
+    auto ground = authoring::make_entity(schemas, "Ground");
+    auto& ground_pose = ground["components"][0]["fields"];
+    ground_pose["position"] = {0, -1, 0};
+    ground_pose["scale"] = dimension == 2 ? Json::array({12, 1, 1}) : Json::array({12, 1, 12});
+    if (dimension == 2) {
+        add_component(ground, "faset.sprite", {{"size", {1, 1}},
+                                                {"color", {0.20, 0.25, 0.31, 1}}});
+    } else {
+        add_component(ground, "faset.mesh", {{"asset", "builtin:cube"},
+                                              {"color", {0.20, 0.25, 0.31, 1}}});
+    }
+    auto ground_body = schemas.default_fields("faset.rigid_body_" + std::to_string(dimension) +
+                                              "d");
+    ground_body["body_type"] = "static";
+    add_component(ground, "faset.rigid_body_" + std::to_string(dimension) + "d",
+                  std::move(ground_body));
+    scene["entities"].push_back(std::move(ground));
+
+    auto actor = authoring::make_entity(schemas, "Player");
+    actor["components"][0]["fields"]["position"] = {0, 1, 0};
+    if (dimension == 2) {
+        add_component(actor, "faset.sprite", {{"size", {0.8, 0.8}},
+                                               {"color", {0.25, 0.72, 0.85, 1}}});
+    } else {
+        actor["components"][0]["fields"]["scale"] = {0.8, 0.8, 0.8};
+        add_component(actor, "faset.mesh", {{"asset", "builtin:cube"},
+                                             {"color", {0.25, 0.72, 0.85, 1}}});
+    }
+    add_component(actor, "faset.rigid_body_" + std::to_string(dimension) + "d",
+                  schemas.default_fields("faset.rigid_body_" + std::to_string(dimension) + "d"));
+    add_component(actor, language == "lua" ? "starter.player" : "gameplay.character",
+                  {{"speed", 4.0}, {"jump_speed", 5.0}});
+    scene["entities"].push_back(std::move(actor));
+    if (dimension == 3) {
+        auto camera = authoring::make_entity(schemas, "Camera");
+        camera["components"][0]["fields"]["position"] = {0, 2.5, 8};
+        camera["components"][0]["fields"]["rotation"] = {-0.18, 0, 0};
+        add_component(camera, "faset.camera", schemas.default_fields("faset.camera"));
+        scene["entities"].push_back(std::move(camera));
+        auto sun = authoring::make_entity(schemas, "Sun");
+        add_component(sun, "faset.light", schemas.default_fields("faset.light"));
+        scene["entities"].push_back(std::move(sun));
+    }
+    // Validate every built-in component now; the behavior component is validated by
+    // SchemaExporter from the selected C++/Lua module during the first build.
+    auto builtins = scene;
+    for (auto& entity : builtins["entities"]) {
+        auto& components = entity["components"].get_ref<Json::array_t&>();
+        std::erase_if(components, [](const Json& component) {
+            return !component.at("type").get<std::string>().starts_with("faset.");
+        });
+    }
+    authoring::validate_scene(builtins, schemas);
+    return scene;
+}
+struct StarterCreateLock {
+    fs::path path;
+    explicit StarterCreateLock(const fs::path& root) : path(root / ".faset/starter-create.lock") {
+        if (!fs::create_directory(path))
+            throw std::runtime_error("Another project creation is in progress; remove a stale " +
+                                     path_to_utf8(path) + " only after closing that Editor");
+    }
+    ~StarterCreateLock() {
+        std::error_code ignored;
+        fs::remove_all(path, ignored);
+    }
+    StarterCreateLock(const StarterCreateLock&) = delete;
+    StarterCreateLock& operator=(const StarterCreateLock&) = delete;
+};
+void require_new_starter_directory(const fs::path& root) {
+    // BuildService creates .faset/cache in its constructor. Any other content is
+    // user-owned, including a previous starter, and must be left intact.
+    for (const auto& entry : fs::directory_iterator(root)) {
+        if (entry.path().filename() != ".faset" || !entry.is_directory() ||
+            entry.is_symlink())
+            throw std::runtime_error("Create requires a new or empty project directory");
+        for (const auto& internal : fs::directory_iterator(entry.path())) {
+            if (internal.path().filename() == "starter-create.lock" &&
+                internal.is_directory() && !internal.is_symlink())
+                continue;
+            if (internal.path().filename() != "cache" || !internal.is_directory() ||
+                internal.is_symlink() || !fs::is_empty(internal.path()))
+                throw std::runtime_error("Create requires a new or empty project directory");
+        }
+    }
 }
 } // namespace
 Json JobStatus::json() const {
@@ -904,6 +1002,97 @@ void BuildService::scaffold(const std::string& name, int dimension) {
                                     {"start_scene", "Scenes/main.scene.json"}});
     if (!fs::exists(c.project_root / ".gitignore"))
         atomic_write(c.project_root / ".gitignore", ".faset/\nExports/\n");
+}
+void BuildService::scaffold(const std::string& name, int dimension,
+                            std::string_view language) {
+    if (name.empty() || (dimension != 2 && dimension != 3) ||
+        (language != "cpp" && language != "lua"))
+        throw std::invalid_argument("Starter requires a name, 2D/3D and cpp/lua language");
+    const auto& c = impl_->config;
+    StarterCreateLock lock(c.project_root);
+    require_new_starter_directory(c.project_root);
+    const auto scene = starter_scene(name, dimension, language);
+    const auto source = c.engine_root / "tools/project_templates" /
+                        (language == "lua" ? "lua-main.lua" : "Gameplay.cpp");
+    const auto module = read_text(source);
+    const auto header = language == "cpp"
+                            ? read_text(c.engine_root / "tools/project_templates/Gameplay.hpp")
+                            : std::string();
+    const auto lua_annotations = language == "lua"
+                                     ? read_text(c.engine_root / "tools/lua/faset.lua")
+                                     : std::string();
+    const auto lua_config = language == "lua"
+                                ? read_json(c.engine_root / "tools/lua/luarc.json")
+                                : Json();
+    const auto lua_scripts_config =
+        language == "lua" ? read_json(c.engine_root / "tools/lua/luarc-scripts.json") : Json();
+    const auto stage = lock.path / "staged";
+    fs::create_directories(stage / "Scripts");
+    fs::create_directories(stage / "Scenes");
+    fs::create_directories(stage / "Assets");
+    if (language == "cpp") {
+        atomic_write(stage / "Scripts/Gameplay.cpp", module);
+        atomic_write(stage / "Scripts/Gameplay.hpp", header);
+    } else {
+        atomic_write(stage / "Scripts/main.lua", module);
+        atomic_write(stage / ".faset/lua/faset.lua", lua_annotations);
+        atomic_write_json(stage / ".luarc.json", lua_config);
+        atomic_write_json(stage / "Scripts/.luarc.json", lua_scripts_config);
+    }
+    atomic_write_json(stage / "Scenes/main.scene.json", scene);
+    Json project = {{"format", "faset.project"},
+                    {"version", 1},
+                    {"id", new_id()},
+                    {"name", name},
+                    {"dimension", dimension},
+                    {"start_scene", "Scenes/main.scene.json"}};
+    if (language == "lua")
+        project["scripting"] = {{"lua", {{"scripts", Json::array({"Scripts/main.lua"})}}}};
+    atomic_write_json(stage / "project.faset.json", project);
+    atomic_write(stage / ".gitignore",
+                 ".faset/*\n!.faset/lua/\n.faset/lua/*\n!.faset/lua/faset.lua\nExports/\n");
+    std::vector<std::pair<fs::path, std::string>> created;
+    auto publish = [&](const fs::path& relative) {
+        const auto source = stage / relative;
+        const auto target = c.project_root / relative;
+        fs::create_directories(target.parent_path());
+        if (!fs::copy_file(source, target, fs::copy_options::none))
+            throw std::runtime_error("Starter destination appeared during creation: " +
+                                     path_to_utf8(target));
+        created.emplace_back(target, sha256_file(source));
+    };
+    try {
+        publish(".gitignore");
+        if (language == "cpp") {
+            publish("Scripts/Gameplay.cpp");
+            publish("Scripts/Gameplay.hpp");
+        } else {
+            publish("Scripts/main.lua");
+            publish(".faset/lua/faset.lua");
+            publish(".luarc.json");
+            publish("Scripts/.luarc.json");
+        }
+        publish("Scenes/main.scene.json");
+        fs::create_directory(c.project_root / "Assets");
+        // The manifest is the final commit marker: an interrupted create has no
+        // valid project record and never replaces an existing project file.
+        publish("project.faset.json");
+    } catch (...) {
+        for (auto it = created.rbegin(); it != created.rend(); ++it) {
+            try {
+                std::error_code ignored;
+                if (fs::is_regular_file(it->first, ignored) &&
+                    sha256_file(it->first) == it->second)
+                    fs::remove(it->first, ignored);
+            } catch (...) { /* Preserve the original create failure. */
+            }
+        }
+        for (const auto& relative : {"Assets", "Scenes", "Scripts", ".faset/lua"}) {
+            std::error_code ignored;
+            fs::remove(c.project_root / relative, ignored); // Empty directories only.
+        }
+        throw;
+    }
 }
 std::string BuildService::start_build() {
     return impl_->enqueue("build");

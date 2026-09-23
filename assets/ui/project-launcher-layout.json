@@ -41,6 +41,15 @@
                 {"id": "launcher-3d", "kind": "button", "text": "3D", "layout": {"width": 116}}
               ]}
             ]},
+            {"id": "launcher-language-space", "kind": "row", "layout": {"height": 18}},
+            {"id": "launcher-language-group", "kind": "column", "layout": {"gap": 6}, "children": [
+              {"id": "launcher-language-label", "kind": "label", "text": "Gameplay language", "layout": {"height": 24}},
+              {"id": "launcher-languages", "kind": "row", "layout": {"height": 42, "gap": 4}, "children": [
+                {"id": "launcher-cpp", "kind": "button", "text": "C++", "layout": {"width": 116}},
+                {"id": "launcher-lua", "kind": "button", "text": "Lua", "layout": {"width": 116}}
+              ]},
+              {"id": "launcher-language-hint", "kind": "label", "text": "Compiled gameplay. Add Lua later if you need quick reloads.", "font_size": 12, "layout": {"height": 30}}
+            ]},
             {"id": "launcher-hint", "kind": "label", "text": "Open a directory containing project.faset.json.", "font_size": 13, "layout": {"height": 36}},
             {"id": "launcher-actions-space", "kind": "row", "layout": {"height": 22}},
             {"id": "launcher-actions-rule", "kind": "row", "layout": {"height": 1}},

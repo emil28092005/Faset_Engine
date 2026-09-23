@@ -6,6 +6,7 @@
 #include <faset/editor/plugins.hpp>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <thread>
 
 namespace faset::editor {
@@ -33,6 +34,7 @@ class Session {
         return plugins_ ? plugins_->panels() : Json::array();
     }
     void scaffold(const std::string& name, int dimension);
+    void scaffold(const std::string& name, int dimension, std::string_view language);
     const SessionConfig& config() const {
         return config_;
     }

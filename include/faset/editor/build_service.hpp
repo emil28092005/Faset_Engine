@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace faset::editor {
@@ -38,6 +39,9 @@ class BuildService {
     BuildService(const BuildService&) = delete;
     BuildService& operator=(const BuildService&) = delete;
     void scaffold(const std::string& name, int dimension);
+    // Explicit starter choice creates a runnable start scene. The legacy overload above
+    // remains intentionally scene-free for existing command-line and API callers.
+    void scaffold(const std::string& name, int dimension, std::string_view language);
     std::string start_build();
     std::string start_cook(Json resolved_scene);
     // Publishes output/generations/<id>; current.json changes only after all validation succeeds.

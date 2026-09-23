@@ -111,6 +111,9 @@ int main() {
             text(launcher, "launcher-path", path_to_utf8(root / "." / new_project.filename()));
             click(launcher, "launcher-2d");
             check(launcher.widgets().find("launcher-2d")->selected, "2D project selection");
+            click(launcher, "launcher-lua");
+            check(launcher.widgets().find("launcher-lua")->selected,
+                  "Lua project language selection");
             renderer.render(launcher.snapshot());
             renderer.capture(root / "launcher-create.ppm");
             launcher.frame({key("Return", true)});
@@ -118,6 +121,7 @@ int main() {
                   "Create through keyboard rejected: " +
                       launcher.widgets().find("launcher-error")->text);
             check(launcher.selection()->create && launcher.selection()->dimension == 2 &&
+                      launcher.selection()->language == "lua" &&
                       launcher.selection()->name == "Тестовый проект",
                   "Create through keyboard preserves typed project metadata");
             check(launcher.selection()->path == new_project,
@@ -126,6 +130,19 @@ int main() {
                       path_to_utf8(new_project));
             check(!std::filesystem::exists(new_project),
                   "Launcher does not create a partial project before Session scaffold");
+        }
+        {
+            editor::ProjectSelection retry{new_project, "Retry starter", 3, true, "lua"};
+            editor::ProjectLauncher launcher(renderer, path_from_utf8(FASET_TEST_ENGINE), {},
+                                             recents, retry, "Template source is unavailable");
+            launcher.frame({});
+            check(launcher.widgets().find("launcher-create")->selected &&
+                      launcher.widgets().find("launcher-lua")->selected &&
+                      launcher.widgets().find("launcher-path")->text == path_to_utf8(new_project) &&
+                      launcher.widgets().find("launcher-name")->text == "Retry starter" &&
+                      launcher.widgets().find("launcher-error")->text ==
+                          "Template source is unavailable",
+                  "Failed starter returns to Create with the chosen options and error");
         }
         {
             editor::ProjectLauncher launcher(renderer, path_from_utf8(FASET_TEST_ENGINE),

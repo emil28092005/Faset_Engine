@@ -113,6 +113,10 @@ void Session::scaffold(const std::string& name, int dimension) {
     builds_.scaffold(name, dimension);
     log("Created project: " + name);
 }
+void Session::scaffold(const std::string& name, int dimension, std::string_view language) {
+    builds_.scaffold(name, dimension, language);
+    log("Created " + std::string(language) + " starter project: " + name);
+}
 Json Session::assets_list() const {
     Json list = Json::array();
     const auto directory = assets_.cache_root() / "assets";

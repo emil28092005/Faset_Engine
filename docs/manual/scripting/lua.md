@@ -5,6 +5,23 @@ behaviors share the same runtime lifecycle, typed entity operations, scene compo
 and Inspector metadata. The Editor does not run gameplay code in its own process.
 There is no built-in script editor: edit `.lua` files in Zed or another external editor.
 
+## Start with a runnable Lua project
+
+Choose **Create project → Lua → 2D or 3D** in the native launcher, or run:
+
+```sh
+build/linux-debug/faset_editor --project "$PWD/LuaGame" --new LuaGame --dimension 2 --language lua
+```
+
+The starter creates `Scripts/main.lua`, a scene with a player and ground, and a
+manifest entry for that script. The player moves horizontally and jumps with the
+default input actions. The 3D choice also provides a camera and directional light.
+Open `Scripts/main.lua` in your external editor and change `speed` or
+`fixed_update`. **Refresh Lua** updates declared Inspector fields; **Reload Lua**
+updates a development Player after a valid edit without rebuilding native gameplay.
+The starter installs LuaLS declarations and `.luarc.json`; reopening it in Zed or
+another LuaLS-enabled editor provides completions for the Faset API.
+
 ## Enable Lua in a project
 
 Add explicit entry scripts to `project.faset.json`:

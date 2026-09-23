@@ -4,6 +4,7 @@
 #include <faset/editor/mcp.hpp>
 #include <faset/editor/session.hpp>
 #include <iostream>
+#include <memory>
 #include <thread>
 #ifdef FASET_HAS_EDITOR_UI
 #include <faset/editor/editor_ui.hpp>
@@ -40,7 +41,7 @@ void help() {
     std::cout
         << "Faset Editor\n"
            "  faset_editor                         Open the project launcher\n"
-           "  faset_editor --project PATH [--new NAME --dimension 2|3] [--scene RELATIVE_PATH]\n"
+           "  faset_editor --project PATH [--new NAME --dimension 2|3 [--language cpp|lua]] [--scene RELATIVE_PATH]\n"
            "  faset_editor --project PATH --mcp [--gui]\n"
            "  faset_editor --project PATH --command JSON [--wait]\n"
            "Options: --engine SDK_SOURCE, --headless, --frames N, --capture PATH.ppm\n"
@@ -52,9 +53,10 @@ int editor_main(int argc, char** argv) {
     using namespace faset::editor;
     try {
         std::filesystem::path project, engine = path_from_utf8(FASET_ENGINE_SOURCE), scene, capture;
-        std::string new_name, command;
+        std::string new_name, command, language = "cpp";
         int dimension = 3;
         bool mcp = false, gui = true, explicit_gui = false, wait = false;
+        bool explicit_language = false;
         std::uint64_t frames = 0;
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i];
@@ -74,6 +76,10 @@ int editor_main(int argc, char** argv) {
                 new_name = value();
             else if (arg == "--dimension")
                 dimension = std::stoi(value());
+            else if (arg == "--language") {
+                language = value();
+                explicit_language = true;
+            }
             else if (arg == "--scene")
                 scene = path_from_utf8(value());
             else if (arg == "--mcp")
@@ -100,30 +106,65 @@ int editor_main(int argc, char** argv) {
                 throw Error("cli.option", "Unknown option: " + arg);
         }
         require(!(mcp && !command.empty()), "cli.mode", "Choose MCP or a single command");
+        require(!explicit_language || !new_name.empty(), "cli.language",
+                "--language requires --new NAME");
+        require(language == "cpp" || language == "lua", "cli.language",
+                "Language must be cpp or lua");
         if (mcp && !explicit_gui)
             gui = false;
         require(!project.empty() || (gui && !mcp && new_name.empty()), "cli.project",
                 "Use --project PATH for command, MCP, or --new modes");
         auto previous_project = project;
+#ifdef FASET_HAS_EDITOR_UI
+        std::optional<ProjectSelection> retry_create;
+        std::string creation_error;
+#endif
         for (;;) {
             if (project.empty()) {
 #ifdef FASET_HAS_EDITOR_UI
                 const auto selection =
-                    run_project_launcher(engine, previous_project, frames, capture);
+                    run_project_launcher(engine, previous_project, frames, capture,
+                                         retry_create, creation_error);
+                retry_create.reset();
+                creation_error.clear();
                 if (!selection)
                     return 0;
                 project = selection->path;
                 new_name = selection->create ? selection->name : std::string();
                 dimension = selection->dimension;
+                language = selection->language;
+                explicit_language = selection->create;
 #else
                 throw Error("editor.gui_unavailable",
                             "This build has no graphical project launcher; use --project PATH");
 #endif
             }
-            Session session({std::filesystem::absolute(project), std::filesystem::absolute(engine),
-                             executable_directory(argv[0])});
-            if (!new_name.empty())
-                session.scaffold(new_name, dimension);
+            std::unique_ptr<Session> session_holder;
+            try {
+                session_holder = std::make_unique<Session>(SessionConfig{
+                    std::filesystem::absolute(project), std::filesystem::absolute(engine),
+                    executable_directory(argv[0])});
+                if (!new_name.empty()) {
+                    if (explicit_language)
+                        session_holder->scaffold(new_name, dimension, language);
+                    else
+                        session_holder->scaffold(new_name, dimension);
+                }
+            } catch (const std::exception& error) {
+#ifdef FASET_HAS_EDITOR_UI
+                if (gui && !new_name.empty()) {
+                    retry_create = ProjectSelection{std::filesystem::absolute(project),
+                                                    new_name, dimension, true, language};
+                    creation_error = error.what();
+                    project.clear();
+                    new_name.clear();
+                    scene.clear();
+                    continue;
+                }
+#endif
+                throw;
+            }
+            Session& session = *session_holder;
             const auto settings = session.project();
 #ifdef FASET_HAS_EDITOR_UI
             if (gui && std::filesystem::exists(project / "project.faset.json"))
@@ -167,6 +208,8 @@ int editor_main(int argc, char** argv) {
                 project.clear();
                 scene.clear();
                 new_name.clear();
+                explicit_language = false;
+                language = "cpp";
                 continue;
 #else
                 throw Error(

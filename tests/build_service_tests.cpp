@@ -1,8 +1,12 @@
 #include "assets_image_fixtures.hpp"
+#include <algorithm>
+#include <atomic>
 #include <bit>
 #include <chrono>
 #include <cstdlib>
+#include <functional>
 #include <faset/assets/asset_pipeline.hpp>
+#include <faset/authoring/service.hpp>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
@@ -41,6 +45,102 @@ Json scene(int dimension) {
     return {{"format", "faset.scene"},   {"version", 1},           {"id", "scene-test"},
             {"name", "Build test"},      {"dimension", dimension}, {"entities", Json::array()},
             {"instances", Json::array()}};
+}
+void starter_contracts(const fs::path& root) {
+    for (const int dimension : {2, 3}) {
+        for (const char* language : {"cpp", "lua"}) {
+            const auto project = root / path_from_utf8(std::string("Starter café ") + language +
+                                                        std::to_string(dimension));
+            editor::BuildConfig config;
+            config.project_root = project;
+            config.engine_root = path_from_utf8(FASET_ENGINE_SOURCE);
+            editor::BuildService service(config);
+            service.scaffold("Starter", dimension, language);
+            const auto manifest = read_json(project / "project.faset.json");
+            const auto start = read_json(project / "Scenes/main.scene.json");
+            require(manifest.at("dimension") == dimension &&
+                        manifest.at("start_scene") == "Scenes/main.scene.json",
+                    "Explicit starter has the requested scene type and startup path");
+            require(start.at("dimension") == dimension && !start.at("entities").empty(),
+                    "Starter scene is valid and has visible contents");
+            auto builtins = start;
+            bool has_behavior = false;
+            for (auto& entity : builtins["entities"]) {
+                auto& components = entity["components"].get_ref<Json::array_t&>();
+                std::erase_if(components, [&](const Json& component) {
+                    const auto custom =
+                        !component.at("type").get<std::string>().starts_with("faset.");
+                    has_behavior |= custom;
+                    return custom;
+                });
+            }
+            require(has_behavior, "Starter scene binds its gameplay behavior");
+            authoring::validate_scene(builtins, authoring::builtin_schemas());
+            if (std::string_view(language) == "lua") {
+                require(!fs::exists(project / "Scripts/Gameplay.cpp") &&
+                            !fs::exists(project / "Scripts/Gameplay.hpp"),
+                        "Lua starter has no C++ gameplay stub");
+                require(manifest.at("scripting").at("lua").at("scripts") ==
+                            Json::array({"Scripts/main.lua"}) &&
+                            scripting::loadLuaProject(project).enabled() &&
+                            fs::is_regular_file(project / ".luarc.json") &&
+                            fs::is_regular_file(project / "Scripts/.luarc.json") &&
+                            fs::is_regular_file(project / ".faset/lua/faset.lua"),
+                        "Lua starter declares an actual runnable module");
+            } else {
+                require(fs::is_regular_file(project / "Scripts/Gameplay.cpp") &&
+                            fs::is_regular_file(project / "Scripts/Gameplay.hpp") &&
+                            !manifest.contains("scripting"),
+                        "C++ starter contains its compiled gameplay module");
+            }
+            const auto marker = read_text(project / "Scenes/main.scene.json");
+            bool rejected = false;
+            try {
+                service.scaffold("Again", dimension, language);
+            } catch (const std::exception&) {
+                rejected = true;
+            }
+            require(rejected && read_text(project / "Scenes/main.scene.json") == marker,
+                    "Explicit creation rejects existing project without overwriting it");
+        }
+    }
+    editor::BuildConfig legacy;
+    legacy.project_root = root / "legacy";
+    legacy.engine_root = path_from_utf8(FASET_ENGINE_SOURCE);
+    editor::BuildService(legacy).scaffold("Legacy", 3);
+    require(!fs::exists(legacy.project_root / "Scenes/main.scene.json"),
+            "Two-argument scaffold retains its prior no-scene behavior");
+    const auto concurrent_root = root / "concurrent";
+    editor::BuildConfig concurrent;
+    concurrent.project_root = concurrent_root;
+    concurrent.engine_root = path_from_utf8(FASET_ENGINE_SOURCE);
+    editor::BuildService first(concurrent), second(concurrent);
+    std::atomic<int> ready = 0;
+    std::atomic<int> successes = 0;
+    auto attempt = [&](editor::BuildService& service, const char* name) {
+        ++ready;
+        while (ready.load() < 2)
+            std::this_thread::yield();
+        try {
+            service.scaffold(name, 2, "lua");
+            ++successes;
+        } catch (const std::exception&) {
+        }
+    };
+    std::thread a(attempt, std::ref(first), "First");
+    std::thread b(attempt, std::ref(second), "Second");
+    a.join();
+    b.join();
+    require(successes == 1, "Two concurrent creators publish exactly one starter");
+    const auto winner = read_json(concurrent_root / "project.faset.json");
+    require(winner.at("name") == "First" || winner.at("name") == "Second",
+            "Published manifest belongs to the successful creator");
+    require(fs::is_regular_file(concurrent_root / "Scripts/main.lua") &&
+                fs::is_regular_file(concurrent_root / "Scenes/main.scene.json"),
+            "The winning starter publishes all required files");
+    const auto ignore = read_text(concurrent_root / ".gitignore");
+    require(ignore.find("!.faset/lua/faset.lua") != std::string::npos,
+            "LuaLS declarations are commit-friendly in generated projects");
 }
 void lua_project_contracts(const fs::path& root) {
     fs::create_directories(root);
@@ -379,6 +479,7 @@ int test_main(int argc, char** argv) {
     try {
         fs::create_directories(temporary);
         lua_project_contracts(temporary / "lua-project");
+        starter_contracts(temporary / "starters");
         const auto original_executable = fs::absolute(path_from_utf8(argv[0]));
         const auto executable = temporary / original_executable.filename();
         fs::copy_file(original_executable, executable);

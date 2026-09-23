@@ -31,17 +31,27 @@ cmake --build --preset linux-debug --parallel
 ctest --preset linux-debug
 ```
 
-Create a project and open the native Editor:
+Create a runnable C++ or Lua starter and open the native Editor:
 
 ```sh
-build/linux-debug/faset_editor --project "$PWD/MyGame" --new MyGame --dimension 3
+build/linux-debug/faset_editor --project "$PWD/MyGame" --new MyGame --dimension 3 --language cpp
+build/linux-debug/faset_editor --project "$PWD/LuaGame" --new LuaGame --dimension 2 --language lua
 ```
 
 You can also run `build/linux-debug/faset_editor` without arguments to open the
-project launcher and create or select a project using the native interface.
+project launcher. Its Create view offers C++ 2D, C++ 3D, Lua 2D, and Lua 3D.
+Each explicit starter includes `Scenes/main.scene.json` with a player, ground,
+and a behavior bound to `Scripts/Gameplay.cpp` or `Scripts/main.lua`. 3D starters
+also include a camera and light. Existing files in a destination directory are
+never replaced by starter creation. The older `--new NAME --dimension 2|3`
+command without `--language` retains its original scene-free C++ scaffold.
 
 Use **Build** after changing `MyGame/Scripts/Gameplay.cpp`, then **Play**.
 The Player runs separately. Stop it before changing and rebuilding C++ gameplay.
+Lua starters declare their entry script in `project.faset.json`, install LuaLS
+annotations/configuration, and need no `Gameplay.cpp`. Use **Refresh Lua** after
+editing a Lua behavior declaration; development **Reload Lua** can apply a valid
+script edit to a running Player without recompiling C++.
 See [MCP and CLI](../editor/mcp.md) for headless authoring and automation.
 
 For an optimized build use `linux-release`. The `linux-sanitize` preset enables

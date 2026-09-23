@@ -75,6 +75,22 @@ ProjectSelection open_project(const fs::path& path) {
         throw std::runtime_error("Project name or scene type is invalid.");
     return {path, std::move(name), dimension, false};
 }
+bool fresh_destination(const fs::path& path) {
+    if (!fs::exists(path))
+        return true;
+    if (!fs::is_directory(path) || fs::is_symlink(path))
+        return false;
+    for (const auto& entry : fs::directory_iterator(path)) {
+        if (entry.path().filename() != ".faset" || !entry.is_directory() ||
+            entry.is_symlink())
+            return false;
+        for (const auto& internal : fs::directory_iterator(entry.path()))
+            if (internal.path().filename() != "cache" || !internal.is_directory() ||
+                internal.is_symlink() || !fs::is_empty(internal.path()))
+                return false;
+    }
+    return true;
+}
 Json recent_records(const fs::path& file) {
     try {
         auto j = read_json(file);
@@ -124,9 +140,11 @@ struct ProjectLauncher::Impl {
     std::optional<ProjectSelection> selected;
     bool create = false, cancelled = false, browsing = false, browser_valid = false;
     int dimension = 3;
+    std::string language = "cpp";
     std::string error;
     Impl(render::Renderer& r, const fs::path& engine, const fs::path& initial,
-         const fs::path& recents)
+         const fs::path& recents, const std::optional<ProjectSelection>& retry,
+         std::string creation_error)
         : renderer(r), ui(engine / "assets/fonts/NotoSans.ttf"),
           recents_file(recents.empty() ? recent_path() : recents) {
         auto theme = ui::Theme::load(engine / "assets/ui/dark.json");
@@ -147,13 +165,22 @@ struct ProjectLauncher::Impl {
         ui.set_ime(
             [this](bool enabled) { renderer.set_text_input(enabled); },
             [this](ui::Rect r) { renderer.set_text_input_area(r.x, r.y, r.width, r.height); });
-        const auto start = initial.empty() ? user_home() / "FasetProjects/MyGame" : initial;
+        const auto start = retry ? retry->path
+                                 : initial.empty() ? user_home() / "FasetProjects/MyGame" : initial;
         ui.update_text("launcher-path", path_to_utf8(start));
-        create = initial.empty();
+        create = retry ? retry->create : initial.empty();
+        if (retry) {
+            ui.update_text("launcher-name", retry->name);
+            dimension = retry->dimension;
+            language = retry->language;
+            error = std::move(creation_error);
+        }
         ui.find("launcher-open")->on_click = [this](Widget&) { set_mode(false); };
         ui.find("launcher-create")->on_click = [this](Widget&) { set_mode(true); };
         ui.find("launcher-2d")->on_click = [this](Widget&) { dimension = 2; };
         ui.find("launcher-3d")->on_click = [this](Widget&) { dimension = 3; };
+        ui.find("launcher-cpp")->on_click = [this](Widget&) { language = "cpp"; };
+        ui.find("launcher-lua")->on_click = [this](Widget&) { language = "lua"; };
         ui.find("launcher-submit")->on_click = [this](Widget&) { submit(); };
         ui.find("launcher-cancel")->on_click = [this](Widget&) { cancelled = true; };
         ui.find("launcher-name")->on_preview = [this](Widget&) { error.clear(); };
@@ -209,14 +236,14 @@ struct ProjectLauncher::Impl {
                     throw std::runtime_error("Enter a project name.");
                 if (name.size() > 256 || name.find_first_of("\r\n\t") != std::string::npos)
                     throw std::runtime_error("Use a short project name on one line.");
-                if (fs::exists(path) && (!fs::is_directory(path) || !fs::is_empty(path)))
+                if (!fresh_destination(path))
                     throw std::runtime_error("Create requires a new or empty directory.");
                 auto parent = path.parent_path();
                 while (!parent.empty() && !fs::exists(parent))
                     parent = parent.parent_path();
                 if (parent.empty() || !fs::is_directory(parent))
                     throw std::runtime_error("Project parent directory is unavailable.");
-                selected = ProjectSelection{path, name, dimension, true};
+                selected = ProjectSelection{path, name, dimension, true, language};
             } else
                 selected = open_project(path);
             error.clear();
@@ -351,14 +378,24 @@ struct ProjectLauncher::Impl {
         ui.find("launcher-create")->selected = create;
         ui.find("launcher-2d")->selected = dimension == 2;
         ui.find("launcher-3d")->selected = dimension == 3;
+        ui.find("launcher-cpp")->selected = language == "cpp";
+        ui.find("launcher-lua")->selected = language == "lua";
         ui.find("launcher-2d")->appearance =
             dimension == 2 ? Appearance::Quiet : Appearance::Default;
         ui.find("launcher-3d")->appearance =
             dimension == 3 ? Appearance::Quiet : Appearance::Default;
+        ui.find("launcher-cpp")->appearance =
+            language == "cpp" ? Appearance::Quiet : Appearance::Default;
+        ui.find("launcher-lua")->appearance =
+            language == "lua" ? Appearance::Quiet : Appearance::Default;
+        ui.find("launcher-language-hint")->text =
+            language == "cpp" ? "Compiled gameplay. Add Lua later if you need quick reloads."
+                              : "Lua gameplay reloads during development without a C++ rebuild.";
         for (const auto* id : {"launcher-name-label", "launcher-name", "launcher-dimension-label",
                                "launcher-dimensions", "launcher-name-group",
                                "launcher-name-space", "launcher-path-space",
-                               "launcher-dimension-group"})
+                               "launcher-dimension-group", "launcher-language-group",
+                               "launcher-language-space"})
             ui.find(id)->visible = create;
         ui.find("launcher-heading")->text = create ? "Create project" : "Open project";
         ui.find("launcher-submit")->text = create ? "Create project" : "Open project";
@@ -424,8 +461,11 @@ struct ProjectLauncher::Impl {
     }
 };
 ProjectLauncher::ProjectLauncher(render::Renderer& r, const fs::path& engine,
-                                 const fs::path& initial, const fs::path& recents)
-    : impl_(std::make_unique<Impl>(r, engine, initial, recents)) {}
+                                 const fs::path& initial, const fs::path& recents,
+                                 const std::optional<ProjectSelection>& retry,
+                                 std::string creation_error)
+    : impl_(std::make_unique<Impl>(r, engine, initial, recents, retry,
+                                   std::move(creation_error))) {}
 ProjectLauncher::~ProjectLauncher() = default;
 void ProjectLauncher::frame(const std::vector<render::Event>& events) {
     impl_->frame(events);
@@ -445,9 +485,11 @@ bool ProjectLauncher::cancelled() const {
 std::optional<ProjectSelection> run_project_launcher(const fs::path& engine,
                                                      const fs::path& initial,
                                                      std::uint64_t max_frames,
-                                                     const fs::path& capture) {
+                                                     const fs::path& capture,
+                                                     const std::optional<ProjectSelection>& retry,
+                                                     std::string creation_error) {
     render::Renderer renderer({1100, 720, "Faset Engine — Projects", false, true});
-    ProjectLauncher launcher(renderer, engine, initial);
+    ProjectLauncher launcher(renderer, engine, initial, {}, retry, std::move(creation_error));
     std::uint64_t frames = 0;
     while (!renderer.should_close() && !launcher.cancelled() && !launcher.selection() &&
            (max_frames == 0 || frames < max_frames)) {
