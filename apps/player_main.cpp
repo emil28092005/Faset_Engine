@@ -48,6 +48,7 @@ struct ProfileSample {
     bool physicsDebug{};
     bool gpuVisibilityActive{};
     faset::render::VisibilityMode effectiveVisibilityMode{faset::render::VisibilityMode::Direct};
+    faset::render::FrameStats lighting;
 };
 Json distribution(std::vector<double> values) {
     if (values.empty())
@@ -96,7 +97,35 @@ Json profileFrames(const std::vector<ProfileSample>& samples) {
                           {"physics_debug", sample.physicsDebug},
                           {"gpu_visibility_active", sample.gpuVisibilityActive},
                           {"effective_visibility_mode",
-                           visibility_mode_name(sample.effectiveVisibilityMode)}});
+                           visibility_mode_name(sample.effectiveVisibilityMode)},
+                          {"effective_lighting_path", sample.lighting.effective_lighting_path},
+                          {"submitted_local_lights", sample.lighting.submitted_local_lights},
+                          {"omitted_local_lights", sample.lighting.omitted_local_lights},
+                          {"requested_sun_cascades", sample.lighting.requested_sun_cascades},
+                          {"effective_sun_cascades", sample.lighting.effective_sun_cascades},
+                          {"requested_local_shadow_faces",
+                           sample.lighting.requested_local_shadow_faces},
+                          {"local_shadow_faces", sample.lighting.local_shadow_faces},
+                          {"local_shadow_tiles", sample.lighting.local_shadow_tiles},
+                          {"dropped_shadow_faces", sample.lighting.dropped_shadow_faces},
+                          {"dropped_point_shadow_faces",
+                           sample.lighting.dropped_point_shadow_faces},
+                          {"shadow_atlas_full_drops", sample.lighting.shadow_atlas_full_drops},
+                          {"shadow_caster_budget_drops",
+                           sample.lighting.shadow_caster_budget_drops},
+                          {"shadow_unavailable_drops",
+                           sample.lighting.shadow_unavailable_drops},
+                          {"shadow_caster_draws", sample.lighting.shadow_caster_draws},
+                          {"sun_shadow_atlas_bytes",
+                           sample.lighting.sun_shadow_atlas_bytes},
+                          {"local_shadow_atlas_bytes",
+                           sample.lighting.local_shadow_atlas_bytes},
+                          {"gpu_main_raster_ms",
+                           gpuMeasured ? Json(sample.lighting.gpu_main_raster_ms) : Json(nullptr)},
+                          {"gpu_sun_shadow_ms",
+                           gpuMeasured ? Json(sample.lighting.gpu_sun_shadow_ms) : Json(nullptr)},
+                          {"gpu_local_shadow_ms",
+                           gpuMeasured ? Json(sample.lighting.gpu_local_shadow_ms) : Json(nullptr)}});
     }
     return {{"samples", std::move(frames)},
             {"summary_ms",
@@ -587,7 +616,8 @@ int player_main(int argc, char** argv) {
                      milliseconds(renderStarted, frameFinished), measured.cpu_ms, measured.gpu_ms,
                      measured.readback_cpu_ms, runtimeStats, measured.draw_calls, measured.vertices,
                      measured.gpu_allocated_bytes, measured.texture_count, debugPhysics,
-                     measured.gpu_visibility_active, measured.effective_visibility_mode});
+                     measured.gpu_visibility_active, measured.effective_visibility_mode,
+                     measured});
             }
             ++frames;
         }
@@ -619,6 +649,7 @@ int player_main(int argc, char** argv) {
                  {"visibility_mode", visibilityName},
                  {"effective_visibility_mode",
                   visibility_mode_name(stats.effective_visibility_mode)},
+                 {"effective_lighting_path", stats.effective_lighting_path},
                  {"simulation_mode", "synthetic_fixed_timestep"},
                  {"fixed_delta_seconds", config.fixedDelta},
                  {"percentile_method", "nearest_rank_all_completed_frames_no_warmup_exclusion"},

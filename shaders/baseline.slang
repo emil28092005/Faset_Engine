@@ -78,6 +78,34 @@ float sampleSunCascade(uint index, float3 world, float nl) {
     }
     return visible;
 }
+float sampleLocalFace(uint index, float3 world, float nl) {
+    ShadowViewGpu record = shadowViews[index];
+    if (record.biasFlags.w < 0.5) return 1.0;
+    float4 clip = mul(record.viewProjection, float4(world,1));
+    if (clip.w <= 0.0) return 1.0;
+    float3 projected = clip.xyz / clip.w;
+    float2 localUV = projected.xy * 0.5 + 0.5;
+    if (any(localUV < 0.0) || any(localUV > 1.0) ||
+        projected.z < 0.0 || projected.z > 1.0) return 1.0;
+    float2 atlasUV = localUV * record.tileScaleOffset.xy + record.tileScaleOffset.zw;
+    float bias = max(record.biasFlags.x, record.biasFlags.y * (1.0 - nl));
+    float visible = 0.0;
+    for (int y=-1; y<=1; ++y) for (int x=-1; x<=1; ++x) {
+        float2 tap = clamp(atlasUV + float2(x,y) * record.biasFlags.z,
+                           record.guardedClamp.xy, record.guardedClamp.zw);
+        float depth = localShadowAtlas.SampleLevel(shadowSampler, tap, 0);
+        visible += projected.z - bias <= depth ? 1.0 / 9.0 : 0.0;
+    }
+    return visible;
+}
+uint pointShadowFace(float3 lightToFragment) {
+    float3 magnitude = abs(lightToFragment);
+    if (magnitude.x >= magnitude.y && magnitude.x >= magnitude.z)
+        return lightToFragment.x >= 0.0 ? 0 : 1;
+    if (magnitude.y >= magnitude.z)
+        return lightToFragment.y >= 0.0 ? 2 : 3;
+    return lightToFragment.z >= 0.0 ? 4 : 5;
+}
 float3 directBRDF(float3 base, float rough, float metal, float3 n, float3 view, float3 l) {
     const float pi = 3.14159265;
     float nl = max(dot(n,l),0.0);
@@ -160,8 +188,16 @@ float4 fragmentMain(VertexOutput v) : SV_Target {
             float cone=saturate((cosAngle-light.directionCosOuter.w)/denominator);
             attenuation *= cone*cone*(3.0-2.0*cone);
         }
+        float visibility = 1.0;
+        float nl = max(dot(n,l), 0.0);
+        if (light.coneTypeShadowView.w > 0.5 && nl > 0.0 && attenuation > 0.0) {
+            uint face = light.coneTypeShadowView.w > 1.5 ?
+                pointShadowFace(v.world - light.positionRange.xyz) : 0;
+            uint viewIndex = uint(light.coneTypeShadowView.z + 0.5) + face;
+            visibility = sampleLocalFace(viewIndex, v.world, nl);
+        }
         linear += directBRDF(base.rgb, rough, metal, n, view, l) *
-                  light.colorIntensity.rgb * (light.colorIntensity.w * attenuation);
+                  light.colorIntensity.rgb * (light.colorIntensity.w * attenuation * visibility);
     }
     linear=linear/(1.0+linear);
     return float4(pow(max(linear,0),float3(1.0/2.2)),base.a);

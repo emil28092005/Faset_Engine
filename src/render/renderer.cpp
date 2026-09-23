@@ -231,8 +231,8 @@ struct Renderer::Impl {
     VkExtent2D swap_extent{};
     std::vector<VkImage> swap_images;
     std::vector<VkImageLayout> swap_layouts;
-    Image color, depth, shadow;
-    std::uint32_t sun_shadow_size{};
+    Image color, depth, shadow, local_shadow;
+    std::uint32_t sun_shadow_size{}, local_shadow_size{};
     Buffer vertices, readback;
     Buffer lighting_header, lighting_locals, lighting_views;
     SceneResources scene;
@@ -364,6 +364,7 @@ struct Renderer::Impl {
         destroy(color);
         destroy(depth);
         destroy(shadow);
+        destroy(local_shadow);
         if (device) {
             destroy_scene_interfaces();
             if (pipeline)
@@ -791,6 +792,18 @@ struct Renderer::Impl {
         if (!shadow.handle)
             shadow = make_image(1, 1, VK_FORMAT_D32_SFLOAT, shadow_usage,
                                 VK_IMAGE_ASPECT_DEPTH_BIT);
+        for (const auto size : {2048u, 1024u}) {
+            if (size > max_image_dimension)
+                continue;
+            try {
+                local_shadow = make_image(size, size, VK_FORMAT_D32_SFLOAT,
+                                          shadow_usage, VK_IMAGE_ASPECT_DEPTH_BIT);
+                local_shadow_size = size;
+                break;
+            } catch (const std::exception&) {
+                // Local shadows are optional; all affected lights remain unshadowed.
+            }
+        }
         make_targets();
         make_descriptors();
         make_pipelines();
@@ -1626,7 +1639,8 @@ struct Renderer::Impl {
             {lighting_header.handle, 0, lighting_header.size},
             {lighting_locals.handle, 0, lighting_locals.size},
             {lighting_views.handle, 0, lighting_views.size}}};
-        const VkDescriptorImageInfo atlas{VK_NULL_HANDLE, shadow.view,
+        const VkDescriptorImageInfo atlas{VK_NULL_HANDLE,
+                                          local_shadow.handle ? local_shadow.view : shadow.view,
                                           VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL};
         std::array<VkWriteDescriptorSet, 4> writes{};
         for (std::uint32_t i = 0; i < writes.size(); ++i) {
@@ -1741,6 +1755,17 @@ struct Renderer::Impl {
             statistics.sun_shadow_caster_draws = 0;
         statistics.sun_shadow_atlas_bytes = sun_shadow_size ? shadow.allocation_size : 0;
         statistics.gpu_sun_shadow_ms = 0;
+        statistics.requested_local_shadow_faces = statistics.local_shadow_faces =
+            statistics.local_shadow_tiles = statistics.dropped_shadow_faces =
+            statistics.dropped_point_shadow_faces =
+            statistics.shadow_atlas_full_drops =
+            statistics.shadow_caster_budget_drops =
+            statistics.shadow_unavailable_drops =
+            statistics.shadow_caster_draws = 0;
+        statistics.local_shadow_atlas_bytes = local_shadow_size
+            ? local_shadow.allocation_size : 0;
+        statistics.gpu_local_shadow_ms = 0;
+        statistics.effective_lighting_path = "forward";
         statistics.gpu_bins = statistics.gpu_visible_instances =
             statistics.gpu_frustum_rejected = statistics.gpu_occlusion_deferred =
                 statistics.gpu_post_visible = 0;
@@ -1986,6 +2011,8 @@ struct Renderer::Impl {
         ShadowBudget shadow_budget;
         shadow_budget.sun_atlas_size = sun_shadow_size;
         shadow_budget.sun_atlas_available = sun_shadow_size != 0;
+        shadow_budget.local_atlas_size = local_shadow_size;
+        shadow_budget.local_atlas_available = local_shadow_size != 0;
         const auto shadow_plan = build_shadow_plan(snapshot, shadow_casters, shadow_budget);
         const bool sun_raster = sun_shadow_size &&
             std::any_of(shadow_plan.sun_views.begin(), shadow_plan.sun_views.end(),
@@ -2000,6 +2027,39 @@ struct Renderer::Impl {
                 if (view.valid)
                     statistics.sun_shadow_caster_draws +=
                         static_cast<std::uint32_t>(view.caster_indices.size());
+        const bool local_raster = local_shadow_size &&
+            std::any_of(shadow_plan.local_views.begin(), shadow_plan.local_views.end(),
+                        [](const ShadowView& view) {
+                            return view.valid && !view.caster_indices.empty();
+                        });
+        statistics.requested_local_shadow_faces = shadow_plan.local_faces_requested;
+        statistics.local_shadow_tiles = shadow_plan.local_faces_used;
+        statistics.local_shadow_faces = local_raster ? shadow_plan.local_faces_used : 0;
+        statistics.dropped_shadow_faces = shadow_plan.dropped_local_faces;
+        statistics.dropped_point_shadow_faces = shadow_plan.dropped_point_faces;
+        for (const auto& assignment : shadow_plan.local_assignments) {
+            if (assignment.valid || assignment.reason == ShadowDropReason::None)
+                continue;
+            const auto& light = snapshot.local_lights[assignment.source_index];
+            const auto faces = light.kind == LocalLight::Kind::Point ? 6u : 1u;
+            if (assignment.reason == ShadowDropReason::TileBudget)
+                statistics.shadow_atlas_full_drops += faces;
+            else if (assignment.reason == ShadowDropReason::CasterBudget)
+                statistics.shadow_caster_budget_drops += faces;
+            else if (assignment.reason == ShadowDropReason::Unavailable)
+                statistics.shadow_unavailable_drops += faces;
+        }
+        for (const auto& view : shadow_plan.sun_views) {
+            if (view.reason == ShadowDropReason::CasterBudget)
+                ++statistics.shadow_caster_budget_drops;
+            else if (view.reason == ShadowDropReason::Unavailable)
+                ++statistics.shadow_unavailable_drops;
+        }
+        statistics.shadow_caster_draws = statistics.sun_shadow_caster_draws;
+        if (local_raster)
+            for (const auto& view : shadow_plan.local_views)
+                statistics.shadow_caster_draws +=
+                    static_cast<std::uint32_t>(view.caster_indices.size());
         std::vector<GpuVertex> data;
         std::vector<Batch> scene_batches, transparent_batches, sprite_batches, ui_batches;
         for (const auto& selected : selected_draws) {
@@ -2110,10 +2170,14 @@ struct Renderer::Impl {
                                   triangles.clip_rect});
         }
         std::vector<Batch> shadow_batch_by_source(snapshot.draws.size());
-        if (sun_raster) {
+        if (sun_raster || local_raster) {
             std::vector<std::uint8_t> required(snapshot.draws.size());
             for (const auto& view : shadow_plan.sun_views)
-                if (view.valid)
+                if (sun_raster && view.valid)
+                    for (const auto source : view.caster_indices)
+                        required.at(source) = 1;
+            for (const auto& view : shadow_plan.local_views)
+                if (local_raster && view.valid)
                     for (const auto source : view.caster_indices)
                         required.at(source) = 1;
             for (std::size_t source = 0; source < required.size(); ++source) {
@@ -2234,6 +2298,19 @@ struct Renderer::Impl {
             if (i < lighting.cascade_splits.size())
                 lighting.cascade_splits[i] = view.split_far;
         }
+        for (const auto& view : shadow_plan.local_views) {
+            ShadowViewGpu gpu{};
+            gpu.view_projection = view.view_projection;
+            gpu.tile_scale_offset = view.atlas_scale_offset;
+            gpu.guarded_clamp = view.guarded_clamp;
+            gpu.bias_flags = {.0008f, .003f,
+                              local_shadow_size ? 1.f / float(local_shadow_size) : 0.f,
+                              local_raster && view.valid ? 1.f : 0.f};
+            gpu_shadow_views.push_back(gpu);
+        }
+        std::vector<const LocalShadowAssignment*> assignments(snapshot.local_lights.size());
+        for (const auto& assignment : shadow_plan.local_assignments)
+            assignments.at(assignment.source_index) = &assignment;
         statistics.omitted_local_lights = shadow_plan.omitted_local_lights;
         std::vector<LocalLightGpu> gpu_lights;
         gpu_lights.reserve(shadow_plan.submitted_local_indices.size());
@@ -2260,6 +2337,12 @@ struct Renderer::Impl {
                                    local.intensity};
             gpu.cone_type_shadow_view = {spot ? std::cos(local.inner_angle) : 1.f,
                                          spot ? 1.f : 0.f, -1, 0};
+            const auto* assignment = assignments.at(source);
+            if (local_raster && assignment && assignment->valid) {
+                gpu.cone_type_shadow_view[2] = float(
+                    shadow_plan.sun_views.size() + assignment->first_view);
+                gpu.cone_type_shadow_view[3] = float(assignment->face_count);
+            }
             gpu_lights.push_back(gpu);
         }
         lighting.counts[0] = static_cast<std::uint32_t>(gpu_lights.size());
@@ -2440,26 +2523,26 @@ struct Renderer::Impl {
                           }
                       });
         };
-        if (sun_raster)
-            add_pass("SunShadowAtlas", {}, {"shadow"}, [&] {
-                transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        auto raster_shadow_atlas = [&](Image& atlas, std::uint32_t atlas_size,
+                                       const std::vector<ShadowView>& views) {
+                transition(command, atlas, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                            VK_IMAGE_ASPECT_DEPTH_BIT);
                 VkRenderingAttachmentInfo attachment{};
                 attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                attachment.imageView = shadow.view;
+                attachment.imageView = atlas.view;
                 attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
                 attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                 attachment.clearValue.depthStencil = {1, 0};
                 VkRenderingInfo rendering{};
                 rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                rendering.renderArea = {{0, 0}, {sun_shadow_size, sun_shadow_size}};
+                rendering.renderArea = {{0, 0}, {atlas_size, atlas_size}};
                 rendering.layerCount = 1;
                 rendering.pDepthAttachment = &attachment;
                 vkCmdBeginRendering(command, &rendering);
                 vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                   shadow_pipeline);
-                for (const auto& view : shadow_plan.sun_views) {
+                for (const auto& view : views) {
                     if (!view.valid || view.caster_indices.empty())
                         continue;
                     const auto guard = (view.tile_size - view.usable_size) / 2;
@@ -2487,8 +2570,12 @@ struct Renderer::Impl {
                     }
                 }
                 vkCmdEndRendering(command);
-                transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                transition(command, atlas, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
                            VK_IMAGE_ASPECT_DEPTH_BIT);
+        };
+        if (sun_raster)
+            add_pass("SunShadowAtlas", {}, {"shadow"}, [&] {
+                raster_shadow_atlas(shadow, sun_shadow_size, shadow_plan.sun_views);
             });
         else
             add_pass("ShadowFallback", {}, {"shadow"}, [&] {
@@ -2496,6 +2583,18 @@ struct Renderer::Impl {
                 // every graphics shader branch treats its shadow as unshadowed.
                 transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
                            VK_IMAGE_ASPECT_DEPTH_BIT);
+            });
+        if (local_raster)
+            add_pass("LocalShadowAtlas", {}, {"local_shadow"}, [&] {
+                raster_shadow_atlas(local_shadow, local_shadow_size,
+                                    shadow_plan.local_views);
+            });
+        else
+            add_pass("LocalShadowFallback", {}, {"local_shadow"}, [&] {
+                if (local_shadow.handle)
+                    transition(command, local_shadow,
+                               VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                               VK_IMAGE_ASPECT_DEPTH_BIT);
             });
         if (gpu_active)
             add_pass("MainCull", {"shadow"},
@@ -2556,8 +2655,9 @@ struct Renderer::Impl {
                 }
             });
         add_pass(occlusion ? "MainRaster" : "ForwardAndUI",
-                 gpu_active ? std::vector<std::string>{"shadow", "main_indirect", "main_visible"}
-                            : std::vector<std::string>{"shadow"},
+                 gpu_active ? std::vector<std::string>{"shadow", "local_shadow",
+                                                       "main_indirect", "main_visible"}
+                            : std::vector<std::string>{"shadow", "local_shadow"},
                  {"color", "depth"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
@@ -2824,6 +2924,7 @@ struct Renderer::Impl {
                 const auto& label = timestamp_labels[i];
                 if (label == "MainCull") statistics.gpu_main_cull_ms = elapsed;
                 else if (label == "SunShadowAtlas") statistics.gpu_sun_shadow_ms = elapsed;
+                else if (label == "LocalShadowAtlas") statistics.gpu_local_shadow_ms = elapsed;
                 else if (label == "MainRaster" || label == "ForwardAndUI")
                     statistics.gpu_main_raster_ms = elapsed;
                 else if (label == "BuildCurrentHZB") statistics.gpu_hzb_ms = elapsed;
@@ -2897,6 +2998,7 @@ struct Renderer::Impl {
         statistics.gpu_allocated_bytes = vertices.allocation_size + readback.allocation_size +
                                          color.allocation_size + depth.allocation_size +
                                          shadow.allocation_size +
+                                         local_shadow.allocation_size +
                                          lighting_header.allocation_size +
                                          lighting_locals.allocation_size +
                                          lighting_views.allocation_size;

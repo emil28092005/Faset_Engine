@@ -145,13 +145,159 @@ void sun() {
                 two_d.stats.gpu_sun_shadow_ms == 0,
             "Sprite-only rendering spends no sun shadow GPU work");
 }
+Snapshot local_scene(LocalLight::Kind kind, bool caster_shadow) {
+    Snapshot result;
+    result.view_id = "p3-local-shadow";
+    result.eye = {0, 5, 8};
+    const auto view = look_at(result.eye, {0, -1, 0});
+    const auto projection = orthographic(-3, 3, -2.25f, 2.25f, .1f, 50);
+    result.projection = projection;
+    result.view_projection = multiply(projection, view);
+    result.camera_frustum = CameraFrustum{view, projection, .1f, 50, false};
+    result.authored_lights_present = true;
+    DrawItem floor;
+    floor.mesh = cube_mesh();
+    floor.model = transform({0, -1, 0}, {}, {8, .1f, 8});
+    floor.color = {.8f, .8f, .8f, 1};
+    floor.instance_key = "floor";
+    result.draws.push_back(floor);
+    DrawItem caster;
+    caster.mesh = cube_mesh();
+    caster.model = transform({0, .7f, 0}, {}, {.8f, .8f, .8f});
+    caster.color = {.4f, .4f, .4f, 1};
+    caster.cast_shadow = caster_shadow;
+    caster.instance_key = "caster";
+    result.draws.push_back(caster);
+    LocalLight light;
+    light.kind = kind;
+    light.stable_id = "local";
+    light.position = {0, 3, 0};
+    light.direction = {0, -1, 0};
+    light.color = {1, .85f, .65f, 1};
+    light.intensity = 80;
+    light.range = 8;
+    light.inner_angle = .3f;
+    light.outer_angle = .7f;
+    result.local_lights.push_back(light);
+    return result;
+}
+std::size_t darker_pixels(const Frame& shadowed, const Frame& unshadowed) {
+    std::size_t count{};
+    for (std::size_t i = 0; i < shadowed.pixels.size(); i += 4)
+        count += int(unshadowed.pixels[i]) > int(shadowed.pixels[i]) + 12;
+    return count;
+}
+Snapshot point_face_scene(Vec3 axis, bool caster_shadow) {
+    Snapshot result;
+    result.view_id = "point-six-faces";
+    const Vec3 lateral = std::abs(axis[1]) > .9f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
+    result.eye = {-axis[0] * .4f + lateral[0] * 2,
+                  -axis[1] * .4f + lateral[1] * 2,
+                  -axis[2] * .4f + lateral[2] * 2};
+    const Vec3 target{axis[0] * 3, axis[1] * 3, axis[2] * 3};
+    const auto view = look_at(result.eye, target);
+    const auto projection = orthographic(-2, 2, -2, 2, .1f, 20);
+    result.projection = projection;
+    result.view_projection = multiply(projection, view);
+    result.camera_frustum = CameraFrustum{view, projection, .1f, 20, false};
+    result.authored_lights_present = true;
+    DrawItem receiver;
+    receiver.mesh = cube_mesh();
+    receiver.model = transform(target, {}, {1.5f, 1.5f, 1.5f});
+    receiver.color = {.8f, .8f, .8f, 1};
+    receiver.instance_key = "point-receiver";
+    result.draws.push_back(receiver);
+    DrawItem caster;
+    caster.mesh = cube_mesh();
+    caster.model = transform({axis[0] * 1.5f, axis[1] * 1.5f, axis[2] * 1.5f},
+                             {}, {.5f, .5f, .5f});
+    caster.cast_shadow = caster_shadow;
+    caster.instance_key = "point-caster";
+    result.draws.push_back(caster);
+    LocalLight light;
+    light.stable_id = "point-face";
+    light.position = {0, 0, 0};
+    light.range = 8;
+    light.intensity = 90;
+    result.local_lights.push_back(light);
+    return result;
+}
+void local() {
+    auto direct = make_renderer(VisibilityMode::Direct);
+    auto gpu = make_renderer(VisibilityMode::GpuFrustum);
+    auto occlusion = make_renderer(VisibilityMode::GpuOcclusion);
+    for (auto kind : {LocalLight::Kind::Point, LocalLight::Kind::Spot}) {
+        const auto scene_with_shadow = local_scene(kind, true);
+        const auto shadowed = capture(direct, scene_with_shadow);
+        const auto gpu_shadowed = capture(gpu, scene_with_shadow);
+        const auto occlusion_shadowed = capture(occlusion, scene_with_shadow);
+        const auto unshadowed = capture(direct, local_scene(kind, false));
+        const auto faces = kind == LocalLight::Kind::Point ? 6u : 1u;
+        require(shadowed.stats.local_shadow_faces == faces &&
+                    shadowed.stats.requested_local_shadow_faces == faces &&
+                    shadowed.stats.shadow_caster_draws <= 4096 &&
+                    shadowed.stats.local_shadow_atlas_bytes > 0 &&
+                    shadowed.stats.gpu_local_shadow_ms > 0,
+                "Point/spot views render within atlas and caster budgets");
+        require(darker_pixels(shadowed, unshadowed) > 20,
+                "Caster darkens point/spot-lit receiver (count=" +
+                    std::to_string(darker_pixels(shadowed, unshadowed)) + ")");
+        require(shadowed.stats.validation_errors == 0 &&
+                    gpu_shadowed.stats.validation_errors == 0 &&
+                    occlusion_shadowed.stats.validation_errors == 0,
+                "Local shadow rendering passes Vulkan validation");
+        compare_frames(shadowed, gpu_shadowed);
+        compare_frames(shadowed, occlusion_shadowed);
+    }
+    for (const Vec3 axis : {Vec3{1, 0, 0}, Vec3{-1, 0, 0}, Vec3{0, 1, 0},
+                            Vec3{0, -1, 0}, Vec3{0, 0, 1}, Vec3{0, 0, -1},
+                            Vec3{.7071068f, .7071068f, 0}}) {
+        const auto shadowed = capture(direct, point_face_scene(axis, true));
+        const auto unshadowed = capture(direct, point_face_scene(axis, false));
+        require(shadowed.stats.local_shadow_faces == 6 &&
+                    darker_pixels(shadowed, unshadowed) > 5,
+                "A point light shadows each face direction and the adjacent-face seam");
+    }
+    auto crowded = local_scene(LocalLight::Kind::Point, true);
+    const auto point = crowded.local_lights.front();
+    crowded.local_lights.clear();
+    for (int i = 0; i < 15; ++i) {
+        LocalLight filler;
+        filler.kind = LocalLight::Kind::Spot;
+        filler.stable_id = "filler-" + std::to_string(i);
+        filler.position = {100, 100, 100};
+        filler.direction = {0, -1, 0};
+        filler.range = 8;
+        filler.intensity = 1;
+        filler.shadow_priority = 10;
+        crowded.local_lights.push_back(filler);
+    }
+    const auto without_point = capture(direct, crowded);
+    crowded.local_lights.push_back(point);
+    const auto overflow = capture(direct, crowded);
+    require(overflow.stats.requested_local_shadow_faces == 21 &&
+                overflow.stats.dropped_point_shadow_faces == 6 &&
+                overflow.stats.shadow_atlas_full_drops == 6 &&
+                overflow.stats.local_shadow_tiles <= 16,
+            "Fifteen occupied tiles drop the complete six-face point shadow");
+    std::size_t brightened{};
+    for (std::size_t i = 0; i < overflow.pixels.size(); i += 4)
+        brightened += int(overflow.pixels[i]) > int(without_point.pixels[i]) + 12;
+    require(brightened > 20,
+            "Point light with dropped atlas faces still illuminates unshadowed");
+}
 } // namespace
 int main(int argc, char** argv) {
     try {
-        if (argc != 2 || std::string(argv[1]) != "--sun")
-            throw std::invalid_argument("Expected --sun");
-        sun();
-        std::cout << "Sun cascade atlas and Direct/GPU lighting parity passed\n";
+        if (argc != 2)
+            throw std::invalid_argument("Expected --sun or --local");
+        if (std::string(argv[1]) == "--sun")
+            sun();
+        else if (std::string(argv[1]) == "--local")
+            local();
+        else
+            throw std::invalid_argument("Expected --sun or --local");
+        std::cout << "Shadow atlas and Direct/GPU lighting parity passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

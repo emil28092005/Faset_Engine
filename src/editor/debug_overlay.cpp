@@ -381,6 +381,27 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
             ImGui::Text("Prepared LOD: %u / %u / %u / %u+", stats.lod_counts[0],
                         stats.lod_counts[1], stats.lod_counts[2], stats.lod_counts[3]);
             ImGui::Separator();
+            ImGui::TextUnformatted("Lighting and shadows");
+            ImGui::Text("Lighting path: %s", stats.effective_lighting_path.c_str());
+            ImGui::Text("Local lights: %u submitted, %u omitted",
+                        stats.submitted_local_lights, stats.omitted_local_lights);
+            ImGui::Text("Sun cascades: %u / %u effective",
+                        stats.requested_sun_cascades, stats.effective_sun_cascades);
+            ImGui::Text("Local faces: %u requested, %u rasterized (%u tiles)",
+                        stats.requested_local_shadow_faces, stats.local_shadow_faces,
+                        stats.local_shadow_tiles);
+            ImGui::Text("Dropped faces: %u (point %u, atlas %u, draw budget %u, unavailable %u)",
+                        stats.dropped_shadow_faces, stats.dropped_point_shadow_faces,
+                        stats.shadow_atlas_full_drops, stats.shadow_caster_budget_drops,
+                        stats.shadow_unavailable_drops);
+            ImGui::Text("Shadow caster draws: %u / 4096", stats.shadow_caster_draws);
+            ImGui::Text("Atlas memory: sun %.1f MiB, local %.1f MiB",
+                        double(stats.sun_shadow_atlas_bytes) / 1048576.0,
+                        double(stats.local_shadow_atlas_bytes) / 1048576.0);
+            if (stats.gpu_ms > 0)
+                ImGui::Text("Shadow GPU: sun %.2f ms, local %.2f ms",
+                            stats.gpu_sun_shadow_ms, stats.gpu_local_shadow_ms);
+            ImGui::Separator();
             ImGui::Text("Vulkan allocations: %.2f MiB",
                         double(stats.gpu_allocated_bytes) / 1048576.0);
             ImGui::Text("Validation: %s   Errors: %u",

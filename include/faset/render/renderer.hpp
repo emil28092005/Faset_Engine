@@ -187,6 +187,11 @@ struct FrameStats {
     std::uint32_t requested_sun_cascades{}, effective_sun_cascades{};
     std::uint32_t sun_shadow_caster_draws{};
     std::uint64_t sun_shadow_atlas_bytes{};
+    std::uint32_t requested_local_shadow_faces{}, local_shadow_faces{}, local_shadow_tiles{};
+    std::uint32_t dropped_shadow_faces{}, dropped_point_shadow_faces{};
+    std::uint32_t shadow_atlas_full_drops{}, shadow_caster_budget_drops{};
+    std::uint32_t shadow_unavailable_drops{}, shadow_caster_draws{};
+    std::uint64_t local_shadow_atlas_bytes{};
     bool gpu_visibility_active{}, hzb_valid{};
     // Requested and actual paths for the last frame; actual may be less capable.
     VisibilityMode requested_visibility_mode{VisibilityMode::Direct};
@@ -198,7 +203,8 @@ struct FrameStats {
     double cpu_ms{}, gpu_ms{}, readback_cpu_ms{};
     double gpu_main_cull_ms{}, gpu_main_raster_ms{}, gpu_hzb_ms{};
     double gpu_post_cull_ms{}, gpu_post_raster_ms{};
-    double gpu_sun_shadow_ms{};
+    double gpu_sun_shadow_ms{}, gpu_local_shadow_ms{};
+    std::string effective_lighting_path{"forward"};
     std::string device;
 };
 struct HzbDebugImage {

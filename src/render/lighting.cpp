@@ -240,8 +240,10 @@ ShadowView local_view(const LocalLight& light, std::uint32_t face,
     const auto up = light.kind == LocalLight::Kind::Point ? ups.at(face)
                     : std::abs(direction[1]) > .98f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
     const auto near_plane = std::max(.0001f, std::min(.05f, light.range * .1f));
+    // Slight face overlap keeps the dominant-axis choice inside both adjacent
+    // projections at a cubemap seam; the guarded tile still prevents PCF bleed.
     const auto fov = light.kind == LocalLight::Kind::Point
-        ? std::numbers::pi_v<float> / 2 : light.outer_angle * 2;
+        ? std::numbers::pi_v<float> / 2 + .04f : light.outer_angle * 2;
     result.view_projection = multiply(
         perspective(fov, 1, near_plane, light.range),
         look_at(light.position, add(light.position, direction), up));

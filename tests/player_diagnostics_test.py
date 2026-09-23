@@ -29,6 +29,21 @@ with tempfile.TemporaryDirectory(prefix="faset-player-diagnostics-") as temporar
     report = json.loads(profile.read_text(encoding="utf-8"))
     assert report["completed_frames"] == 1 and len(report["samples"]) == 1, report
     assert report["samples"][0]["tick"] == 1, report["samples"]
+    lighting = report["samples"][0]
+    assert lighting["effective_lighting_path"] == "forward", lighting
+    for field in ["submitted_local_lights", "omitted_local_lights",
+                  "requested_sun_cascades", "effective_sun_cascades",
+                  "requested_local_shadow_faces", "local_shadow_faces",
+                  "local_shadow_tiles", "dropped_shadow_faces",
+                  "dropped_point_shadow_faces", "shadow_atlas_full_drops",
+                  "shadow_caster_budget_drops", "shadow_unavailable_drops",
+                  "shadow_caster_draws", "sun_shadow_atlas_bytes",
+                  "local_shadow_atlas_bytes", "gpu_main_raster_ms",
+                  "gpu_sun_shadow_ms", "gpu_local_shadow_ms"]:
+        assert field in lighting, (field, lighting)
+    assert lighting["submitted_local_lights"] == 0 and \
+           lighting["effective_sun_cascades"] == 0 and \
+           lighting["local_shadow_faces"] == 0, lighting
 
     # The same linked v2 schema must validate without registering or invoking behavior.
     validated = subprocess.run([sys.argv[1], "--scene", str(scene), "--validate"],
