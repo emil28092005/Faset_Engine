@@ -97,6 +97,7 @@ struct Snapshot {
     std::string view_id{};
     bool camera_cut{};
 };
+enum class VisibilityMode { Direct, GpuFrustum, GpuOcclusion };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.
 void validate_shader_bundle(const std::filesystem::path& directory);
 
@@ -105,6 +106,7 @@ struct RendererConfig {
     std::string title{"Faset Engine"};
     bool headless{false};
     bool validation{true};
+    VisibilityMode visibility_mode{VisibilityMode::Direct};
     // Optional isolated shader bundle, useful for editor preview and shader reload tests.
     std::filesystem::path shader_directory{};
 };
@@ -140,6 +142,10 @@ struct FrameStats {
     std::uint64_t gpu_allocated_bytes{};
     std::uint32_t texture_count{};
     std::uint32_t vertices{}, draw_calls{}, culled_meshes{}, validation_errors{};
+    bool gpu_visibility_active{}, hzb_valid{};
+    std::uint32_t gpu_bins{}, gpu_visible_instances{}, gpu_frustum_rejected{};
+    std::uint32_t gpu_occlusion_deferred{}, gpu_post_visible{};
+    std::array<std::uint32_t, 4> lod_counts{};
     double cpu_ms{}, gpu_ms{}, readback_cpu_ms{};
     std::string device;
 };
@@ -154,6 +160,8 @@ class Renderer {
     std::vector<Event> poll_events();
     void render(const Snapshot&);
     void resize(std::uint32_t width, std::uint32_t height);
+    void set_visibility_mode(VisibilityMode);
+    VisibilityMode visibility_mode() const;
     // Rebuilds graphics pipelines from SPIR-V; a failure preserves the current pipelines.
     bool reload_shaders(std::string& error);
     // Saves the latest completed frame as a portable RGB PPM image.

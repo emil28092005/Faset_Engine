@@ -3,12 +3,14 @@
 #include <SDL3/SDL_vulkan.h>
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstring>
 #include <faset/core/io.hpp>
 #include <faset/render/render_graph.hpp>
 #include <faset/render/renderer.hpp>
+#include <faset/render/visibility.hpp>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -28,11 +30,48 @@ void check(VkResult result, const char* action) {
 struct GpuVertex {
     float clip[4], world[3], normal[3], color[4], material[2], uv[2];
 };
+// The GPU path keeps local geometry separate from the instance table. All layouts
+// below are mirrored by gpu_scene.slang and checked by shader reflection tests.
+struct SceneVertex {
+    float position[3], normal[3], color[4], uv[2];
+};
+static_assert(sizeof(SceneVertex) == 48);
+struct SceneInstance {
+    Mat4 model;
+    std::array<float, 4> normal0, normal1, normal2;
+    std::array<float, 4> color, material;
+    std::array<float, 4> center_extent, half_extent;
+    std::array<float, 4> previous_center_extent, previous_half_extent;
+    std::array<std::uint32_t, 4> metadata;
+};
+static_assert(sizeof(SceneInstance) == 224);
+struct SceneView {
+    Mat4 current_vp, previous_vp;
+    std::array<float, 4> viewport, previous_viewport;
+    std::array<std::uint32_t, 4> hzb_dimensions, previous_hzb_dimensions, flags;
+};
+static_assert(sizeof(SceneView) == 208);
+struct SceneBin {
+    std::uint32_t candidate_first, candidate_count, visible_base, capacity;
+};
+struct SceneCandidate {
+    std::uint32_t instance_id, bin_index, flags, unused;
+};
+struct SceneIndirect {
+    std::uint32_t vertex_count, instance_count, first_vertex, first_instance;
+};
+static_assert(sizeof(SceneBin) == 16 && sizeof(SceneCandidate) == 16 &&
+              sizeof(SceneIndirect) == 16);
 struct Push {
     Mat4 light_view_projection;
     std::array<float, 4> light_direction, eye;
 };
 static_assert(sizeof(Push) == 96, "Slang FrameParameters layout");
+struct ScenePush {
+    Push frame;
+    std::array<std::uint32_t, 4> draw_info;
+};
+static_assert(sizeof(ScenePush) == 112);
 std::array<float, 4> point(const Mat4& m, std::array<float, 4> p) {
     std::array<float, 4> o{};
     for (int r = 0; r < 4; ++r)
@@ -49,6 +88,8 @@ struct Image {
     VkImage handle{};
     VkDeviceMemory memory{};
     VkImageView view{};
+    std::vector<VkImageView> mip_views;
+    std::uint32_t mip_levels{1};
     VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
     VkDeviceSize allocation_size{};
 };
@@ -56,6 +97,69 @@ struct Batch {
     std::uint32_t first{}, count{};
     const Texture* texture{};
     std::array<float, 4> clip_rect{};
+};
+struct SceneDrawBin {
+    const Mesh* mesh{};
+    const Texture* texture{};
+    SceneIndirect command{};
+    SceneBin range{};
+};
+struct PreparedScene {
+    std::vector<SceneVertex> vertices;
+    std::vector<SceneInstance> instances;
+    std::vector<SceneCandidate> candidates;
+    std::vector<SceneBin> bins;
+    std::vector<SceneIndirect> commands;
+    std::vector<const Texture*> textures;
+    SceneView view{};
+    std::uint32_t candidate_count{};
+};
+float projected_pixels(const Bounds& bounds, const Mat4& view_projection,
+                       const std::array<float, 4>& viewport) {
+    float min_x = std::numeric_limits<float>::infinity();
+    float max_x = -min_x, min_y = min_x, max_y = -min_x;
+    for (unsigned corner = 0; corner < 8; ++corner) {
+        Vec3 p{corner & 1 ? bounds.max[0] : bounds.min[0],
+               corner & 2 ? bounds.max[1] : bounds.min[1],
+               corner & 4 ? bounds.max[2] : bounds.min[2]};
+        auto clip = point(view_projection, {p[0], p[1], p[2], 1});
+        if (!std::isfinite(clip[0]) || !std::isfinite(clip[1]) ||
+            !std::isfinite(clip[3]) || clip[3] <= 0)
+            return std::numeric_limits<float>::max();
+        const float x = (clip[0] / clip[3] * .5f + .5f) * viewport[2];
+        const float y = (clip[1] / clip[3] * .5f + .5f) * viewport[3];
+        min_x = std::min(min_x, x);
+        max_x = std::max(max_x, x);
+        min_y = std::min(min_y, y);
+        max_y = std::max(max_y, y);
+    }
+    return std::max(max_x - min_x, max_y - min_y);
+}
+bool opaque_texture(const Texture* texture) {
+    if (!texture)
+        return true;
+    for (std::size_t i = 3; i < texture->rgba.size(); i += 4)
+        if (texture->rgba[i] != 255)
+            return false;
+    return true;
+}
+struct SceneResources {
+    Buffer vertices, instances, candidates, bins, view;
+    Buffer main_ids, post_ids, main_args, post_args, deferred_ids, deferred_count;
+    Image hzb[2];
+    VkDescriptorSetLayout graphics_layout{}, cull_layout{}, hzb_layout{};
+    VkDescriptorPool descriptor_pool{};
+    VkDescriptorSet graphics_main{}, graphics_post{}, cull_main{}, cull_post{};
+    std::vector<VkDescriptorSet> hzb_sets[2];
+    VkPipelineLayout graphics_pipeline_layout{}, cull_pipeline_layout{}, hzb_pipeline_layout{};
+    VkPipeline graphics_pipeline{}, cull_pipeline{}, post_pipeline{}, hzb_pipeline{};
+    std::array<std::string, 5> shader_layouts{};
+    std::uint32_t hzb_mips{}, hzb_current{};
+    bool hzb_history_valid{}, available{};
+    bool hzb_supported{};
+    Mat4 previous_vp{identity};
+    std::array<float, 4> previous_viewport{};
+    std::string previous_view_id;
 };
 constexpr std::uint32_t shadow_size = 1024;
 } // namespace
@@ -87,6 +191,9 @@ struct Renderer::Impl {
     std::vector<VkImageLayout> swap_layouts;
     Image color, depth, shadow;
     Buffer vertices, readback;
+    SceneResources scene;
+    InstanceTracker instance_tracker;
+    std::unordered_map<std::string, std::size_t> previous_lods;
     VkDescriptorSetLayout descriptor_layout{};
     VkDescriptorPool descriptor_pool{};
     VkSampler shadow_sampler{}, color_sampler{};
@@ -129,6 +236,8 @@ struct Renderer::Impl {
     }
     void destroy(Image& i) {
         if (device) {
+            for (auto view : i.mip_views)
+                vkDestroyImageView(device, view, nullptr);
             if (i.view)
                 vkDestroyImageView(device, i.view, nullptr);
             if (i.handle)
@@ -143,12 +252,38 @@ struct Renderer::Impl {
             vkDeviceWaitIdle(device);
         for (auto& [_, texture] : textures)
             destroy(texture.image);
+        destroy(scene.vertices);
+        destroy(scene.instances);
+        destroy(scene.candidates);
+        destroy(scene.bins);
+        destroy(scene.view);
+        destroy(scene.main_ids);
+        destroy(scene.post_ids);
+        destroy(scene.main_args);
+        destroy(scene.post_args);
+        destroy(scene.deferred_ids);
+        destroy(scene.deferred_count);
+        destroy(scene.hzb[0]);
+        destroy(scene.hzb[1]);
         destroy(vertices);
         destroy(readback);
         destroy(color);
         destroy(depth);
         destroy(shadow);
         if (device) {
+            for (auto pipeline : {scene.graphics_pipeline, scene.cull_pipeline,
+                                  scene.post_pipeline, scene.hzb_pipeline})
+                if (pipeline)
+                    vkDestroyPipeline(device, pipeline, nullptr);
+            for (auto layout : {scene.graphics_pipeline_layout, scene.cull_pipeline_layout,
+                                scene.hzb_pipeline_layout})
+                if (layout)
+                    vkDestroyPipelineLayout(device, layout, nullptr);
+            if (scene.descriptor_pool)
+                vkDestroyDescriptorPool(device, scene.descriptor_pool, nullptr);
+            for (auto layout : {scene.graphics_layout, scene.cull_layout, scene.hzb_layout})
+                if (layout)
+                    vkDestroyDescriptorSetLayout(device, layout, nullptr);
             if (pipeline)
                 vkDestroyPipeline(device, pipeline, nullptr);
             if (ui_pipeline)
@@ -237,14 +372,15 @@ struct Renderer::Impl {
         return b;
     }
     Image make_image(std::uint32_t w, std::uint32_t h, VkFormat format, VkImageUsageFlags usage,
-                     VkImageAspectFlags aspect) {
+                     VkImageAspectFlags aspect, std::uint32_t mip_levels = 1) {
         Image image{};
+        image.mip_levels = mip_levels;
         VkImageCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         info.imageType = VK_IMAGE_TYPE_2D;
         info.format = format;
         info.extent = {w, h, 1};
-        info.mipLevels = 1;
+        info.mipLevels = mip_levels;
         info.arrayLayers = 1;
         info.samples = VK_SAMPLE_COUNT_1_BIT;
         info.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -268,8 +404,18 @@ struct Renderer::Impl {
             view.image = image.handle;
             view.viewType = VK_IMAGE_VIEW_TYPE_2D;
             view.format = format;
-            view.subresourceRange = {aspect, 0, 1, 0, 1};
+            view.subresourceRange = {aspect, 0, mip_levels, 0, 1};
             check(vkCreateImageView(device, &view, nullptr, &image.view), "Create image view");
+            if (mip_levels > 1) {
+                image.mip_views.reserve(mip_levels);
+                for (std::uint32_t level = 0; level < mip_levels; ++level) {
+                    view.subresourceRange = {aspect, level, 1, 0, 1};
+                    VkImageView mip_view{};
+                    check(vkCreateImageView(device, &view, nullptr, &mip_view),
+                          "Create mip view");
+                    image.mip_views.push_back(mip_view);
+                }
+            }
         } catch (...) {
             destroy(image);
             throw;
@@ -277,7 +423,7 @@ struct Renderer::Impl {
         return image;
     }
     void transition(VkCommandBuffer cmd, VkImage image, VkImageLayout& before, VkImageLayout after,
-                    VkImageAspectFlags aspect) {
+                    VkImageAspectFlags aspect, std::uint32_t mip_levels = 1) {
         // Conservative dependencies make the first single-queue backend auditable.
         VkImageMemoryBarrier2 barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -292,7 +438,7 @@ struct Renderer::Impl {
         barrier.newLayout = after;
         barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.image = image;
-        barrier.subresourceRange = {aspect, 0, 1, 0, 1};
+        barrier.subresourceRange = {aspect, 0, mip_levels, 0, 1};
         VkDependencyInfo dependency{};
         dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
         dependency.imageMemoryBarrierCount = 1;
@@ -302,7 +448,7 @@ struct Renderer::Impl {
     }
     void transition(VkCommandBuffer cmd, Image& image, VkImageLayout after,
                     VkImageAspectFlags aspect) {
-        transition(cmd, image.handle, image.layout, after, aspect);
+        transition(cmd, image.handle, image.layout, after, aspect, image.mip_levels);
     }
     void begin() {
         check(vkResetCommandBuffer(command, 0), "Reset command buffer");
@@ -425,17 +571,21 @@ struct Renderer::Impl {
             vkGetPhysicalDeviceProperties(gpu, &properties);
             if (properties.apiVersion < VK_API_VERSION_1_3)
                 continue;
+            VkPhysicalDeviceVulkan11Features f11{};
+            f11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
             VkPhysicalDeviceVulkan13Features f13{};
             f13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+            f11.pNext = &f13;
             VkPhysicalDeviceFeatures2 features{};
             features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-            features.pNext = &f13;
+            features.pNext = &f11;
             vkGetPhysicalDeviceFeatures2(gpu, &features);
             if (!f13.synchronization2 || !f13.dynamicRendering)
                 continue;
-            VkFormatProperties color_props{}, depth_props{};
+            VkFormatProperties color_props{}, depth_props{}, hzb_props{};
             vkGetPhysicalDeviceFormatProperties(gpu, VK_FORMAT_R8G8B8A8_UNORM, &color_props);
             vkGetPhysicalDeviceFormatProperties(gpu, VK_FORMAT_D32_SFLOAT, &depth_props);
+            vkGetPhysicalDeviceFormatProperties(gpu, VK_FORMAT_R32_SFLOAT, &hzb_props);
             if (!(color_props.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) ||
                 !(depth_props.optimalTilingFeatures &
                   VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) ||
@@ -460,6 +610,14 @@ struct Renderer::Impl {
                     statistics.device = properties.deviceName;
                     timestamp_period = properties.limits.timestampPeriod;
                     timestamp_bits = queues[i].timestampValidBits;
+                    scene.available = (queues[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
+                                      f11.shaderDrawParameters;
+                    scene.hzb_supported = scene.available &&
+                        (hzb_props.optimalTilingFeatures &
+                         (VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                          VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)) ==
+                        (VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                         VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
                 }
             }
         }
@@ -472,13 +630,17 @@ struct Renderer::Impl {
         qi.queueFamilyIndex = queue_family;
         qi.queueCount = 1;
         qi.pQueuePriorities = &priority;
+        VkPhysicalDeviceVulkan11Features f11{};
+        f11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        f11.shaderDrawParameters = scene.available ? VK_TRUE : VK_FALSE;
         VkPhysicalDeviceVulkan13Features f13{};
         f13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
         f13.synchronization2 = VK_TRUE;
         f13.dynamicRendering = VK_TRUE;
+        f11.pNext = &f13;
         VkDeviceCreateInfo di{};
         di.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        di.pNext = &f13;
+        di.pNext = &f11;
         di.queueCreateInfoCount = 1;
         di.pQueueCreateInfos = &qi;
         const char* swap_extension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -529,6 +691,8 @@ struct Renderer::Impl {
         make_targets();
         make_descriptors();
         make_pipelines();
+        if (scene.available)
+            make_scene_descriptors_and_pipelines();
         white = std::make_shared<Texture>();
         white->width = white->height = 1;
         white->rgba = {255, 255, 255, 255};
@@ -541,17 +705,36 @@ struct Renderer::Impl {
         destroy(color);
         destroy(depth);
         destroy(readback);
+        destroy(scene.hzb[0]);
+        destroy(scene.hzb[1]);
+        scene.hzb_history_valid = false;
         color = make_image(width, height, VK_FORMAT_R8G8B8A8_UNORM,
                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                            VK_IMAGE_ASPECT_COLOR_BIT);
         depth = make_image(width, height, VK_FORMAT_D32_SFLOAT,
-                           VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+                           VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                               VK_IMAGE_USAGE_SAMPLED_BIT,
+                           VK_IMAGE_ASPECT_DEPTH_BIT);
+        if (scene.hzb_supported) {
+            const auto padded_width = std::bit_ceil(width);
+            const auto padded_height = std::bit_ceil(height);
+            scene.hzb_mips = std::bit_width(std::max(padded_width, padded_height));
+            for (auto& pyramid : scene.hzb)
+                pyramid = make_image(padded_width, padded_height, VK_FORMAT_R32_SFLOAT,
+                                     VK_IMAGE_USAGE_SAMPLED_BIT |
+                                         VK_IMAGE_USAGE_STORAGE_BIT |
+                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                     VK_IMAGE_ASPECT_COLOR_BIT, scene.hzb_mips);
+            scene.hzb_current = 0;
+        }
         // CPU reads this allocation every frame. Prefer cached coherent memory when available.
         readback =
             make_buffer(VkDeviceSize(width) * height * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                         VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
         last_pixels.clear();
+        if (scene.graphics_layout)
+            refresh_scene_descriptors();
     }
     void make_swapchain() {
         if (!surface)
@@ -895,6 +1078,246 @@ struct Renderer::Impl {
         vkDestroyShaderModule(device, fragment, nullptr);
         vkDestroyShaderModule(device, shadow_vertex, nullptr);
     }
+    void refresh_scene_descriptors() {
+        if (!scene.graphics_layout)
+            return;
+        if (scene.descriptor_pool)
+            vkDestroyDescriptorPool(device, scene.descriptor_pool, nullptr);
+        scene.graphics_main = scene.graphics_post = scene.cull_main = scene.cull_post = {};
+        for (auto& sets : scene.hzb_sets)
+            sets.clear();
+        const std::uint32_t hzb_sets = scene.hzb_supported ? scene.hzb_mips * 2 : 0;
+        const std::array<VkDescriptorPoolSize, 3> sizes{{
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 64},
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16 + hzb_sets},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, hzb_sets}}};
+        VkDescriptorPoolCreateInfo pool{};
+        pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool.maxSets = 4 + hzb_sets;
+        pool.poolSizeCount = static_cast<std::uint32_t>(sizes.size());
+        pool.pPoolSizes = sizes.data();
+        check(vkCreateDescriptorPool(device, &pool, nullptr, &scene.descriptor_pool),
+              "Create GPU visibility descriptor pool");
+        const std::array<VkDescriptorSetLayout, 4> layouts{
+            scene.graphics_layout, scene.graphics_layout, scene.cull_layout, scene.cull_layout};
+        VkDescriptorSetAllocateInfo allocation{};
+        allocation.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocation.descriptorPool = scene.descriptor_pool;
+        allocation.descriptorSetCount = 4;
+        allocation.pSetLayouts = layouts.data();
+        std::array<VkDescriptorSet, 4> sets{};
+        check(vkAllocateDescriptorSets(device, &allocation, sets.data()),
+              "Allocate GPU visibility descriptors");
+        scene.graphics_main = sets[0];
+        scene.graphics_post = sets[1];
+        scene.cull_main = sets[2];
+        scene.cull_post = sets[3];
+        if (!scene.hzb_supported)
+            return;
+        for (std::uint32_t image = 0; image < 2; ++image) {
+            auto& target_sets = scene.hzb_sets[image];
+            target_sets.resize(scene.hzb_mips);
+            std::vector<VkDescriptorSetLayout> mip_layouts(scene.hzb_mips, scene.hzb_layout);
+            allocation.descriptorSetCount = scene.hzb_mips;
+            allocation.pSetLayouts = mip_layouts.data();
+            check(vkAllocateDescriptorSets(device, &allocation, target_sets.data()),
+                  "Allocate HZB mip descriptors");
+            for (std::uint32_t mip = 0; mip < scene.hzb_mips; ++mip) {
+                const auto source = mip == 0 ? depth.view : scene.hzb[image].mip_views[mip - 1];
+                const auto output = scene.hzb[image].mip_views.empty()
+                    ? scene.hzb[image].view : scene.hzb[image].mip_views[mip];
+                VkDescriptorImageInfo images[] = {
+                    {VK_NULL_HANDLE, source,
+                     mip == 0 ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
+                              : VK_IMAGE_LAYOUT_GENERAL},
+                    {VK_NULL_HANDLE, output, VK_IMAGE_LAYOUT_GENERAL}};
+                VkWriteDescriptorSet writes[2]{};
+                for (std::uint32_t binding = 0; binding < 2; ++binding) {
+                    writes[binding].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    writes[binding].dstSet = target_sets[mip];
+                    writes[binding].dstBinding = binding;
+                    writes[binding].descriptorCount = 1;
+                    writes[binding].descriptorType = binding == 0
+                        ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                    writes[binding].pImageInfo = &images[binding];
+                }
+                vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+            }
+        }
+    }
+    void make_scene_descriptors_and_pipelines() {
+        std::array<VkDescriptorSetLayoutBinding, 3> graphics{};
+        for (std::uint32_t i = 0; i < graphics.size(); ++i)
+            graphics[i] = {i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
+                           nullptr};
+        VkDescriptorSetLayoutCreateInfo layout{};
+        layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout.bindingCount = static_cast<std::uint32_t>(graphics.size());
+        layout.pBindings = graphics.data();
+        check(vkCreateDescriptorSetLayout(device, &layout, nullptr, &scene.graphics_layout),
+              "Create GPU scene descriptor layout");
+        std::array<VkDescriptorSetLayoutBinding, 10> cull{};
+        for (std::uint32_t i = 0; i < cull.size(); ++i)
+            cull[i] = {i, i == 7 || i == 8 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+                                            : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                       1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+        layout.bindingCount = static_cast<std::uint32_t>(cull.size());
+        layout.pBindings = cull.data();
+        check(vkCreateDescriptorSetLayout(device, &layout, nullptr, &scene.cull_layout),
+              "Create GPU cull descriptor layout");
+        std::array<VkDescriptorSetLayoutBinding, 2> hzb{{
+            {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+            {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}}};
+        layout.bindingCount = static_cast<std::uint32_t>(hzb.size());
+        layout.pBindings = hzb.data();
+        check(vkCreateDescriptorSetLayout(device, &layout, nullptr, &scene.hzb_layout),
+              "Create HZB descriptor layout");
+        const std::array<VkDescriptorSetLayout, 2> scene_layouts{descriptor_layout,
+                                                                  scene.graphics_layout};
+        VkPushConstantRange graphics_push{VK_SHADER_STAGE_VERTEX_BIT |
+                                              VK_SHADER_STAGE_FRAGMENT_BIT,
+                                          0, sizeof(ScenePush)};
+        VkPipelineLayoutCreateInfo pipeline_info{};
+        pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipeline_info.setLayoutCount = 2;
+        pipeline_info.pSetLayouts = scene_layouts.data();
+        pipeline_info.pushConstantRangeCount = 1;
+        pipeline_info.pPushConstantRanges = &graphics_push;
+        check(vkCreatePipelineLayout(device, &pipeline_info, nullptr,
+                                     &scene.graphics_pipeline_layout),
+              "Create GPU scene pipeline layout");
+        VkPushConstantRange compute_push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 16};
+        pipeline_info.setLayoutCount = 1;
+        pipeline_info.pSetLayouts = &scene.cull_layout;
+        pipeline_info.pPushConstantRanges = &compute_push;
+        check(vkCreatePipelineLayout(device, &pipeline_info, nullptr,
+                                     &scene.cull_pipeline_layout),
+              "Create GPU cull pipeline layout");
+        pipeline_info.pSetLayouts = &scene.hzb_layout;
+        check(vkCreatePipelineLayout(device, &pipeline_info, nullptr,
+                                     &scene.hzb_pipeline_layout),
+              "Create HZB pipeline layout");
+        const auto gpu_shaders = detail::load_gpu_shader_bundle(shader_directory());
+        const auto baseline_shaders = detail::load_shader_bundle(shader_directory());
+        for (std::size_t i = 0; i < gpu_shaders.size(); ++i)
+            if (!scene.shader_layouts[i].empty() &&
+                scene.shader_layouts[i] != gpu_shaders[i].layout_fingerprint)
+                throw std::runtime_error("GPU shader layout changed; current pipeline preserved");
+        VkShaderModule vertex = shader(gpu_shaders[0]);
+        VkShaderModule fragment = shader(baseline_shaders[1]);
+        VkShaderModule main_cull = shader(gpu_shaders[2]);
+        VkShaderModule hzb_shader = shader(gpu_shaders[3]);
+        VkShaderModule post_cull = shader(gpu_shaders[4]);
+        try {
+            VkPipelineShaderStageCreateInfo stages[2]{};
+            for (auto& stage : stages)
+                stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+            stages[0].module = vertex;
+            stages[0].pName = "main";
+            stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            stages[1].module = fragment;
+            stages[1].pName = "main";
+            VkVertexInputBindingDescription binding{0, sizeof(SceneVertex),
+                                                    VK_VERTEX_INPUT_RATE_VERTEX};
+            const std::array<VkVertexInputAttributeDescription, 4> attributes{{
+                {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(SceneVertex, position)},
+                {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(SceneVertex, normal)},
+                {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(SceneVertex, color)},
+                {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(SceneVertex, uv)}}};
+            VkPipelineVertexInputStateCreateInfo input{};
+            input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            input.vertexBindingDescriptionCount = 1;
+            input.pVertexBindingDescriptions = &binding;
+            input.vertexAttributeDescriptionCount = attributes.size();
+            input.pVertexAttributeDescriptions = attributes.data();
+            VkPipelineInputAssemblyStateCreateInfo assembly{};
+            assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            VkPipelineViewportStateCreateInfo viewport{};
+            viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewport.viewportCount = viewport.scissorCount = 1;
+            VkPipelineRasterizationStateCreateInfo raster{};
+            raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            raster.polygonMode = VK_POLYGON_MODE_FILL;
+            raster.cullMode = VK_CULL_MODE_NONE;
+            raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            raster.lineWidth = 1;
+            VkPipelineMultisampleStateCreateInfo samples{};
+            samples.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            samples.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+            VkPipelineDepthStencilStateCreateInfo depth_state{};
+            depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+            depth_state.depthTestEnable = VK_TRUE;
+            depth_state.depthWriteEnable = VK_TRUE;
+            depth_state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+            VkPipelineColorBlendAttachmentState blend{};
+            blend.colorWriteMask = 15;
+            blend.blendEnable = VK_TRUE;
+            blend.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+            blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+            blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            VkPipelineColorBlendStateCreateInfo color_blend{};
+            color_blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            color_blend.attachmentCount = 1;
+            color_blend.pAttachments = &blend;
+            const std::array<VkDynamicState, 2> dynamic_states{VK_DYNAMIC_STATE_VIEWPORT,
+                                                               VK_DYNAMIC_STATE_SCISSOR};
+            VkPipelineDynamicStateCreateInfo dynamic{};
+            dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamic.dynamicStateCount = dynamic_states.size();
+            dynamic.pDynamicStates = dynamic_states.data();
+            const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
+            VkPipelineRenderingCreateInfo rendering{};
+            rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+            rendering.colorAttachmentCount = 1;
+            rendering.pColorAttachmentFormats = &color_format;
+            rendering.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+            VkGraphicsPipelineCreateInfo graphics_pipeline{};
+            graphics_pipeline.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            graphics_pipeline.pNext = &rendering;
+            graphics_pipeline.stageCount = 2;
+            graphics_pipeline.pStages = stages;
+            graphics_pipeline.pVertexInputState = &input;
+            graphics_pipeline.pInputAssemblyState = &assembly;
+            graphics_pipeline.pViewportState = &viewport;
+            graphics_pipeline.pRasterizationState = &raster;
+            graphics_pipeline.pMultisampleState = &samples;
+            graphics_pipeline.pDepthStencilState = &depth_state;
+            graphics_pipeline.pColorBlendState = &color_blend;
+            graphics_pipeline.pDynamicState = &dynamic;
+            graphics_pipeline.layout = scene.graphics_pipeline_layout;
+            check(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphics_pipeline,
+                                            nullptr, &scene.graphics_pipeline),
+                  "Create GPU scene pipeline");
+            auto make_compute = [&](VkShaderModule module, VkPipelineLayout layout,
+                                    VkPipeline& output) {
+                VkComputePipelineCreateInfo info{};
+                info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+                info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+                info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+                info.stage.module = module;
+                info.stage.pName = "main";
+                info.layout = layout;
+                check(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr,
+                                               &output), "Create GPU visibility compute pipeline");
+            };
+            make_compute(main_cull, scene.cull_pipeline_layout, scene.cull_pipeline);
+            make_compute(post_cull, scene.cull_pipeline_layout, scene.post_pipeline);
+            if (scene.hzb_supported)
+                make_compute(hzb_shader, scene.hzb_pipeline_layout, scene.hzb_pipeline);
+            for (std::size_t i = 0; i < gpu_shaders.size(); ++i)
+                scene.shader_layouts[i] = gpu_shaders[i].layout_fingerprint;
+            refresh_scene_descriptors();
+        } catch (...) {
+            for (auto module : {vertex, fragment, main_cull, hzb_shader, post_cull})
+                vkDestroyShaderModule(device, module, nullptr);
+            throw;
+        }
+        for (auto module : {vertex, fragment, main_cull, hzb_shader, post_cull})
+            vkDestroyShaderModule(device, module, nullptr);
+    }
     GpuVertex gpu_vertex(const Vertex& v, const DrawItem& item, const Mat4& vp) {
         GpuVertex out{};
         auto world = point(item.model, {v.position[0], v.position[1], v.position[2], 1});
@@ -1020,9 +1443,111 @@ struct Renderer::Impl {
             x += 6 * unit;
         }
     }
+    void upload_scene_buffer(Buffer& buffer, const void* bytes, std::size_t count,
+                             VkBufferUsageFlags usage) {
+        const VkDeviceSize required = std::max<VkDeviceSize>(16, count);
+        if (buffer.size < required) {
+            destroy(buffer);
+            buffer = make_buffer(required, usage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                 VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+        }
+        if (count && bytes) {
+            void* mapped{};
+            check(vkMapMemory(device, buffer.memory, 0, buffer.size, 0, &mapped),
+                  "Map GPU scene buffer");
+            std::memcpy(mapped, bytes, count);
+            vkUnmapMemory(device, buffer.memory);
+        }
+    }
+    template <typename T>
+    void upload_scene_vector(Buffer& buffer, const std::vector<T>& values,
+                             VkBufferUsageFlags usage = 0) {
+        upload_scene_buffer(buffer, values.data(), values.size() * sizeof(T), usage);
+    }
+    void update_scene_descriptors(bool occlusion) {
+        auto write_buffers = [&](VkDescriptorSet set, std::span<const Buffer* const> buffers,
+                                 std::uint32_t first_binding) {
+            std::vector<VkDescriptorBufferInfo> infos(buffers.size());
+            std::vector<VkWriteDescriptorSet> writes(buffers.size());
+            for (std::size_t i = 0; i < buffers.size(); ++i) {
+                infos[i] = {buffers[i]->handle, 0, buffers[i]->size};
+                writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[i].dstSet = set;
+                writes[i].dstBinding = first_binding + static_cast<std::uint32_t>(i);
+                writes[i].descriptorCount = 1;
+                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                writes[i].pBufferInfo = &infos[i];
+            }
+            vkUpdateDescriptorSets(device, static_cast<std::uint32_t>(writes.size()),
+                                   writes.data(), 0, nullptr);
+        };
+        const std::array<const Buffer*, 3> main_graphics{&scene.instances, &scene.main_ids,
+                                                          &scene.view};
+        const std::array<const Buffer*, 3> post_graphics{&scene.instances, &scene.post_ids,
+                                                          &scene.view};
+        write_buffers(scene.graphics_main, main_graphics, 0);
+        write_buffers(scene.graphics_post, post_graphics, 0);
+        const std::array<const Buffer*, 7> main_cull{
+            &scene.instances, &scene.candidates, &scene.bins, &scene.main_ids,
+            &scene.main_args, &scene.deferred_ids, &scene.deferred_count};
+        const std::array<const Buffer*, 7> post_cull{
+            &scene.instances, &scene.candidates, &scene.bins, &scene.post_ids,
+            &scene.post_args, &scene.deferred_ids, &scene.deferred_count};
+        write_buffers(scene.cull_main, main_cull, 0);
+        write_buffers(scene.cull_post, post_cull, 0);
+        for (auto set : {scene.cull_main, scene.cull_post}) {
+            const Image* previous = occlusion ? &scene.hzb[1 - scene.hzb_current] : &shadow;
+            const Image* current = occlusion ? &scene.hzb[scene.hzb_current] : &shadow;
+            const VkImageLayout previous_layout = occlusion ? VK_IMAGE_LAYOUT_GENERAL
+                                                             : VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+            const VkImageLayout current_layout = previous == &shadow
+                ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
+            VkDescriptorImageInfo images[] = {
+                {VK_NULL_HANDLE, previous->view, previous_layout},
+                {VK_NULL_HANDLE, current->view, current_layout}};
+            VkWriteDescriptorSet writes[2]{};
+            for (std::uint32_t i = 0; i < 2; ++i) {
+                writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[i].dstSet = set;
+                writes[i].dstBinding = 7 + i;
+                writes[i].descriptorCount = 1;
+                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+                writes[i].pImageInfo = &images[i];
+            }
+            vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+            const std::array<const Buffer*, 1> view{&scene.view};
+            write_buffers(set, view, 9);
+        }
+    }
+    void scene_barrier(VkPipelineStageFlags2 source_stages, VkAccessFlags2 source_access,
+                       VkPipelineStageFlags2 destination_stages, VkAccessFlags2 destination_access) {
+        VkMemoryBarrier2 barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = source_stages;
+        barrier.srcAccessMask = source_access;
+        barrier.dstStageMask = destination_stages;
+        barrier.dstAccessMask = destination_access;
+        VkDependencyInfo dependency{};
+        dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dependency.memoryBarrierCount = 1;
+        dependency.pMemoryBarriers = &barrier;
+        vkCmdPipelineBarrier2(command, &dependency);
+    }
     void render(const Snapshot& snapshot) {
         auto start = std::chrono::steady_clock::now();
         statistics.draw_calls = statistics.culled_meshes = statistics.gpu_label_count = 0;
+        statistics.gpu_bins = statistics.gpu_visible_instances =
+            statistics.gpu_frustum_rejected = statistics.gpu_occlusion_deferred =
+                statistics.gpu_post_visible = 0;
+        statistics.lod_counts = {};
+        const bool gpu_active = scene.available &&
+            config.visibility_mode != VisibilityMode::Direct;
+        const bool occlusion = gpu_active && scene.hzb_supported &&
+            config.visibility_mode == VisibilityMode::GpuOcclusion;
+        statistics.gpu_visibility_active = gpu_active;
+        statistics.hzb_valid = false;
         bool can_present = surface != VK_NULL_HANDLE;
         if (surface) {
             // A capture may render between normal event-loop iterations. Keep the window
@@ -1058,13 +1583,191 @@ struct Renderer::Impl {
         for (const auto& triangles : snapshot.ui_triangles)
             if (triangles.texture)
                 upload_texture(triangles.texture);
+        std::array<float, 4> scene_viewport{0, 0, float(width), float(height)};
+        if (snapshot.scene_rect[2] > 0 && snapshot.scene_rect[3] > 0) {
+            const auto& rect = snapshot.scene_rect;
+            const float x = std::clamp(rect[0], 0.f, float(width));
+            const float y = std::clamp(rect[1], 0.f, float(height));
+            scene_viewport = {x, y, std::max(0.f, std::min(rect[2], float(width) - x)),
+                              std::max(0.f, std::min(rect[3], float(height) - y))};
+        }
+        const std::string view_id = snapshot.view_id.empty() ? "default" : snapshot.view_id;
+        const bool history_compatible = occlusion && scene.hzb_history_valid &&
+            !snapshot.camera_cut && scene.previous_view_id == view_id &&
+            scene.previous_viewport == scene_viewport;
+        if (!history_compatible)
+            instance_tracker.invalidate_view(view_id);
+        if (occlusion)
+            scene.hzb_current = history_compatible ? 1 - scene.hzb_current : 0;
+        PreparedScene gpu_frame;
+        gpu_frame.view.current_vp = snapshot.view_projection;
+        gpu_frame.view.previous_vp = scene.previous_vp;
+        gpu_frame.view.viewport = scene_viewport;
+        gpu_frame.view.previous_viewport = scene.previous_viewport;
+        if (scene.hzb_supported) {
+            const auto dimensions = std::array<std::uint32_t, 4>{
+                std::bit_ceil(width), std::bit_ceil(height), scene.hzb_mips, 0};
+            gpu_frame.view.hzb_dimensions = dimensions;
+            gpu_frame.view.previous_hzb_dimensions = dimensions;
+        }
+        gpu_frame.view.flags[0] = history_compatible ? 1 : 0;
+        statistics.hzb_valid = history_compatible;
+        struct SelectedDraw {
+            const DrawItem* source;
+            std::shared_ptr<const Mesh> mesh;
+            bool gpu{};
+        };
+        std::vector<SelectedDraw> selected_draws;
+        selected_draws.reserve(snapshot.draws.size());
+        struct BuildingBin {
+            const Mesh* mesh{};
+            const Texture* texture{};
+            std::uint32_t first_vertex{}, vertex_count{};
+            std::vector<std::uint32_t> instances;
+        };
+        std::vector<BuildingBin> building_bins;
+        std::unordered_map<const Mesh*, std::pair<std::uint32_t, std::uint32_t>> mesh_ranges;
+        std::unordered_map<std::string, std::size_t> current_lods;
+        for (const auto& item : snapshot.draws) {
+            if (!item.mesh || item.mesh->vertices.empty())
+                continue;
+            const auto source_bounds = transformed_bounds(*item.mesh, item.model);
+            std::vector<float> thresholds;
+            std::vector<std::uint8_t> available;
+            std::shared_ptr<const Mesh> selected_mesh = item.mesh;
+            std::size_t lod = 0;
+            if (!item.lod_meshes.empty()) {
+                available.push_back(1);
+                for (std::size_t level = 0; level < item.lod_meshes.size(); ++level) {
+                    thresholds.push_back(192.f / float(std::uint32_t(1) <<
+                                                      std::min<std::size_t>(level, 20)));
+                    available.push_back(item.lod_meshes[level] &&
+                                                !item.lod_meshes[level]->vertices.empty() ? 1 : 0);
+                }
+                auto previous = previous_lods.find(item.instance_key);
+                lod = select_lod(projected_pixels(source_bounds, snapshot.view_projection,
+                                                  scene_viewport),
+                                 previous != previous_lods.end() && !item.instance_key.empty()
+                                     ? previous->second : SIZE_MAX,
+                                 thresholds, .12f, available);
+                if (lod)
+                    selected_mesh = item.lod_meshes[lod - 1];
+            }
+            statistics.lod_counts[std::min<std::size_t>(lod, 3)]++;
+            if (!item.instance_key.empty())
+                current_lods[item.instance_key] = lod;
+            const auto bounds = selected_mesh == item.mesh
+                ? source_bounds : transformed_bounds(*selected_mesh, item.model);
+            InstanceUpdate previous{};
+            if (!item.instance_key.empty())
+                previous = instance_tracker.update(item.instance_key, selected_mesh,
+                                                   item.model, bounds, view_id);
+            const bool eligible = gpu_active && item.color[3] >= 1.f &&
+                opaque_texture(item.texture.get());
+            selected_draws.push_back({&item, selected_mesh, eligible});
+            if (!eligible)
+                continue;
+            auto [range_it, inserted] = mesh_ranges.try_emplace(selected_mesh.get());
+            if (inserted) {
+                const std::size_t first = gpu_frame.vertices.size();
+                auto emit = [&](std::uint32_t index) {
+                    if (index >= selected_mesh->vertices.size())
+                        throw std::out_of_range("Mesh index outside vertex range");
+                    const auto& v = selected_mesh->vertices[index];
+                    SceneVertex gpu_vertex{};
+                    std::copy(v.position.begin(), v.position.end(), gpu_vertex.position);
+                    std::copy(v.normal.begin(), v.normal.end(), gpu_vertex.normal);
+                    std::copy(v.color.begin(), v.color.end(), gpu_vertex.color);
+                    std::copy(v.uv.begin(), v.uv.end(), gpu_vertex.uv);
+                    gpu_frame.vertices.push_back(gpu_vertex);
+                };
+                if (selected_mesh->indices.empty())
+                    for (std::uint32_t i = 0; i < selected_mesh->vertices.size(); ++i)
+                        emit(i);
+                else
+                    for (auto i : selected_mesh->indices)
+                        emit(i);
+                const auto count = gpu_frame.vertices.size() - first;
+                if (count % 3 || first > UINT32_MAX || count > UINT32_MAX)
+                    throw std::invalid_argument("GPU scene mesh must fit complete triangles");
+                range_it->second = {static_cast<std::uint32_t>(first),
+                                    static_cast<std::uint32_t>(count)};
+            }
+            if (!range_it->second.second)
+                continue;
+            auto bin_it = std::find_if(building_bins.begin(), building_bins.end(),
+                                       [&](const BuildingBin& bin) {
+                                           return bin.mesh == selected_mesh.get() &&
+                                                  bin.texture == (item.texture
+                                                      ? item.texture.get() : white.get());
+                                       });
+            if (bin_it == building_bins.end()) {
+                const auto [first, count] = range_it->second;
+                building_bins.push_back({selected_mesh.get(), item.texture
+                                              ? item.texture.get() : white.get(),
+                                         first, count, {}});
+                bin_it = std::prev(building_bins.end());
+            }
+            const auto& m = item.model;
+            Vec3 a{m[0], m[1], m[2]}, b{m[4], m[5], m[6]}, c{m[8], m[9], m[10]};
+            auto cross = [](Vec3 x, Vec3 y) {
+                return Vec3{x[1] * y[2] - x[2] * y[1],
+                            x[2] * y[0] - x[0] * y[2],
+                            x[0] * y[1] - x[1] * y[0]};
+            };
+            const auto ca = cross(b, c), cb = cross(c, a), cc = cross(a, b);
+            const float determinant = a[0] * ca[0] + a[1] * ca[1] + a[2] * ca[2];
+            const float sign = determinant < 0 ? -1.f : 1.f;
+            SceneInstance instance{};
+            instance.model = m;
+            for (int row = 0; row < 3; ++row) {
+                auto& normal = row == 0 ? instance.normal0
+                             : row == 1 ? instance.normal1 : instance.normal2;
+                normal = {ca[row] * sign, cb[row] * sign, cc[row] * sign, 0};
+            }
+            instance.color = item.color;
+            instance.material = {item.roughness, item.metallic, 0, 0};
+            for (int axis = 0; axis < 3; ++axis) {
+                instance.center_extent[axis] = (bounds.min[axis] + bounds.max[axis]) * .5f;
+                instance.half_extent[axis] = (bounds.max[axis] - bounds.min[axis]) * .5f;
+                instance.previous_center_extent[axis] =
+                    (previous.previous_bounds.min[axis] +
+                     previous.previous_bounds.max[axis]) * .5f;
+                instance.previous_half_extent[axis] =
+                    (previous.previous_bounds.max[axis] -
+                     previous.previous_bounds.min[axis]) * .5f;
+            }
+            instance.metadata[0] = previous.previous_valid && history_compatible ? 1 : 0;
+            if (gpu_frame.instances.size() >= UINT32_MAX)
+                throw std::overflow_error("GPU scene instance capacity exceeded");
+            bin_it->instances.push_back(static_cast<std::uint32_t>(gpu_frame.instances.size()));
+            gpu_frame.instances.push_back(instance);
+        }
+        previous_lods = std::move(current_lods);
+        for (const auto& bin : building_bins) {
+            if (gpu_frame.candidates.size() > UINT32_MAX - bin.instances.size())
+                throw std::overflow_error("GPU scene candidate capacity exceeded");
+            const auto first_candidate = static_cast<std::uint32_t>(gpu_frame.candidates.size());
+            const auto visible_base = first_candidate;
+            const auto bin_index = static_cast<std::uint32_t>(gpu_frame.bins.size());
+            for (auto id : bin.instances)
+                gpu_frame.candidates.push_back({id, bin_index, 0, 0});
+            gpu_frame.bins.push_back({first_candidate,
+                                      static_cast<std::uint32_t>(bin.instances.size()),
+                                      visible_base,
+                                      static_cast<std::uint32_t>(bin.instances.size())});
+            gpu_frame.commands.push_back({bin.vertex_count, 0, bin.first_vertex, 0});
+            gpu_frame.textures.push_back(bin.texture);
+        }
+        gpu_frame.candidate_count = static_cast<std::uint32_t>(gpu_frame.candidates.size());
         std::vector<GpuVertex> data;
         std::vector<Batch> scene_batches, shadow_batches, sprite_batches, ui_batches;
-        for (const auto& item : snapshot.draws) {
-            if (!item.mesh)
+        for (const auto& selected : selected_draws) {
+            const auto& item = *selected.source;
+            if (selected.gpu && !item.cast_shadow)
                 continue;
             auto first = data.size();
-            const auto& mesh = *item.mesh;
+            const auto& mesh = *selected.mesh;
             auto emit = [&](std::uint32_t index) {
                 if (index >= mesh.vertices.size())
                     throw std::out_of_range("Mesh index outside vertex range");
@@ -1086,10 +1789,12 @@ struct Renderer::Impl {
                         item.texture ? item.texture.get() : white.get()};
             if (item.cast_shadow)
                 shadow_batches.push_back(batch);
-            if (outside(data, first))
-                ++statistics.culled_meshes;
-            else
-                scene_batches.push_back(batch);
+            if (!selected.gpu) {
+                if (outside(data, first))
+                    ++statistics.culled_meshes;
+                else
+                    scene_batches.push_back(batch);
+            }
         }
         struct OrderedSprite {
             const Sprite* sprite;
@@ -1166,7 +1871,7 @@ struct Renderer::Impl {
                                   triangles.texture ? triangles.texture.get() : white.get(),
                                   triangles.clip_rect});
         }
-        statistics.vertices = static_cast<std::uint32_t>(data.size());
+        statistics.vertices = static_cast<std::uint32_t>(data.size() + gpu_frame.vertices.size());
         auto byte_count = std::max<std::size_t>(sizeof(GpuVertex), data.size() * sizeof(GpuVertex));
         if (vertices.size < byte_count) {
             destroy(vertices);
@@ -1179,6 +1884,27 @@ struct Renderer::Impl {
         if (!data.empty())
             std::memcpy(mapped, data.data(), data.size() * sizeof(GpuVertex));
         vkUnmapMemory(device, vertices.memory);
+        if (gpu_active) {
+            statistics.gpu_bins = static_cast<std::uint32_t>(gpu_frame.bins.size());
+            upload_scene_vector(scene.vertices, gpu_frame.vertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+            upload_scene_vector(scene.instances, gpu_frame.instances);
+            upload_scene_vector(scene.candidates, gpu_frame.candidates);
+            upload_scene_vector(scene.bins, gpu_frame.bins);
+            upload_scene_buffer(scene.view, &gpu_frame.view, sizeof(gpu_frame.view), 0);
+            upload_scene_buffer(scene.main_ids, nullptr,
+                                gpu_frame.candidate_count * sizeof(std::uint32_t), 0);
+            upload_scene_buffer(scene.post_ids, nullptr,
+                                gpu_frame.candidate_count * sizeof(std::uint32_t), 0);
+            upload_scene_vector(scene.main_args, gpu_frame.commands,
+                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+            upload_scene_vector(scene.post_args, gpu_frame.commands,
+                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+            upload_scene_buffer(scene.deferred_ids, nullptr,
+                                gpu_frame.candidate_count * sizeof(std::uint32_t), 0);
+            const std::uint32_t zero = 0;
+            upload_scene_buffer(scene.deferred_count, &zero, sizeof(zero), 0);
+            update_scene_descriptors(occlusion);
+        }
         Vec3 direction = snapshot.light_direction;
         float length = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1] +
                                  direction[2] * direction[2]);
@@ -1283,6 +2009,31 @@ struct Renderer::Impl {
             transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
                        VK_IMAGE_ASPECT_DEPTH_BIT);
         });
+        if (gpu_active)
+            add_pass("MainCull", {"shadow"}, {"main_indirect", "main_visible"}, [&] {
+                scene_barrier(VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                                  VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+                if (gpu_frame.candidate_count) {
+                    vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                      scene.cull_pipeline);
+                    vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                            scene.cull_pipeline_layout, 0, 1,
+                                            &scene.cull_main, 0, nullptr);
+                    const std::array<std::uint32_t, 4> push{
+                        gpu_frame.candidate_count, gpu_frame.candidate_count, 0, 0};
+                    vkCmdPushConstants(command, scene.cull_pipeline_layout,
+                                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push.data());
+                    vkCmdDispatch(command, (gpu_frame.candidate_count + 63) / 64, 1, 1);
+                    scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                  VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+                                      VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+                                  VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
+                                      VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+                }
+            });
         add_pass("ForwardAndUI", {"shadow"}, {"color", "depth"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
@@ -1329,6 +2080,35 @@ struct Renderer::Impl {
                                sizeof(push), &push);
             vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1,
                                     &white_descriptor, 0, nullptr);
+            if (gpu_active && !gpu_frame.bins.empty()) {
+                VkDeviceSize scene_offset{};
+                vkCmdBindVertexBuffers(command, 0, 1, &scene.vertices.handle, &scene_offset);
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  scene.graphics_pipeline);
+                for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
+                    auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
+                    const std::array<VkDescriptorSet, 2> sets{descriptor,
+                                                               scene.graphics_main};
+                    vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            scene.graphics_pipeline_layout, 0, sets.size(),
+                                            sets.data(), 0, nullptr);
+                    ScenePush draw_push{push, {gpu_frame.bins[bin].visible_base, 0, 0, 0}};
+                    vkCmdPushConstants(command, scene.graphics_pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT |
+                                           VK_SHADER_STAGE_FRAGMENT_BIT,
+                                       0, sizeof(draw_push), &draw_push);
+                    vkCmdDrawIndirect(command, scene.main_args.handle,
+                                      VkDeviceSize(bin) * sizeof(SceneIndirect), 1,
+                                      sizeof(SceneIndirect));
+                    ++statistics.draw_calls;
+                }
+                vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                vkCmdPushConstants(command, pipeline_layout,
+                                   VK_SHADER_STAGE_VERTEX_BIT |
+                                       VK_SHADER_STAGE_FRAGMENT_BIT,
+                                   0, sizeof(push), &push);
+            }
             for (auto batch : scene_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
                 vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
@@ -1438,6 +2218,39 @@ struct Renderer::Impl {
         statistics.readback_cpu_ms = std::chrono::duration<double, std::milli>(
                                          std::chrono::steady_clock::now() - readback_started)
                                          .count();
+        if (gpu_active) {
+            void* counts{};
+            check(vkMapMemory(device, scene.main_args.memory, 0, scene.main_args.size, 0,
+                              &counts), "Read GPU scene indirect counts");
+            auto* commands = static_cast<const SceneIndirect*>(counts);
+            std::uint32_t main_visible{};
+            for (std::size_t i = 0; i < gpu_frame.commands.size(); ++i)
+                main_visible += commands[i].instance_count;
+            vkUnmapMemory(device, scene.main_args.memory);
+            check(vkMapMemory(device, scene.deferred_count.memory, 0, scene.deferred_count.size,
+                              0, &counts), "Read GPU deferred count");
+            statistics.gpu_occlusion_deferred = *static_cast<const std::uint32_t*>(counts);
+            vkUnmapMemory(device, scene.deferred_count.memory);
+            if (occlusion && statistics.gpu_occlusion_deferred) {
+                check(vkMapMemory(device, scene.post_args.memory, 0, scene.post_args.size, 0,
+                                  &counts), "Read GPU post counts");
+                commands = static_cast<const SceneIndirect*>(counts);
+                for (std::size_t i = 0; i < gpu_frame.commands.size(); ++i)
+                    statistics.gpu_post_visible += commands[i].instance_count;
+                vkUnmapMemory(device, scene.post_args.memory);
+            }
+            statistics.gpu_visible_instances = main_visible + statistics.gpu_post_visible;
+            statistics.gpu_frustum_rejected = gpu_frame.candidate_count -
+                std::min(gpu_frame.candidate_count,
+                         main_visible + statistics.gpu_occlusion_deferred);
+            statistics.culled_meshes += statistics.gpu_frustum_rejected;
+        }
+        instance_tracker.finish_frame();
+        scene.previous_vp = snapshot.view_projection;
+        scene.previous_viewport = scene_viewport;
+        scene.previous_view_id = view_id;
+        if (!occlusion)
+            scene.hzb_history_valid = false;
         ++statistics.frame;
         statistics.gpu_allocated_bytes = vertices.allocation_size + readback.allocation_size +
                                          color.allocation_size + depth.allocation_size +
@@ -1445,6 +2258,15 @@ struct Renderer::Impl {
         statistics.texture_count = static_cast<std::uint32_t>(textures.size());
         for (const auto& [_, texture] : textures)
             statistics.gpu_allocated_bytes += texture.image.allocation_size;
+        if (scene.available) {
+            for (const Buffer* buffer : {&scene.vertices, &scene.instances, &scene.candidates,
+                                         &scene.bins, &scene.view, &scene.main_ids,
+                                         &scene.post_ids, &scene.main_args, &scene.post_args,
+                                         &scene.deferred_ids, &scene.deferred_count})
+                statistics.gpu_allocated_bytes += buffer->allocation_size;
+            for (const auto& image : scene.hzb)
+                statistics.gpu_allocated_bytes += image.allocation_size;
+        }
         statistics.validation_errors = validation_errors.load();
         statistics.cpu_ms =
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
@@ -1513,6 +2335,16 @@ void Renderer::resize(std::uint32_t w, std::uint32_t h) {
         impl_->height = h;
         impl_->make_targets();
     }
+}
+void Renderer::set_visibility_mode(VisibilityMode mode) {
+    if (impl_->config.visibility_mode == mode)
+        return;
+    impl_->config.visibility_mode = mode;
+    impl_->scene.hzb_history_valid = false;
+    impl_->instance_tracker.invalidate_view(impl_->scene.previous_view_id);
+}
+VisibilityMode Renderer::visibility_mode() const {
+    return impl_->config.visibility_mode;
 }
 std::uint32_t Renderer::width() const {
     return impl_->width;
