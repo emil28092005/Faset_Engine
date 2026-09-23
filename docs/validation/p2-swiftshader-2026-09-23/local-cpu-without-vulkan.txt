@@ -1,0 +1,57 @@
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p2/build/p2-release
+      Start 37: build_schema_publication
+      Start 12: render_shader_reflection
+      Start 36: process_and_cook
+      Start 49: editor_mcp_stdio
+      Start 33: lua_cli_contracts
+      Start 40: ui_widgets
+ 1/26 Test #40: ui_widgets .......................   Passed    0.14 sec
+      Start  4: assets_blender_bundle
+ 2/26 Test #33: lua_cli_contracts ................   Passed    0.17 sec
+      Start 57: playable_3d
+ 3/26 Test #49: editor_mcp_stdio .................   Passed    0.26 sec
+      Start  6: lua_safety_contracts
+ 4/26 Test  #4: assets_blender_bundle ............   Passed    0.11 sec
+      Start 51: core
+ 5/26 Test #57: playable_3d ......................   Passed    0.11 sec
+      Start 56: playable_2d
+ 6/26 Test #36: process_and_cook .................   Passed    0.29 sec
+      Start  3: assets_pipeline
+ 7/26 Test #56: playable_2d ......................   Passed    0.05 sec
+      Start  5: lua_contracts
+ 8/26 Test  #3: assets_pipeline ..................   Passed    0.04 sec
+      Start 55: tutorial_physics
+ 9/26 Test #51: core .............................   Passed    0.08 sec
+      Start  2: runtime_contracts
+10/26 Test #55: tutorial_physics .................   Passed    0.01 sec
+      Start  1: authoring
+11/26 Test  #6: lua_safety_contracts .............   Passed    0.09 sec
+      Start 11: render_gpu_shader_contract
+12/26 Test  #5: lua_contracts ....................   Passed    0.03 sec
+      Start 39: editor_session_settings
+13/26 Test  #2: runtime_contracts ................   Passed    0.02 sec
+14/26 Test  #1: authoring ........................   Passed    0.02 sec
+      Start 38: editor_plugins
+      Start 54: tutorial_spawning
+15/26 Test #11: render_gpu_shader_contract .......   Passed    0.02 sec
+16/26 Test #39: editor_session_settings ..........   Passed    0.01 sec
+      Start 31: player_scene_contracts
+      Start  7: render_graph
+17/26 Test #38: editor_plugins ...................   Passed    0.01 sec
+18/26 Test #54: tutorial_spawning ................   Passed    0.01 sec
+      Start 14: visibility_policy
+      Start 52: tutorial_moving
+19/26 Test #31: player_scene_contracts ...........   Passed    0.01 sec
+20/26 Test  #7: render_graph .....................   Passed    0.01 sec
+21/26 Test #14: visibility_policy ................   Passed    0.01 sec
+      Start 35: editor_mcp
+      Start 53: tutorial_following
+22/26 Test #52: tutorial_moving ..................   Passed    0.02 sec
+23/26 Test #35: editor_mcp .......................   Passed    0.01 sec
+24/26 Test #53: tutorial_following ...............   Passed    0.01 sec
+25/26 Test #37: build_schema_publication .........   Passed    1.76 sec
+26/26 Test #12: render_shader_reflection .........   Passed    2.41 sec
+
+100% tests passed, 0 tests failed out of 26
+
+Total Test time (real) =   2.41 sec

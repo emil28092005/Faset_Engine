@@ -406,7 +406,7 @@ LOD example. Its full CTest run reported 57 registered tests, zero failures and
 one existing native-window lifecycle skip. The focused Release Player CLI test
 selected all three visibility modes, verified active GPU status in the profile,
 and rejected an invalid mode. Release build/test success establishes functional
-coverage; it does not replace a Release performance comparison or a Windows P2 run.
+coverage; at that checkpoint, Windows P2 was still unverified.
 
 As an additional Linux software-Vulkan check, Lavapipe ran all 15 labelled P2
 acceptance cases plus the standalone GPU visibility test and both example modes.
@@ -425,3 +425,44 @@ pixels, with no missing geometry. Direct CPU vertex transformation and GPU shade
 vertex transformation round differently at subpixel triangle boundaries. The
 Debug benchmarks above and this Release functional record have different purposes;
 neither establishes physical Windows GPU coverage.
+
+Compatibility checkpoint `433bce0` followed the first red Windows P2 CI run. The
+pinned SwiftShader device does not expose `shaderDrawParameters`; the Slang
+`SV_InstanceID` builtin had emitted a SPIR-V `DrawParameters` capability, so the
+renderer rejected the GPU route. Both GPU vertex entries now use raw
+`SV_VulkanInstanceID` while their fixed indirect commands keep `firstInstance = 0`.
+The renderer no longer requests that optional feature. The GPU smoke case now has
+the `gpu;p2` CTest labels, so CPU-only native checks exclude it. A reflection test
+rejects `DrawParameters` in the two generated vertex modules. On matching Linux
+SwiftShader, all 16 P2 cases passed with the GPU path active; a deliberately
+driverless CPU-only selection passed 26/26.
+
+At this revision, [Windows graphics CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35918597688)
+passed all 58 tests on pinned SwiftShader, including the P2 route and Windows
+window/editor tests. Its two relocated Release example games each rendered 120
+frames in the default Direct mode. [Native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35918597686)
+also passed. The [SwiftShader compatibility dossier](validation/p2-swiftshader-2026-09-23/README.md)
+records the cause, local commands, CI run and export report. Windows did not have
+the Khronos validation layer, and no physical Windows GPU or driver-family
+performance claim follows from this software-Vulkan result.
+
+Independent P2 source review then found two contract gaps. Requested GPU occlusion
+could silently run GPU frustum when HZB was unavailable, and stable instance
+slot/generation lived only in the CPU tracker while GPU candidates used dense
+frame-local indices. Follow-up `22012c1` records the requested and effective
+visibility mode per frame in renderer statistics, Player profiles/output and
+Editor diagnostics, with a CPU capability-policy regression. GPU instance records
+now carry stable slot and all 64 generation bits in previously reserved metadata;
+dense indices remain addresses into the current frame's instance buffer. A focused
+reorder/replacement/anonymous-instance test covers the metadata packing. The
+reviewer rechecked both fixes and found no remaining load-bearing issue in those
+paths. On this revision, full Linux Debug and Release CTest each reported 57
+registered tests, zero failures and one existing native-window lifecycle skip. The dedicated ImGui overlay test passed
+1/1; pinned Linux SwiftShader passed all 16 P2 cases and Player diagnostics; a
+driverless CPU-only Release selection passed 26/26. The final
+[Windows graphics CI run](https://github.com/emil28092005/Faset_Engine/actions/runs/35922643226)
+passed all 58 tests without skips on SwiftShader; both relocated Release games
+rendered 120 frames in Direct mode. The corresponding
+[native/manual CI run](https://github.com/emil28092005/Faset_Engine/actions/runs/35922643004)
+passed on Linux and Windows. Unsupported-HZB integration and physical Windows
+GPU coverage remain untested.

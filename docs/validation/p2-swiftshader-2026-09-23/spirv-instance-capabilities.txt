@@ -1,0 +1,2 @@
+gpuVertexMain: sha256=4647ef4fe1a68ab623ee9c19dac56631907f825cba0becd30869c5221c2a0385, OpCapability=[1], spirv-val exit=0
+gpuShadowMain: sha256=ffcdb91e70c41ce9452094865546a009b9203140cf8eeb3ad1b4e5868d82b815, OpCapability=[1], spirv-val exit=0

@@ -1,0 +1,27 @@
+$ ctest --test-dir build/p2-release -R render_shader_reload|player_shutdown_diagnostics --output-on-failure -j2
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p2/build/p2-release
+    Start 10: render_shader_reload
+    Start 32: player_shutdown_diagnostics
+1/2 Test #32: player_shutdown_diagnostics ......   Passed    1.59 sec
+2/2 Test #10: render_shader_reload .............   Passed    5.17 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+gpu    =   6.76 sec*proc (2 tests)
+
+Total Test time (real) =   5.17 sec
+exit=0
+
+$ ctest --test-dir build/p2-ui-debug -R editor_debug_overlay --output-on-failure
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p2/build/p2-ui-debug
+    Start 58: editor_debug_overlay
+1/1 Test #58: editor_debug_overlay .............   Passed    2.13 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+gpu    =   2.13 sec*proc (1 test)
+
+Total Test time (real) =   2.13 sec
+exit=0

@@ -30,7 +30,7 @@
 
 ---
 
-**Implementation note, 23 September 2026:** this checklist records the proposed execution sequence. A checked item has direct code/test/commit evidence; an unchecked item may be an unrecorded test-first step or a narrower validation/documentation gap, even where the corresponding P2 feature works. The [acceptance protocol](../../studies/19-p2-gpu-visibility-acceptance.md), [initial benchmark](../../studies/20-p2-gpu-visibility-benchmark-2026-09-23.md) and [optimized repeat](../../studies/21-p2-gpu-visibility-optimization-2026-09-23.md) report the observed Linux scope. Other platforms and real-game performance require separate evidence.
+**Implementation note, 23 September 2026:** this checklist records the proposed execution sequence. A checked item has direct code/test/commit evidence; an unchecked item may be an unrecorded test-first step or a narrower validation/documentation gap, even where the corresponding P2 feature works. The [acceptance protocol](../../studies/19-p2-gpu-visibility-acceptance.md), [initial benchmark](../../studies/20-p2-gpu-visibility-benchmark-2026-09-23.md), [optimized repeat](../../studies/21-p2-gpu-visibility-optimization-2026-09-23.md) and [SwiftShader compatibility record](../../validation/p2-swiftshader-2026-09-23/README.md) report their tested configurations. Real-game performance and physical Windows GPUs require separate evidence.
 
 ### Task 1: Stable instances, conservative bounds, and LOD policy
 
@@ -59,7 +59,7 @@
 
 - [x] **Step 1: Write failing reflection/package tests.** A storage-buffer/storage-image Slang reflection fixture must normalize to a typed descriptor; missing or tampered P2 SPIR-V/metadata must fail validation; a packaged Player must contain all required P2 shaders.
 - [ ] **Step 2: Run focused tests and verify the expected rejection or missing-artifact failure.** `ctest --test-dir build/linux-debug --output-on-failure -R 'render_shader_reload|build_schema_publication'` plus the new reflection test target.
-- [x] **Step 3: Extend the compiler's descriptor normalization and add the P2 shader entries.** Vertex resolves `visibleIds[binBase + SV_InstanceID]`; compute writes bounded per-bin IDs/counts; HZB computes max of valid children and far depth for padding. Keep C++/Slang record strides explicit and checked.
+- [x] **Step 3: Extend the compiler's descriptor normalization and add the P2 shader entries.** Vertex resolves `visibleIds[binBase + SV_VulkanInstanceID]`; compute writes bounded per-bin IDs/counts; HZB computes max of valid children and far depth for padding. Keep C++/Slang record strides explicit and checked.
 - [x] **Step 4: Validate generated reflection and package.** Rebuild `faset_shaders`, run the focused tests and inspect each generated metadata stage/binding/fingerprint.
 - [x] **Step 5: Commit** `Add checked Slang shaders for GPU visibility and HZB`.
 
@@ -118,7 +118,7 @@
 **Interfaces:** Close P2 only with exact revision, compiler/driver/GPU/OS, scene/camera paths, commands, full-frame direct/GPU timings, pass counters, image comparison and stated coverage limits.
 
 - [ ] **Step 1: Add adversarial fixtures for mass deletion/reuse, near-plane, camera inside bounds, odd/offset viewport, door/wall, open scene and offscreen shadow caster; confirm at least one fails before its corresponding fix.**
-- [ ] **Step 2: Run Debug and Release build/test suites, GPU validation, shader reload, two sample-game export/relaunch checks, and available Windows CI.** Record exact outputs; a platform without executed GPU coverage remains explicitly unverified.
-- [ ] **Step 3: Profile the same closed and open scenes in direct and GPU modes.** Record CPU extraction/upload/submission, GPU pass and full-frame time, readback conditions, memory and culling counters. Do not turn a scene-specific result into a universal performance claim.
-- [ ] **Step 4: Review all PLAN P2 criteria against evidence, update docs, run `graphify update .`, request independent code review and fix load-bearing findings.**
-- [ ] **Step 5: Commit** `Validate and document P2 GPU visibility milestone`; publish only after all checks are green.
+- [x] **Step 2: Run Debug and Release build/test suites, GPU validation, shader reload, two sample-game export/relaunch checks, and available Windows CI.** Record exact outputs; a platform without executed GPU coverage remains explicitly unverified.
+- [x] **Step 3: Profile the same closed and open scenes in direct and GPU modes.** Record CPU extraction/upload/submission, GPU pass and full-frame time, readback conditions, memory and culling counters. Do not turn a scene-specific result into a universal performance claim.
+- [x] **Step 4: Review all PLAN P2 criteria against evidence, update docs, run `graphify update .`, request independent code review and fix load-bearing findings.**
+- [x] **Step 5: Commit** `Validate and document P2 GPU visibility milestone`; publish only after all checks are green.
