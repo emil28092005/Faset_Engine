@@ -468,44 +468,6 @@ def main():
     validate_report(report)
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Report: {output / 'report.json'}", flush=True)
-    settings = json.loads((project / "project.faset.json").read_text(encoding="utf-8"))
-    run("changed-build-player-first-frame", [built["player"], "--scene",
-        project / settings["start_scene"], "--assets", project / ".faset/cache",
-        "--headless", "--frames", "1", "--profile", profile])
-    iteration_seconds = time.perf_counter() - iteration_started
-    assert not call("schema-current-after-build", "faset_schema_status")["stale"]
-    # Keep original inputs in this disposable project, without implying its last
-    # built binary matches the restored source signature.
-    gameplay.write_bytes(original)
-    engine = Path(__file__).resolve().parents[1]
-    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=engine,
-                              capture_output=True, text=True).stdout.strip()
-    dirty = subprocess.run(["git", "status", "--porcelain"], cwd=engine,
-                           capture_output=True, text=True).stdout.strip()
-    cpu = platform.processor()
-    if Path("/proc/cpuinfo").exists():
-        cpu = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
-                    if line.startswith("model name")), cpu)
-    report = {
-        "format": "faset.workflow-measurements", "version": 1,
-        "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "revision": revision, "working_tree_dirty": bool(dirty),
-        "host": {"platform": platform.platform(), "cpu": cpu,
-                 "logical_cpus": os.cpu_count(), "python": platform.python_version()},
-        "source_project": str(source), "editor": str(editor),
-        "build_configuration": "Debug", "samples": samples,
-        "changed_build_and_one_frame_process_seconds": iteration_seconds,
-        "player": json.loads(profile.read_text()),
-        "method": [
-            "Fresh disposable project, engine dependency archives and OS file caches already available.",
-            "Each Editor command starts a new process and includes shutdown in wall time.",
-            "GUI startup sample includes window creation, two frames, and shutdown.",
-            "Changed build appends a harmless comment, recompiles Gameplay.cpp and relinks native outputs.",
-            "Combined iteration runs the returned Debug Player in a separate process for one offscreen frame.",
-            "Peak RSS is GNU time maximum over each command and waited-for children, not a sum.",
-            "Numbers include ambient host load; there is no warm-up exclusion or real-time frame guarantee."
-        ]}
-    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
