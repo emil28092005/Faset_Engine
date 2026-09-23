@@ -27,7 +27,7 @@ struct FrameParameters {
 // Shared Direct/P2 graphics ABI. The legacy material set remains set 0;
 // GPU-only instance/visibility records occupy set 2.
 struct LightingHeader {
-    uint4 counts;                    // local count, sun enabled, sun shadow enabled, view count
+    uint4 counts;                    // local count, sun enabled, sun shadow enabled, sun view count
     float4 sunDirectionIntensity;    // xyz world-space ray direction, w intensity
     float4 sunColor;
     float4 cameraForwardShadowDistance;
@@ -58,6 +58,26 @@ VertexOutput vertexMain(VertexInput v) {
 }
 [shader("vertex")]
 float4 shadowMain(VertexInput v) : SV_Position { return mul(frame.lightViewProjection, float4(v.world,1)); }
+float sampleSunCascade(uint index, float3 world, float nl) {
+    ShadowViewGpu record = shadowViews[index];
+    if (record.biasFlags.w < 0.5) return 1.0;
+    float4 clip = mul(record.viewProjection, float4(world,1));
+    if (clip.w <= 0.0) return 1.0;
+    float3 projected = clip.xyz / clip.w;
+    float2 localUV = projected.xy * 0.5 + 0.5;
+    if (any(localUV < 0.0) || any(localUV > 1.0) ||
+        projected.z < 0.0 || projected.z > 1.0) return 1.0;
+    float2 atlasUV = localUV * record.tileScaleOffset.xy + record.tileScaleOffset.zw;
+    float bias = max(record.biasFlags.x, record.biasFlags.y * (1.0 - nl));
+    float visible = 0.0;
+    for (int y=-1; y<=1; ++y) for (int x=-1; x<=1; ++x) {
+        float2 tap = clamp(atlasUV + float2(x,y) * record.biasFlags.z,
+                           record.guardedClamp.xy, record.guardedClamp.zw);
+        float depth = shadowMap.SampleLevel(shadowSampler, tap, 0);
+        visible += projected.z - bias <= depth ? 1.0 / 9.0 : 0.0;
+    }
+    return visible;
+}
 float3 directBRDF(float3 base, float rough, float metal, float3 n, float3 view, float3 l) {
     const float pi = 3.14159265;
     float nl = max(dot(n,l),0.0);
@@ -94,15 +114,29 @@ float4 fragmentMain(VertexOutput v) : SV_Target {
         float3 l=normalize(-lighting.sunDirectionIntensity.xyz);
         float nl=max(dot(n,l),0.0);
         float visibility=1.0;
-        if (lighting.counts.z != 0 && nl > 0) {
-            float4 lightClip=mul(frame.lightViewProjection,float4(v.world,1));
-            float3 projected=lightClip.xyz/lightClip.w;
-            float2 uv=projected.xy*.5+.5;
-            if(all(uv>=0.0)&&all(uv<=1.0)&&projected.z>=0.0&&projected.z<=1.0) {
-                visibility=0.0;
-                for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) {
-                    float depth=shadowMap.SampleLevel(shadowSampler,uv+float2(x,y)/1024.0,0);
-                    visibility += projected.z-max(0.0008,0.003*(1.0-nl)) <= depth ? 1.0/9.0 : 0.0;
+        if (lighting.counts.z != 0 && lighting.counts.w != 0 && nl > 0) {
+            if (lighting.counts.w == 1) {
+                visibility = sampleSunCascade(0, v.world, nl);
+            } else {
+                float cameraDepth = dot(v.world - frame.eye.xyz,
+                                        lighting.cameraForwardShadowDistance.xyz);
+                if (cameraDepth >= 0.0 &&
+                    cameraDepth <= lighting.cameraForwardShadowDistance.w) {
+                    uint cascade = 0;
+                    while (cascade + 1 < lighting.counts.w &&
+                           cameraDepth > lighting.cascadeSplits[cascade]) ++cascade;
+                    visibility = sampleSunCascade(cascade, v.world, nl);
+                    if (cascade + 1 < lighting.counts.w) {
+                        float previousSplit = cascade == 0 ? 0.0 :
+                                              lighting.cascadeSplits[cascade-1];
+                        float blendWidth = max(0.2,
+                            0.1 * (lighting.cascadeSplits[cascade] - previousSplit));
+                        float blend = saturate((cameraDepth -
+                            (lighting.cascadeSplits[cascade] - blendWidth)) / blendWidth);
+                        if (blend > 0.0)
+                            visibility = lerp(visibility,
+                                sampleSunCascade(cascade+1, v.world, nl), blend);
+                    }
                 }
             }
         }

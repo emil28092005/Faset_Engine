@@ -184,6 +184,9 @@ struct FrameStats {
     std::uint32_t texture_count{};
     std::uint32_t vertices{}, draw_calls{}, culled_meshes{}, validation_errors{};
     std::uint32_t submitted_local_lights{}, omitted_local_lights{};
+    std::uint32_t requested_sun_cascades{}, effective_sun_cascades{};
+    std::uint32_t sun_shadow_caster_draws{};
+    std::uint64_t sun_shadow_atlas_bytes{};
     bool gpu_visibility_active{}, hzb_valid{};
     // Requested and actual paths for the last frame; actual may be less capable.
     VisibilityMode requested_visibility_mode{VisibilityMode::Direct};
@@ -195,6 +198,7 @@ struct FrameStats {
     double cpu_ms{}, gpu_ms{}, readback_cpu_ms{};
     double gpu_main_cull_ms{}, gpu_main_raster_ms{}, gpu_hzb_ms{};
     double gpu_post_cull_ms{}, gpu_post_raster_ms{};
+    double gpu_sun_shadow_ms{};
     std::string device;
 };
 struct HzbDebugImage {
