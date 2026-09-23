@@ -61,7 +61,10 @@ int main(int argc, char** argv) {
             item.mesh = cube_mesh();
             item.lod_meshes = {prepared_coarse};
             item.instance_key = "example/cube/" + std::to_string(i);
-            item.model = transform({float(i - 4) * 1.8f, 0, i % 2 ? -5.f : 0.f});
+            const bool near_detail = i == 2;
+            item.model = transform({float(i - 4) * 1.8f, 0,
+                                    near_detail ? 6.f : (i % 2 ? -5.f : 0.f)},
+                                   {}, near_detail ? Vec3{4, 4, 4} : Vec3{1, 1, 1});
             item.color = {0.28f + .07f * i, .6f, .8f, 1};
             item.cast_shadow = false;
             frame.draws.push_back(std::move(item));

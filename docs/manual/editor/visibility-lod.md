@@ -51,6 +51,8 @@ build/linux-debug/faset_p2_visibility_example direct /tmp/p2-direct.ppm
 
 The example creates a fine cube and a prepared coarse tetrahedron in
 [`examples/renderer/p2_visibility.cpp`](https://github.com/emil28092005/Faset_Engine/blob/main/examples/renderer/p2_visibility.cpp).
+Its near object selects LOD 0 and the eight smaller objects select LOD 1;
+the program prints those counts and reports Vulkan validation errors.
 Imported GLB geometry can be supplied as prepared levels by C++ integration,
 but automatic LOD generation and assigning a GLB's alternate meshes as LODs in
 the Inspector are not implemented yet.
