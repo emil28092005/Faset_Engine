@@ -204,7 +204,7 @@ def real_executable_smoke(executable: Path) -> None:
     if declared["lights"] != [0, 4, 16, 32, 64, 128] or len(declared["visibility"]) != 3:
         raise AssertionError("C++ executable and Python sweep matrix disagree")
     with tempfile.TemporaryDirectory() as directory:
-        output = Path(directory) / "smoke.csv"
+        output = Path(directory) / "café 世界" / "smoke.csv"
         subprocess.run([executable, "--lights", "4", "--shadows", "off",
                         "--visibility", "direct", "--width", "64", "--height", "64",
                         "--warmup", "0", "--frames", "1", "--validation", "on",
