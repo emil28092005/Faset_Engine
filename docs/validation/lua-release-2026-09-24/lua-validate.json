@@ -1,10 +1,10 @@
 {
   "arguments": [
-    "/tmp/faset-playable-exports-yz70irb6/Faset Café 世界/lua/faset_player",
+    "/tmp/faset-playable-exports-8wzkrc_u/Faset Café 世界/lua/faset_player",
     "--validate"
   ],
-  "cwd": "/tmp/faset-playable-exports-yz70irb6/empty-working-directory",
-  "seconds": 0.0062960259965620935,
+  "cwd": "/tmp/faset-playable-exports-8wzkrc_u/empty-working-directory",
+  "seconds": 0.007359832990914583,
   "exit_code": 0,
   "timed_out": false,
   "stdout": "{\"dimension\":2,\"validated\":true}\n",

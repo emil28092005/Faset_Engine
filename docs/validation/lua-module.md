@@ -57,7 +57,7 @@ were installed. This proves linkage and CPU validation, not graphics compatibili
 ## September 24 Release follow-up
 
 The [Release execution record](lua-release-2026-09-24/README.md) closes the
-Linux offscreen export gap above. At source commit `846f1f4`, a Release Editor
+Linux offscreen export gap above. At source commit `4331857`, a Release Editor
 exported the checked-in Lua-only sample into a disposable Unicode-path project.
 The package was relocated, the source project path was hidden, and its Player
 validated and rendered 120 frames on an NVIDIA GeForce RTX 2080 Ti with driver

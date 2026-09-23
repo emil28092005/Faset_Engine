@@ -1,7 +1,7 @@
 # Lua-only Release game: relocated execution
 
 This is a local Linux result for source revision
-`846f1f459d61ee0f878ab9ad116ac0e75d74d588` on 2026-09-24. The
+`433185717e1f324acb6eaf186818589d11697453` on 2026-09-24. The
 [machine-readable report](report.json) records the exact source input hashes,
 Release package, Editor binary hash, command arguments and elapsed times. The
 Editor itself was built with the `linux-release` preset. The exported Player
@@ -24,6 +24,10 @@ resource/timing definitions; the [validate](lua-validate.json),
 [render](lua-run.json) and [export](lua-export.json) logs retain raw process
 results. The [PNG preview](lua.png) is a lossless conversion of the checked
 PPM.
+
+The verifier also confirmed a clean Git source tree, rejected undeclared
+package files and unexpected C++ script files, classified the selected device
+as physical, and found the sample Lua `on_start` log in the relocated run.
 
 To repeat this check from a built checkout, choose a **new, empty** output
 directory:

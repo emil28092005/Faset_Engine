@@ -1,6 +1,6 @@
 {
   "asset_generations": {},
-  "build_fingerprint": "55f8ff15cb5e4f241fcf7ee436a52a5a1eed36f2031f12bf44070276d796927e",
+  "build_fingerprint": "b745490f85f05987d849f6bb6f4d06953883f4b8e10c5551fadf164c7eec5857",
   "configuration": "Release",
   "executable": "faset_player",
   "files": [
@@ -136,7 +136,7 @@
     },
     {
       "path": "faset_player",
-      "sha256": "c9f626134e0742eb015da1c02ca2587471f30261042830631f55307b1ec4ac71",
+      "sha256": "99d7b8286a9151ec4eff9a9899e862d987048b031e1e40ca1938646afbde37bd",
       "size": 6329192
     },
     {
@@ -166,7 +166,7 @@
     }
   ],
   "format": "faset.export",
-  "generation": "38d65abf-1c6d-4e6e-850a-5a4916e36b16",
+  "generation": "aa31bf16-984e-4854-b46f-15655bd6cc67",
   "lua_enabled": true,
   "lua_fingerprint": "a9261789bb1e0ca38bd40b08b0454165cd51454cba3ad4725dd357812ced6e35",
   "platform": "linux",

@@ -1,14 +1,17 @@
 {
   "format": "faset.playable-export-verification",
   "version": 1,
-  "started_utc": "2026-09-23T23:20:41.969369+00:00",
+  "started_utc": "2026-09-23T23:30:12.719805+00:00",
   "platform": "linux",
   "engine": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-lua-export",
   "editor": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-lua-export/build/linux-release/faset_editor",
-  "standalone_root": "/tmp/faset-playable-exports-yz70irb6",
-  "engine_revision": "846f1f459d61ee0f878ab9ad116ac0e75d74d588",
+  "standalone_root": "/tmp/faset-playable-exports-8wzkrc_u",
+  "engine_revision": "433185717e1f324acb6eaf186818589d11697453",
+  "engine_dirty": false,
+  "engine_git_status": [],
+  "engine_diff_sha256": null,
   "editor_sha256": "03ac75942f5f1d29e9d6fedb21ecffc6c74f4299401dbe84f01ab1b4e9c176a0",
-  "project_workspace": "/tmp/faset-playable-projects-6xvbjr4b",
+  "project_workspace": "/tmp/faset-playable-projects-cuhq4iwr",
   "vulkaninfo_available": true,
   "driver_override": null,
   "frames_per_game": 120,
@@ -44,14 +47,14 @@
           "sha256": "7e4c0781c1837208b4499a9991ffb702143edf1f933ae9c7e3d2543fd2577747"
         }
       ],
-      "generation": "38d65abf-1c6d-4e6e-850a-5a4916e36b16",
+      "generation": "aa31bf16-984e-4854-b46f-15655bd6cc67",
       "configuration": "Release",
-      "standalone_directory": "/tmp/faset-playable-exports-yz70irb6/Faset Café 世界/lua",
+      "standalone_directory": "/tmp/faset-playable-exports-8wzkrc_u/Faset Café 世界/lua",
       "executable": "faset_player",
       "package_file_count": 32,
       "asset_generations": {},
       "device": "NVIDIA GeForce RTX 2080 Ti",
-      "validation_enabled": true,
+      "device_class": "physical",
       "driver": {
         "apiVersion": "1.4.329",
         "driverVersion": "595.84.0.0",
@@ -60,56 +63,57 @@
         "driverName": "NVIDIA",
         "driverInfo": "595.84"
       },
+      "validation_enabled": true,
       "validation_errors": 0,
       "completed_frames": 120,
       "summary_ms": {
         "gpu": {
-          "max": 0.585024,
-          "min": 0.558816,
-          "p50": 0.560416,
-          "p95": 0.577312,
+          "max": 0.584992,
+          "min": 0.551712,
+          "p50": 0.5608,
+          "p95": 0.574592,
           "samples": 120
         },
         "render_call": {
-          "max": 4.487375,
-          "min": 1.483498,
-          "p50": 1.856402,
-          "p95": 2.145527,
+          "max": 4.928888,
+          "min": 1.544123,
+          "p50": 1.919881,
+          "p95": 2.423702,
           "samples": 120
         },
         "renderer_cpu": {
-          "max": 4.483287,
-          "min": 1.480312,
-          "p50": 1.851913,
-          "p95": 2.141489,
+          "max": 4.923196,
+          "min": 1.540666,
+          "p50": 1.915753,
+          "p95": 2.420426,
           "samples": 120
         },
         "renderer_readback_cpu": {
-          "max": 2.631884,
-          "min": 0.383573,
-          "p50": 0.508409,
-          "p95": 0.57264,
+          "max": 2.837363,
+          "min": 0.395756,
+          "p50": 0.504853,
+          "p95": 0.641169,
           "samples": 120
         },
         "simulation": {
-          "max": 0.21704,
+          "max": 0.210056,
           "min": 0.084289,
-          "p50": 0.122371,
-          "p95": 0.17531,
+          "p50": 0.122261,
+          "p95": 0.171062,
           "samples": 120
         },
         "snapshot": {
-          "max": 0.113824,
-          "min": 0.046728,
-          "p50": 0.067627,
-          "p95": 0.102965,
+          "max": 0.254931,
+          "min": 0.046518,
+          "p50": 0.065754,
+          "p95": 0.087906,
           "samples": 120
         },
         "wall": {
-          "max": 4.747145,
-          "min": 1.658538,
-          "p50": 2.05683,
-          "p95": 2.394717,
+          "max": 5.322149,
+          "min": 1.702973,
+          "p50": 2.142903,
+          "p95": 2.634219,
           "samples": 120
         }
       },
@@ -126,5 +130,5 @@
   "requested_projects": [
     "lua"
   ],
-  "finished_utc": "2026-09-23T23:22:48.305164+00:00"
+  "finished_utc": "2026-09-23T23:32:18.151669+00:00"
 }
