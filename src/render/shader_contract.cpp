@@ -216,4 +216,7 @@ detail::load_gpu_shader_bundle(const std::filesystem::path& directory) {
 void validate_shader_bundle(const std::filesystem::path& directory) {
     (void)detail::load_shader_bundle(directory);
 }
+void validate_gpu_shader_bundle(const std::filesystem::path& directory) {
+    (void)detail::load_gpu_shader_bundle(directory);
+}
 } // namespace faset::render

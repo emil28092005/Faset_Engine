@@ -36,4 +36,21 @@ with tempfile.TemporaryDirectory(prefix="faset-player-diagnostics-") as temporar
     assert validated.returncode == 0, validated.stderr
     assert "TEST_" not in validated.stderr, validated.stderr
     assert json.loads(validated.stdout)["validated"]
+
+    for mode, active in [("direct", False), ("gpu-frustum", True),
+                         ("gpu-occlusion", True)]:
+        mode_profile = root / f"{mode}.json"
+        selected = subprocess.run([sys.argv[1], "--scene", str(scene), "--headless",
+                                   "--frames", "2", "--visibility", mode,
+                                   "--profile", str(mode_profile)],
+                                  capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert selected.returncode == 0, (mode, selected.stdout, selected.stderr)
+        mode_report = json.loads(mode_profile.read_text(encoding="utf-8"))
+        assert mode_report["visibility_mode"] == mode, mode_report
+        assert all(sample["gpu_visibility_active"] is active
+                   for sample in mode_report["samples"]), mode_report["samples"]
+
+    invalid_mode = subprocess.run([sys.argv[1], "--visibility", "missing"],
+                                  capture_output=True, text=True, encoding="utf-8", timeout=20)
+    assert invalid_mode.returncode != 0 and "visibility" in invalid_mode.stderr.lower(), invalid_mode
 print("Player normal shutdown diagnostics, preserved tick/profile stats and callback-free validation passed")

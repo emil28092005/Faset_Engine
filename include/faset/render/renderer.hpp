@@ -104,6 +104,7 @@ struct Snapshot {
 enum class VisibilityMode { Direct, GpuFrustum, GpuOcclusion };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.
 void validate_shader_bundle(const std::filesystem::path& directory);
+void validate_gpu_shader_bundle(const std::filesystem::path& directory);
 
 struct RendererConfig {
     std::uint32_t width{1280}, height{720};

@@ -66,3 +66,23 @@ waits for every frame even without this overlay. Read
 [profiling and measurements](profiling.md) and the
 [P2 acceptance study](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/19-p2-gpu-visibility-acceptance.md)
 for the measured scope and limitations.
+
+## Select a mode in the Player
+
+The exported Player uses Direct by default. Choose a GPU mode for one run with
+`--visibility`; the same option works for a development Player and a relocated
+standalone game:
+
+```sh
+./faset_player --visibility gpu-frustum
+./faset_player --visibility gpu-occlusion --headless --frames 120 \
+  --profile visibility-profile.json
+```
+
+Accepted values are `direct`, `gpu-frustum`, and `gpu-occlusion`. The profile
+records the requested `visibility_mode` and each frame's
+`gpu_visibility_active` status. If the device lacks the GPU path, the Player
+reports a Direct fallback; selecting a mode alone does not prove that it ran.
+The Editor's Diagnostics selector changes only its viewport and does not save a
+Player setting. An exported game contains the P2 shader bundle and does not need
+the Slang compiler at runtime.

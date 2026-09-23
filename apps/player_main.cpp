@@ -35,6 +35,7 @@ struct ProfileSample {
     std::uint64_t gpuAllocatedBytes{};
     std::uint32_t textureCount{};
     bool physicsDebug{};
+    bool gpuVisibilityActive{};
 };
 Json distribution(std::vector<double> values) {
     if (values.empty())
@@ -80,7 +81,8 @@ Json profileFrames(const std::vector<ProfileSample>& samples) {
                           {"vertices", sample.vertices},
                           {"gpu_allocated_bytes", sample.gpuAllocatedBytes},
                           {"texture_count", sample.textureCount},
-                          {"physics_debug", sample.physicsDebug}});
+                          {"physics_debug", sample.physicsDebug},
+                          {"gpu_visibility_active", sample.gpuVisibilityActive}});
     }
     return {{"samples", std::move(frames)},
             {"summary_ms",
@@ -167,7 +169,8 @@ faset::runtime::RuntimeConfig simulationConfig(const nlohmann::json& scene) {
     }
     return config;
 }
-void validatePackagedShaders(const std::filesystem::path& directory) {
+void validatePackagedShaders(const std::filesystem::path& directory,
+                             faset::render::VisibilityMode visibilityMode) {
     const auto shaders = directory / "shaders";
     for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
         for (const auto* extension : {".spv", ".reflection.json"}) {
@@ -177,6 +180,8 @@ void validatePackagedShaders(const std::filesystem::path& directory) {
                                          faset::path_to_utf8(path));
         }
     faset::render::validate_shader_bundle(shaders);
+    if (visibilityMode != faset::render::VisibilityMode::Direct)
+        faset::render::validate_gpu_shader_bundle(shaders);
 }
 } // namespace
 int player_main(int argc, char** argv) {
@@ -185,6 +190,8 @@ int player_main(int argc, char** argv) {
         std::filesystem::path scenePath, assetsPath, capturePath, controlPath, profilePath,
             projectRoot;
         bool headless = false, validateOnly = false, debugPhysics = false, watchLua = false;
+        auto visibilityMode = faset::render::VisibilityMode::Direct;
+        std::string visibilityName = "direct";
         std::uint64_t maximumFrames = 0;
         std::set<std::string> options;
         for (int i = 1; i < argc; ++i) {
@@ -194,7 +201,7 @@ int player_main(int argc, char** argv) {
                     << "faset_player [--scene PATH] [--assets CACHE] [--frames N] "
                        "[--headless] [--capture PATH.ppm] [--validate] [--control PATH] "
                        "[--profile PATH.json] [--debug-physics] [--project ROOT] "
-                       "[--watch-lua]\n"
+                       "[--watch-lua] [--visibility direct|gpu-frustum|gpu-occlusion]\n"
                        "No --scene: open scene.fscene beside the executable. CACHE contains "
                        "assets/<id>/.\n"
                        "Headless uses offscreen Vulkan; --frames uses the configured fixed "
@@ -209,6 +216,9 @@ int player_main(int argc, char** argv) {
                        "reload-lua): the scene restarts, runtime state is not preserved.\n"
                        "--profile requires explicit --frames 1..100000; measured durations "
                        "include the first frame and renderer GPU waits/readback.\n"
+                       "--visibility selects the renderer for this Player run; Direct is "
+                       "the default. GPU modes require their packaged shader bundle and "
+                       "device capabilities.\n"
                        "Keys: A/D horizontal, W/S vertical, Space jump, E interact, P pause, "
                        "N single-step, F3 physics boxes, Escape quit.\n";
                 return 0;
@@ -232,6 +242,18 @@ int player_main(int argc, char** argv) {
                 profilePath = faset::path_from_utf8(value());
             else if (arg == "--project")
                 projectRoot = faset::path_from_utf8(value());
+            else if (arg == "--visibility") {
+                visibilityName = value();
+                if (visibilityName == "direct")
+                    visibilityMode = faset::render::VisibilityMode::Direct;
+                else if (visibilityName == "gpu-frustum")
+                    visibilityMode = faset::render::VisibilityMode::GpuFrustum;
+                else if (visibilityName == "gpu-occlusion")
+                    visibilityMode = faset::render::VisibilityMode::GpuOcclusion;
+                else
+                    throw std::invalid_argument("--visibility must be direct, gpu-frustum, "
+                                                "or gpu-occlusion");
+            }
             else if (arg == "--frames")
                 maximumFrames = count(value());
             else if (arg == "--headless")
@@ -302,7 +324,7 @@ int player_main(int argc, char** argv) {
         const auto sceneReadFinished = Clock::now();
         if (scenePath.extension() == ".fscene" &&
             std::filesystem::equivalent(scenePath.parent_path(), executableRoot))
-            validatePackagedShaders(executableRoot);
+            validatePackagedShaders(executableRoot, visibilityMode);
         if (validateOnly) {
             if (!capturePath.empty() || !controlPath.empty())
                 throw std::invalid_argument("--validate cannot capture or control a running game");
@@ -342,8 +364,14 @@ int player_main(int argc, char** argv) {
         printGameplayLogs();
         faset::player::SceneView view(assetsPath);
         const auto rendererStarted = Clock::now();
-        faset::render::Renderer renderer(
-            {1280, 720, document.value("name", std::string("Faset Player")), headless, true});
+        faset::render::RendererConfig renderConfig;
+        renderConfig.width = 1280;
+        renderConfig.height = 720;
+        renderConfig.title = document.value("name", std::string("Faset Player"));
+        renderConfig.headless = headless;
+        renderConfig.validation = true;
+        renderConfig.visibility_mode = visibilityMode;
+        faset::render::Renderer renderer(renderConfig);
         const auto rendererReady = Clock::now();
         std::vector<ProfileSample> profile;
         if (!profilePath.empty())
@@ -528,6 +556,10 @@ int player_main(int argc, char** argv) {
             printGameplayLogs();
             const auto renderStarted = Clock::now();
             renderer.render(snapshot);
+            if (frames == 0 && visibilityMode != faset::render::VisibilityMode::Direct &&
+                !renderer.stats().gpu_visibility_active)
+                std::cerr << "Requested GPU visibility is unavailable on this device; "
+                             "using Direct rendering.\n";
             const auto frameFinished = Clock::now();
             if (frames == 0)
                 firstFrameMs = milliseconds(started, frameFinished);
@@ -539,7 +571,8 @@ int player_main(int argc, char** argv) {
                      milliseconds(simulationFinished, snapshotFinished),
                      milliseconds(renderStarted, frameFinished), measured.cpu_ms, measured.gpu_ms,
                      measured.readback_cpu_ms, runtimeStats, measured.draw_calls, measured.vertices,
-                     measured.gpu_allocated_bytes, measured.texture_count, debugPhysics});
+                     measured.gpu_allocated_bytes, measured.texture_count, debugPhysics,
+                     measured.gpu_visibility_active});
             }
             ++frames;
         }
@@ -568,6 +601,7 @@ int player_main(int argc, char** argv) {
                  {"validation_enabled", stats.validation_enabled},
                  {"validation_errors", stats.validation_errors},
                  {"presentation_mode", headless ? "offscreen" : "windowed"},
+                 {"visibility_mode", visibilityName},
                  {"simulation_mode", "synthetic_fixed_timestep"},
                  {"fixed_delta_seconds", config.fixedDelta},
                  {"percentile_method", "nearest_rank_all_completed_frames_no_warmup_exclusion"},
@@ -593,6 +627,8 @@ int player_main(int argc, char** argv) {
                                     {"ticks", completedTicks},
                                     {"dimension", document.value("dimension", 3)},
                                     {"device", stats.device},
+                                    {"visibility_mode", visibilityName},
+                                    {"gpu_visibility_active", stats.gpu_visibility_active},
                                     {"validation_errors", stats.validation_errors}}
                          .dump()
                   << '\n';
