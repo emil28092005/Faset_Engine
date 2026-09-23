@@ -83,6 +83,10 @@ bool DebugOverlay::visible() const {
 }
 void DebugOverlay::set_visible(bool value) {
     impl_->visible = value;
+    if (!value) {
+        impl_->hzb_preview.reset();
+        impl_->hzb_available = impl_->hzb_sampled = false;
+    }
 }
 std::vector<render::Event> DebugOverlay::process_events(std::span<const render::Event> events) {
     CurrentContext current(impl_->context);
@@ -104,8 +108,13 @@ std::vector<render::Event> DebugOverlay::process_events(std::span<const render::
     for (const auto& event : events) {
         using Type = render::Event::Type;
         if ((event.type == Type::KeyDown || event.type == Type::KeyUp) && event.key == "F12") {
-            if (event.type == Type::KeyDown && !event.repeat)
+            if (event.type == Type::KeyDown && !event.repeat) {
                 impl_->visible = !impl_->visible;
+                if (!impl_->visible) {
+                    impl_->hzb_preview.reset();
+                    impl_->hzb_available = impl_->hzb_sampled = false;
+                }
+            }
             continue;
         }
         io.AddKeyEvent(ImGuiMod_Ctrl, event.control);
@@ -244,6 +253,7 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                 if (selected)
                     ImGui::PopStyleColor();
             }
+            const auto selected_mode = renderer.visibility_mode();
             ImGui::TextDisabled("Renderer mode; no scene or export changes");
             ImGui::Separator();
             ImGui::TextUnformatted("Previous completed frame");
@@ -295,9 +305,11 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                         ImGui::SetWindowSize({ImGui::GetWindowSize().x, expanded});
                 } else {
                     state.hzb_available = false;
+                    state.hzb_preview.reset();
                 }
             }
-            if (state.show_hzb && state.visible && current_mode == render::VisibilityMode::GpuOcclusion) {
+            if (state.show_hzb && state.visible &&
+                selected_mode == render::VisibilityMode::GpuOcclusion) {
                 const auto max_extent = std::max(renderer.width(), renderer.height());
                 const int max_mip = static_cast<int>(std::bit_width(std::bit_ceil(max_extent))) - 1;
                 state.hzb_mip = std::clamp(state.hzb_mip, 0, max_mip);
@@ -320,9 +332,11 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                             state.hzb_available = true;
                         } else {
                             state.hzb_available = false;
+                            state.hzb_preview.reset();
                         }
                     } catch (const std::exception& error) {
                         state.hzb_available = false;
+                        state.hzb_preview.reset();
                         state.hzb_error = error.what();
                         state.show_hzb = false;
                     }
@@ -344,6 +358,7 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                 }
             } else if (state.show_hzb) {
                 state.hzb_available = false;
+                state.hzb_preview.reset();
                 state.hzb_sampled = false;
                 ImGui::TextDisabled("Switch to GPU occlusion to view the HZB");
             }
@@ -365,8 +380,10 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                                  current_size.x, current_size.y};
         }
         ImGui::End();
-    } else {
+    }
+    if (!state.visible) {
         state.hzb_available = false;
+        state.hzb_preview.reset();
         state.hzb_sampled = false;
     }
     // GPU counters are a diagnostics readback, never a normal renderer dependency.
