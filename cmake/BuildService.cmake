@@ -23,5 +23,12 @@ if(BUILD_TESTING)
   target_link_libraries(faset_build_schema_tests PRIVATE faset_build_service faset_authoring faset_editor_commands)
   add_dependencies(faset_build_schema_tests faset_build_schema_tool)
   add_test(NAME build_schema_publication COMMAND faset_build_schema_tests $<TARGET_FILE:faset_build_schema_tool> ${PROJECT_SOURCE_DIR})
-  set_tests_properties(build_schema_publication PROPERTIES TIMEOUT 60)
+  # This fixture performs many full cache invalidations and process launches.
+  # Windows runner startup and antivirus overhead exceed 60 seconds even when
+  # individual native fixture commands finish normally.
+  if(WIN32)
+    set_tests_properties(build_schema_publication PROPERTIES TIMEOUT 240)
+  else()
+    set_tests_properties(build_schema_publication PROPERTIES TIMEOUT 60)
+  endif()
 endif()

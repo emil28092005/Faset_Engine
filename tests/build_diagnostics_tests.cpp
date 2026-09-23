@@ -1,4 +1,5 @@
 #include <faset/editor/build_diagnostics.hpp>
+#include <faset/core/io.hpp>
 #include <iostream>
 #include <stdexcept>
 
@@ -25,7 +26,7 @@ void contracts() {
               rows[0].at("line") == 6 && rows[0].at("severity") == "error" &&
               rows[0].at("message") == "unexpected symbol near '='",
           "Lua syntax error and ANSI stripping work");
-    const auto windows = fs::path(R"(C:\Café)");
+    const auto windows = path_from_utf8(R"(C:\Café)");
     rows = editor::parse_build_diagnostics(
         R"(C:\Café\Scripts\Game.cpp(17,4): error C2143: syntax error)" "\n"
         R"(C:\Café\Scripts\Game.cpp:19:2: warning: suspicious conversion)" "\n",

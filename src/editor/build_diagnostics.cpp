@@ -28,7 +28,9 @@ std::string strip_ansi(std::string_view text) {
 }
 std::string normalize_path(std::string path) {
     std::replace(path.begin(), path.end(), '\\', '/');
-    path = std::filesystem::path(path).lexically_normal().generic_string();
+    // Compiler output is UTF-8. Constructing a path from a narrow string on
+    // Windows can decode it through the process code page and lose Unicode.
+    path = generic_path_to_utf8(path_from_utf8(path).lexically_normal());
     while (path.size() > 1 && path.back() == '/')
         path.pop_back();
     return path;
@@ -46,7 +48,7 @@ std::string project_source(std::string raw, const std::filesystem::path& project
     if (raw.starts_with("lua: "))
         raw.erase(0, 5);
     std::replace(raw.begin(), raw.end(), '\\', '/');
-    for (const auto& component : std::filesystem::path(raw))
+    for (const auto& component : path_from_utf8(raw))
         if (component == "..")
             return {};
     const auto path = normalize_path(std::move(raw));
