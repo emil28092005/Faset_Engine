@@ -85,6 +85,8 @@ if(BUILD_TESTING)
   add_executable(faset_p3_lighting_benchmark
     "${PROJECT_SOURCE_DIR}/examples/renderer/p3_lighting_benchmark.cpp")
   target_link_libraries(faset_p3_lighting_benchmark PRIVATE faset_render faset_core)
+  target_compile_definitions(faset_p3_lighting_benchmark PRIVATE
+    FASET_BENCHMARK_CONFIGURATION="$<CONFIG>")
   add_test(NAME render_lighting_benchmark_schema COMMAND
     "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_p3_lighting_benchmark.py")
   set_tests_properties(render_lighting_benchmark_schema PROPERTIES LABELS "p3" TIMEOUT 90)
