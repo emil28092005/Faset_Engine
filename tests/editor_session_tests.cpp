@@ -239,7 +239,7 @@ int test_main(int argc, char** argv) {
 }
 #ifdef _WIN32
 int wmain(int argc, wchar_t** argv) {
-    return run_utf8_main(argc, argv, test_main);
+    return faset::run_utf8_main(argc, argv, test_main);
 }
 #else
 int main(int argc, char** argv) {
