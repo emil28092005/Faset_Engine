@@ -80,6 +80,34 @@ struct Text {
     Color color{0.85f, 0.87f, 0.90f, 1};
     float size{14};
 };
+struct SunLight {
+    std::string stable_id;
+    Vec3 direction{-0.5f, -1, -0.3f};
+    Color color{1, 1, 1, 1};
+    float intensity{1};
+    bool casts_shadow{true};
+};
+struct LocalLight {
+    enum class Kind { Point, Spot };
+    Kind kind{Kind::Point};
+    std::string stable_id;
+    Vec3 position{};
+    Vec3 direction{0, 0, -1};
+    Color color{1, 1, 1, 1};
+    float intensity{1};
+    float range{10};
+    float inner_angle{0.35f};
+    float outer_angle{0.7f};
+    bool casts_shadow{true};
+    int shadow_priority{};
+};
+struct CameraFrustum {
+    Mat4 view{identity};
+    Mat4 projection{identity};
+    float near_plane{0.1f};
+    float far_plane{1000};
+    bool perspective{true};
+};
 struct Snapshot {
     // Optional scene viewport in drawable pixels (x, y, width, height); zero size uses the full
     // target.
@@ -100,6 +128,12 @@ struct Snapshot {
     // Distinguishes temporal histories when one Renderer displays different views.
     std::string view_id{};
     bool camera_cut{};
+    // Empty legacy scenes may use the renderer's compatibility sun. Any authored light
+    // component, including an explicitly disabled or opaque future one, suppresses it.
+    bool authored_lights_present{};
+    std::optional<SunLight> sun{};
+    std::vector<LocalLight> local_lights;
+    std::optional<CameraFrustum> camera_frustum{};
 };
 enum class VisibilityMode { Direct, GpuFrustum, GpuOcclusion };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.

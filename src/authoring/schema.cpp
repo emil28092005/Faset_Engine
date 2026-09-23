@@ -252,9 +252,22 @@ SchemaRegistry builtin_schemas() {
         {{"fov", Json{{"type", "number"}, {"default", 60.0}, {"min", 1.0}, {"max", 179.0}}},
          {"near", Json{{"type", "number"}, {"default", 0.1}, {"min", 0.001}}},
          {"far", Json{{"type", "number"}, {"default", 1000.0}, {"min", 0.01}}}});
-    add("faset.light", "Directional Light",
-        {{"color", field("color", {1, 1, 1, 1})},
-         {"intensity", Json{{"type", "number"}, {"default", 1.0}, {"min", 0.0}}}});
+    add("faset.light", "Light",
+        {{"kind", Json{{"type", "string"},
+                        {"default", "directional"},
+                        {"enum", {"directional", "point", "spot"}}}},
+         {"enabled", field("boolean", true)},
+         {"color", field("color", {1, 1, 1, 1})},
+         {"intensity", Json{{"type", "number"}, {"default", 1.0}, {"min", 0.0}}},
+         {"range", Json{{"type", "number"}, {"default", 10.0}, {"min", 0.001}}},
+         {"inner_angle", Json{{"type", "number"},
+                              {"default", 0.35}, {"min", 0.0}, {"max", 1.55},
+                              {"unit", "radians"}}},
+         {"outer_angle", Json{{"type", "number"},
+                              {"default", 0.7}, {"min", 0.001}, {"max", 1.55},
+                              {"unit", "radians"}}},
+         {"casts_shadow", field("boolean", true)},
+         {"shadow_priority", field("integer", 0)}});
     for (int dimension : {2, 3}) {
         Json vector = dimension == 2 ? Json{0, 0} : Json{0, 0, 0};
         Json extents = dimension == 2 ? Json{0.5, 0.5} : Json{0.5, 0.5, 0.5};

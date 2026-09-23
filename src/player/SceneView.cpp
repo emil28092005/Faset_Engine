@@ -61,6 +61,16 @@ render::Vec3 direction(const render::Mat4& m, render::Vec3 p) {
     return {m[0] * p[0] + m[4] * p[1] + m[8] * p[2], m[1] * p[0] + m[5] * p[1] + m[9] * p[2],
             m[2] * p[0] + m[6] * p[1] + m[10] * p[2]};
 }
+render::Vec3 normalized(render::Vec3 value, const std::string& entityId,
+                        std::string_view field) {
+    const auto length = std::hypot(value[0], value[1], value[2]);
+    if (!std::isfinite(length) || length < 1e-6f)
+        throw std::invalid_argument("Light on entity " + entityId + " has invalid " +
+                                    std::string(field));
+    for (auto& axis : value)
+        axis /= length;
+    return value;
+}
 std::pair<std::string, std::string> reference(const std::string& ref) {
     const auto hash = ref.find('#');
     return {ref.substr(0, hash), hash == std::string::npos ? std::string{} : ref.substr(hash + 1)};
@@ -263,8 +273,12 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
         const auto id = entity.at("id").get<std::string>();
         if (!byId.emplace(id, &entity).second)
             throw std::invalid_argument("Duplicate scene ID");
+        if (!entity.contains("components") && entity.contains("light"))
+            out.authored_lights_present = true;
         for (const auto& component : entity.value("components", Json::array())) {
             const auto type = component.at("type").get<std::string>();
+            if (type == "faset.light")
+                out.authored_lights_present = true;
             if (component.value("version", 1) != 1 &&
                 (type == "faset.transform" || type == "faset.sprite" || type == "faset.mesh" ||
                  type == "faset.camera" || type == "faset.light"))
@@ -301,8 +315,15 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
     render::Vec3 cameraUp{0, 1, 0};
     bool foundCamera = false;
     std::vector<std::pair<int, render::Sprite>> sprites;
+    std::vector<render::SunLight> directionalLights;
     for (const auto& entity : entities) {
-        const auto model = world(world, entity);
+        const auto id = entity.at("id").get<std::string>();
+        render::Mat4 model;
+        try {
+            model = world(world, entity);
+        } catch (const std::exception& error) {
+            throw std::invalid_argument("Entity " + id + " transform: " + error.what());
+        }
         if (auto fields = properties(entity, "camera");
             !fields.is_null() && !camera.overrideSceneCamera && !foundCamera) {
             camera.eye = point(model, {0, 0, 0});
@@ -314,8 +335,89 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
             foundCamera = true;
             camera_id = entity.at("id").get<std::string>();
         }
-        if (auto fields = properties(entity, "light"); !fields.is_null())
-            out.light_direction = direction(model, {-0.5f, -1, -0.3f});
+        if (auto fields = properties(entity, "light"); !fields.is_null()) {
+            auto invalid = [&](std::string_view field) -> void {
+                throw std::invalid_argument("Light on entity " + id + " has invalid " +
+                                            std::string(field));
+            };
+            for (const auto entry : model)
+                if (!std::isfinite(entry))
+                    invalid("transform");
+            auto number = [&](const char* field, float fallback) {
+                if (!fields.contains(field))
+                    return fallback;
+                const auto& value = fields.at(field);
+                if (!value.is_number())
+                    invalid(field);
+                const auto decimal = value.get<double>();
+                if (!std::isfinite(decimal) ||
+                    std::abs(decimal) > std::numeric_limits<float>::max())
+                    invalid(field);
+                return static_cast<float>(decimal);
+            };
+            auto boolean = [&](const char* field, bool fallback) {
+                if (!fields.contains(field))
+                    return fallback;
+                if (!fields.at(field).is_boolean())
+                    invalid(field);
+                return fields.at(field).get<bool>();
+            };
+            const auto enabled = boolean("enabled", true);
+            if (enabled) {
+                if (fields.contains("kind") && !fields.at("kind").is_string())
+                    invalid("kind");
+                const auto kind = fields.value("kind", std::string("directional"));
+                if (kind != "directional" && kind != "point" && kind != "spot")
+                    invalid("kind");
+                render::Color color;
+                try {
+                    color = vec<4>(fields, "color", {1, 1, 1, 1});
+                } catch (const std::exception&) {
+                    invalid("color");
+                }
+                for (const auto channel : color)
+                    if (channel < 0)
+                        invalid("color");
+                const auto intensity = number("intensity", 1);
+                if (intensity < 0)
+                    invalid("intensity");
+                const auto castsShadow = boolean("casts_shadow", true);
+                const auto stableId = id;
+                if (kind == "directional") {
+                    directionalLights.push_back({stableId,
+                                                 normalized(direction(model, {-0.5f, -1, -0.3f}), id,
+                                                            "direction"),
+                                                 color, intensity, castsShadow});
+                } else {
+                    render::LocalLight local;
+                    local.kind = kind == "point" ? render::LocalLight::Kind::Point
+                                                 : render::LocalLight::Kind::Spot;
+                    local.stable_id = stableId;
+                    local.position = point(model, {0, 0, 0});
+                    for (const auto coordinate : local.position)
+                        if (!std::isfinite(coordinate))
+                            invalid("position");
+                    local.direction = normalized(direction(model, {0, 0, -1}), id, "direction");
+                    local.color = color;
+                    local.intensity = intensity;
+                    local.range = number("range", 10);
+                    if (local.range <= 0)
+                        invalid("range");
+                    local.inner_angle = number("inner_angle", 0.35f);
+                    local.outer_angle = number("outer_angle", 0.7f);
+                    if (local.inner_angle < 0 || local.inner_angle > local.outer_angle ||
+                        local.outer_angle <= 0 || local.outer_angle >= std::numbers::pi_v<float> / 2)
+                        invalid("inner_angle/outer_angle");
+                    local.casts_shadow = castsShadow;
+                    if (fields.contains("shadow_priority")) {
+                        if (!fields.at("shadow_priority").is_number_integer())
+                            invalid("shadow_priority");
+                        local.shadow_priority = fields.at("shadow_priority").get<int>();
+                    }
+                    out.local_lights.push_back(std::move(local));
+                }
+            }
+        }
         if (auto fields = properties(entity, "sprite"); !fields.is_null()) {
             render::Sprite sprite;
             sprite.layer = fields.value("layer", 0);
@@ -372,6 +474,18 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
                      [](const auto& a, const auto& b) { return a.first < b.first; });
     for (auto& pair : sprites)
         out.sprites.push_back(std::move(pair.second));
+    std::sort(directionalLights.begin(), directionalLights.end(),
+              [](const auto& a, const auto& b) { return a.stable_id < b.stable_id; });
+    std::sort(out.local_lights.begin(), out.local_lights.end(),
+              [](const auto& a, const auto& b) { return a.stable_id < b.stable_id; });
+    if (!directionalLights.empty()) {
+        out.sun = directionalLights.front();
+        out.light_direction = out.sun->direction;
+        if (directionalLights.size() > 1)
+            impl_->messages.push_back("warning: multiple enabled directional lights; using " +
+                                      out.sun->stable_id + " and ignoring " +
+                                      std::to_string(directionalLights.size() - 1) + " others");
+    }
     if (dimension == 2) {
         const float height = camera.orthographicHeight;
         if (!std::isfinite(height) || height <= 0)
@@ -408,8 +522,10 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
         out.projection = render::perspective(
             camera.verticalFovDegrees * std::numbers::pi_v<float> / 180, aspect,
             camera.nearPlane, camera.farPlane);
-        out.view_projection = render::multiply(
-            out.projection, render::look_at(camera.eye, camera.target, cameraUp));
+        const auto view = render::look_at(camera.eye, camera.target, cameraUp);
+        out.view_projection = render::multiply(out.projection, view);
+        out.camera_frustum = render::CameraFrustum{view, out.projection, camera.nearPlane,
+                                                   camera.farPlane, true};
     }
     std::sort(impl_->messages.begin(), impl_->messages.end());
     impl_->messages.erase(std::unique(impl_->messages.begin(), impl_->messages.end()),

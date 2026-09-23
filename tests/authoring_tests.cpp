@@ -25,6 +25,25 @@ int main() {
     const auto root = std::filesystem::temp_directory_path() / ("faset-authoring-" + new_id());
     try {
         auto schemas = builtin_schemas();
+        const auto light = schemas.schema("faset.light");
+        CHECK(light["version"] == 1);
+        const auto defaults = schemas.default_fields("faset.light");
+        CHECK(defaults["kind"] == "directional");
+        CHECK(defaults["enabled"] == true);
+        CHECK(defaults["range"] == 10.0);
+        CHECK(defaults["inner_angle"] < defaults["outer_angle"]);
+        CHECK(defaults["casts_shadow"] == true);
+        CHECK(defaults["shadow_priority"] == 0);
+        auto light_component = Json{{"type", "faset.light"}, {"version", 1}, {"fields", defaults}};
+        schemas.validate_component(light_component);
+        light_component["fields"]["kind"] = "area";
+        fails([&] { schemas.validate_component(light_component); }, "validation.enum");
+        light_component["fields"]["kind"] = "point";
+        light_component["fields"]["range"] = 0;
+        fails([&] { schemas.validate_component(light_component); }, "validation.minimum");
+        light_component["fields"]["range"] = 10;
+        light_component["fields"]["intensity"] = -1;
+        fails([&] { schemas.validate_component(light_component); }, "validation.minimum");
         AuthoringService service(root, schemas);
         auto created = service.create("Courtyard", 3);
         const std::string id = created["id"];
