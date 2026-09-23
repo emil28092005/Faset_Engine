@@ -9,3 +9,13 @@ The implementation uses the prototype's compact three-mode visibility selector, 
 ![Implemented diagnostics in the headless Vulkan test](p2-visibility-diagnostics-implemented.png)
 
 The second image is the actual 640 × 420 test capture with a deliberately empty scene. It verifies the selected GPU frustum button and the real counters, with the panel scrolling on a small viewport.
+
+## Current-HZB preview extension
+
+![Updated prototype with HZB thumbnail](p2-visibility-diagnostics-hzb-prototype.png)
+
+The updated prototype was made with the built-in image editing tool before adding the preview control. Its HZB thumbnail and status values are illustrative. The actual overlay exposes **Show HZB** only as an on-demand diagnostic, offers a mip selector, and uses a real GPU depth-pyramid readback. It does not read back HZB while the preview is off.
+
+![Implemented current-HZB preview in the Vulkan test](p2-visibility-diagnostics-hzb-implemented.png)
+
+This 640 × 700 capture is the real developer overlay drawing mip 3 of a cube scene's current HZB. The first frame has already completed, so the displayed visibility counters are actual GPU-read values. The default panel grows when the preview is enabled; on a shorter display it remains scrollable.

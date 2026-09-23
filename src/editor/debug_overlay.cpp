@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <faset/editor/debug_overlay.hpp>
 #include <imgui.h>
@@ -38,13 +39,18 @@ ImGuiKey key(std::string_view name) {
 } // namespace
 struct DebugOverlay::Impl {
     ImGuiContext* context{};
-    bool visible{}, freeze{};
+    bool visible{}, freeze{}, show_hzb{};
+    bool hzb_sampled{}, hzb_available{};
+    int hzb_mip{3}, hzb_last_mip{-1};
+    std::uint64_t hzb_frame{};
+    std::string hzb_error;
     std::uint32_t overlay_buttons{}, editor_buttons{};
     std::array<float, 2> pointer{-1, -1};
     float scale{};
     std::array<float, 4> window_rect{};
     render::FrameStats displayed;
     std::shared_ptr<render::Texture> atlas;
+    std::shared_ptr<render::Texture> hzb_preview;
     Impl() {
         IMGUI_CHECKVERSION();
         auto* previous = ImGui::GetCurrentContext();
@@ -257,12 +263,92 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
             ImGui::Separator();
             ImGui::TextUnformatted("GPU visibility");
             ImGui::Text("Path: %s", stats.gpu_visibility_active ? "active" : "inactive");
-            ImGui::Text("Indirect bins: %u   Visible: %u", stats.gpu_bins,
-                        stats.gpu_visible_instances);
-            ImGui::Text("Frustum rejected: %u", stats.gpu_frustum_rejected);
-            ImGui::Text("HZB history: %s", stats.hzb_valid ? "valid" : "unavailable / invalid");
-            ImGui::Text("Deferred: %u   Post visible: %u", stats.gpu_occlusion_deferred,
-                        stats.gpu_post_visible);
+            ImGui::Text("Indirect bins: %u", stats.gpu_bins);
+            if (stats.gpu_visibility_active && stats.visibility_counters_valid) {
+                ImGui::Text("Visible: %u   Frustum rejected: %u",
+                            stats.gpu_visible_instances, stats.gpu_frustum_rejected);
+                ImGui::Text("Deferred: %u   Post visible: %u", stats.gpu_occlusion_deferred,
+                            stats.gpu_post_visible);
+            } else {
+                ImGui::TextDisabled("Visibility counters: %s",
+                                    stats.gpu_visibility_active
+                                        ? state.freeze ? "frozen before sample" : "awaiting sample"
+                                        : "GPU path inactive");
+            }
+            if (stats.gpu_visibility_active && stats.gpu_ms > 0) {
+                ImGui::Text("Pass ms: cull %.2f   raster %.2f", stats.gpu_main_cull_ms,
+                            stats.gpu_main_raster_ms);
+                if (stats.gpu_hzb_ms > 0 || stats.gpu_post_cull_ms > 0 ||
+                    stats.gpu_post_raster_ms > 0)
+                    ImGui::Text("HZB %.2f   post cull %.2f   raster %.2f",
+                                stats.gpu_hzb_ms, stats.gpu_post_cull_ms,
+                                stats.gpu_post_raster_ms);
+            }
+            ImGui::Text("Previous HZB history: %s", stats.hzb_valid ? "valid" : "invalid");
+            if (ImGui::Checkbox("Show HZB", &state.show_hzb)) {
+                state.hzb_sampled = false;
+                state.hzb_error.clear();
+                if (state.show_hzb) {
+                    const float expanded = std::min(
+                        620.f * scale, std::max(220.f, io.DisplaySize.y - 60.f * scale));
+                    if (ImGui::GetWindowSize().y < expanded)
+                        ImGui::SetWindowSize({ImGui::GetWindowSize().x, expanded});
+                } else {
+                    state.hzb_available = false;
+                }
+            }
+            if (state.show_hzb && state.visible && current_mode == render::VisibilityMode::GpuOcclusion) {
+                const auto max_extent = std::max(renderer.width(), renderer.height());
+                const int max_mip = static_cast<int>(std::bit_width(std::bit_ceil(max_extent))) - 1;
+                state.hzb_mip = std::clamp(state.hzb_mip, 0, max_mip);
+                ImGui::SliderInt("Mip", &state.hzb_mip, 0, max_mip);
+                const auto frame = renderer.stats().frame;
+                if (!state.hzb_sampled || state.hzb_frame != frame ||
+                    state.hzb_last_mip != state.hzb_mip) {
+                    state.hzb_sampled = true;
+                    state.hzb_frame = frame;
+                    state.hzb_last_mip = state.hzb_mip;
+                    try {
+                        if (auto image = renderer.hzb_debug_image(
+                                static_cast<std::uint32_t>(state.hzb_mip))) {
+                            if (!state.hzb_preview)
+                                state.hzb_preview = std::make_shared<render::Texture>();
+                            state.hzb_preview->width = image->width;
+                            state.hzb_preview->height = image->height;
+                            state.hzb_preview->rgba = std::move(image->rgba);
+                            ++state.hzb_preview->revision;
+                            state.hzb_available = true;
+                        } else {
+                            state.hzb_available = false;
+                        }
+                    } catch (const std::exception& error) {
+                        state.hzb_available = false;
+                        state.hzb_error = error.what();
+                        state.show_hzb = false;
+                    }
+                }
+                if (state.hzb_available && state.hzb_preview) {
+                    float width = ImGui::GetContentRegionAvail().x;
+                    float height = width * float(state.hzb_preview->height) /
+                                   float(state.hzb_preview->width);
+                    if (height > 180.f * scale) {
+                        height = 180.f * scale;
+                        width = height * float(state.hzb_preview->width) /
+                                float(state.hzb_preview->height);
+                    }
+                    ImGui::Image(ImTextureID{2}, {width, height});
+                    ImGui::TextDisabled("Current HZB | mip %d (%u x %u)", state.hzb_mip,
+                                        state.hzb_preview->width, state.hzb_preview->height);
+                } else if (state.show_hzb) {
+                    ImGui::TextDisabled("Current HZB unavailable for this frame");
+                }
+            } else if (state.show_hzb) {
+                state.hzb_available = false;
+                state.hzb_sampled = false;
+                ImGui::TextDisabled("Switch to GPU occlusion to view the HZB");
+            }
+            if (!state.hzb_error.empty())
+                ImGui::TextWrapped("HZB preview error: %s", state.hzb_error.c_str());
             ImGui::Text("Prepared LOD: %u / %u / %u / %u+", stats.lod_counts[0],
                         stats.lod_counts[1], stats.lod_counts[2], stats.lod_counts[3]);
             ImGui::Separator();
@@ -273,9 +359,18 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                         stats.validation_errors);
             ImGui::Text("GPU pass labels: %s (%u)", stats.gpu_labels_enabled ? "on" : "unavailable",
                         stats.gpu_label_count);
+            const auto current_position = ImGui::GetWindowPos();
+            const auto current_size = ImGui::GetWindowSize();
+            state.window_rect = {current_position.x, current_position.y,
+                                 current_size.x, current_size.y};
         }
         ImGui::End();
+    } else {
+        state.hzb_available = false;
+        state.hzb_sampled = false;
     }
+    // GPU counters are a diagnostics readback, never a normal renderer dependency.
+    renderer.set_visibility_diagnostics(state.visible);
     ImGui::Render();
     const auto* data = ImGui::GetDrawData();
     if (!data || !data->Valid)
@@ -287,7 +382,11 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                     command.UserCallback(list, &command);
                 continue;
             }
-            if (command.GetTexID() != ImTextureID{1})
+            const auto texture = command.GetTexID() == ImTextureID{1}
+                                     ? state.atlas
+                                     : command.GetTexID() == ImTextureID{2} ? state.hzb_preview
+                                                                             : nullptr;
+            if (!texture)
                 throw std::runtime_error("Unsupported texture in Faset diagnostic overlay");
             const float x = command.ClipRect.x - data->DisplayPos.x;
             const float y = command.ClipRect.y - data->DisplayPos.y;
@@ -296,7 +395,7 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
             if (width <= 0 || height <= 0)
                 continue;
             render::UiTriangles batch;
-            batch.texture = state.atlas;
+            batch.texture = texture;
             batch.clip_rect = {x, y, width, height};
             batch.vertices.reserve(command.ElemCount);
             for (unsigned i = 0; i < command.ElemCount; ++i) {

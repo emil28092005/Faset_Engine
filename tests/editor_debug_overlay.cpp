@@ -1,4 +1,5 @@
 #include <faset/editor/debug_overlay.hpp>
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
@@ -91,6 +92,88 @@ int main(int argc, char** argv) {
         renderer.render(scene);
         require(renderer.pixels() == clean, "Hiding diagnostics restores the underlying frame");
         require(renderer.stats().validation_errors == 0, "Diagnostic overlay Vulkan validation");
+
+        render::RendererConfig hzb_config;
+        hzb_config.width = 640;
+        hzb_config.height = 700;
+        hzb_config.title = "Faset HZB diagnostics test";
+        hzb_config.headless = true;
+        hzb_config.validation = true;
+        hzb_config.visibility_mode = render::VisibilityMode::GpuOcclusion;
+        render::Renderer hzb_renderer(hzb_config);
+        render::Snapshot hzb_scene;
+        hzb_scene.view_id = "overlay-hzb-scene";
+        hzb_scene.eye = {4, 3, 6};
+        hzb_scene.view_projection = render::multiply(
+            render::perspective(.85f, 640.f / 700.f, .1f, 100.f),
+            render::look_at(hzb_scene.eye, {0, 0, 0}));
+        render::DrawItem cube;
+        cube.mesh = render::cube_mesh();
+        cube.instance_key = "hzb-cube";
+        hzb_scene.draws.push_back(cube);
+        hzb_renderer.render(hzb_scene);
+        require(hzb_renderer.hzb_debug_image(3).has_value(),
+                "Fixture creates a current HZB for the preview");
+        editor::DebugOverlay hzb_overlay;
+        hzb_overlay.set_visible(true);
+        hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+        require(!hzb_scene.ui_triangles.empty(), "HZB panel emits its normal font texture");
+        const auto font_texture = hzb_scene.ui_triangles.front().texture;
+        require(std::all_of(hzb_scene.ui_triangles.begin(), hzb_scene.ui_triangles.end(),
+                            [&](const auto& batch) { return batch.texture == font_texture; }),
+                "HZB image is absent while preview toggle is off");
+        render::Event preview_click;
+        preview_click.button = 1;
+        preview_click.x = 34;
+        preview_click.y = 405;
+        const auto click_preview = [&] {
+            preview_click.type = render::Event::Type::MouseDown;
+            require(hzb_overlay.process_events(std::span(&preview_click, 1)).empty(),
+                    "HZB preview checkbox captures pointer down");
+            hzb_scene.ui_triangles.clear();
+            hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+            preview_click.type = render::Event::Type::MouseUp;
+            require(hzb_overlay.process_events(std::span(&preview_click, 1)).empty(),
+                    "HZB preview checkbox captures pointer up");
+            hzb_scene.ui_triangles.clear();
+            hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+        };
+        click_preview();
+        hzb_scene.ui_triangles.clear();
+        hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+        const auto preview = std::find_if(hzb_scene.ui_triangles.begin(),
+                                          hzb_scene.ui_triangles.end(),
+                                          [&](const auto& batch) {
+                                              return batch.texture != font_texture;
+                                          });
+        require(preview != hzb_scene.ui_triangles.end() && preview->texture->width == 128 &&
+                    preview->texture->height == 128 && preview->texture->revision > 0,
+                "Enabled HZB preview emits the selected mip as a revised texture");
+        click_preview();
+        hzb_scene.ui_triangles.clear();
+        hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+        require(std::all_of(hzb_scene.ui_triangles.begin(), hzb_scene.ui_triangles.end(),
+                            [&](const auto& batch) { return batch.texture == font_texture; }),
+                "Disabling HZB preview removes its texture");
+        click_preview();
+        hzb_scene.ui_triangles.clear();
+        hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+        hzb_renderer.render(hzb_scene);
+        require(hzb_renderer.stats().validation_errors == 0 &&
+                    hzb_renderer.stats().visibility_counters_valid,
+                "HZB preview renders cleanly and open diagnostics enable GPU counters");
+        hzb_scene.ui_triangles.clear();
+        hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+        hzb_renderer.render(hzb_scene);
+        if (argc > 2)
+            hzb_renderer.capture(argv[2]);
+        hzb_overlay.set_visible(false);
+        hzb_scene.ui_triangles.clear();
+        hzb_overlay.append(hzb_scene, hzb_renderer, 1.f / 60.f);
+        require(hzb_scene.ui_triangles.empty(), "Hidden panel emits no HZB preview");
+        hzb_renderer.render(hzb_scene);
+        require(!hzb_renderer.stats().visibility_counters_valid,
+                "Closing diagnostics disables GPU visibility readback");
         std::cout << "ImGui diagnostics, F12, font atlas, clipping and event isolation passed\n";
         return 0;
     } catch (const std::exception& error) {
