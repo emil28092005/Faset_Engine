@@ -19,6 +19,7 @@ struct Bounds {
 // corners of the local AABB, including rotation, reflection and nonuniform scale.
 // Empty or nonfinite geometry/matrices are rejected instead of being culled.
 Bounds local_bounds(const Mesh& mesh);
+Bounds transformed_bounds(const Bounds& local, const Mat4& model);
 Bounds transformed_bounds(const Mesh& mesh, const Mat4& model);
 
 struct InstanceUpdate {

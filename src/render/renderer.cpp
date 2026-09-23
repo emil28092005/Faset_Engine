@@ -156,8 +156,9 @@ struct SceneResources {
     std::array<std::string, 5> shader_layouts{};
     std::uint32_t hzb_mips{}, hzb_current{};
     bool hzb_history_valid{}, available{};
-    bool hzb_supported{};
+    bool hzb_supported{}, hzb_extent_supported{};
     Mat4 previous_vp{identity};
+    Mat4 previous_projection{identity};
     std::array<float, 4> previous_viewport{};
     std::string previous_view_id;
 };
@@ -176,6 +177,8 @@ struct Renderer::Impl {
     VkDevice device{};
     VkQueue queue{};
     std::uint32_t queue_family{};
+    std::uint32_t max_compute_groups_x{}, max_storage_buffer_range{},
+                  max_image_dimension{};
     VkCommandPool pool{};
     VkCommandBuffer command{};
     VkFence fence{};
@@ -194,6 +197,17 @@ struct Renderer::Impl {
     SceneResources scene;
     InstanceTracker instance_tracker;
     std::unordered_map<std::string, std::size_t> previous_lods;
+    struct CachedBounds {
+        std::weak_ptr<const Mesh> owner;
+        Bounds local;
+    };
+    struct CachedOpacity {
+        std::weak_ptr<const Texture> owner;
+        std::uint64_t revision{};
+        bool opaque{};
+    };
+    std::unordered_map<const Mesh*, CachedBounds> bounds_cache;
+    std::unordered_map<const Texture*, CachedOpacity> opacity_cache;
     VkDescriptorSetLayout descriptor_layout{};
     VkDescriptorPool descriptor_pool{};
     VkSampler shadow_sampler{}, color_sampler{};
@@ -247,6 +261,36 @@ struct Renderer::Impl {
         }
         i = {};
     }
+    void destroy_scene_interfaces() {
+        if (!device)
+            return;
+        for (auto* pipeline : {&scene.graphics_pipeline, &scene.cull_pipeline,
+                               &scene.post_pipeline, &scene.hzb_pipeline}) {
+            if (*pipeline)
+                vkDestroyPipeline(device, *pipeline, nullptr);
+            *pipeline = {};
+        }
+        for (auto* layout : {&scene.graphics_pipeline_layout, &scene.cull_pipeline_layout,
+                             &scene.hzb_pipeline_layout}) {
+            if (*layout)
+                vkDestroyPipelineLayout(device, *layout, nullptr);
+            *layout = {};
+        }
+        if (scene.descriptor_pool)
+            vkDestroyDescriptorPool(device, scene.descriptor_pool, nullptr);
+        scene.descriptor_pool = {};
+        for (auto* layout : {&scene.graphics_layout, &scene.cull_layout,
+                             &scene.hzb_layout}) {
+            if (*layout)
+                vkDestroyDescriptorSetLayout(device, *layout, nullptr);
+            *layout = {};
+        }
+        scene.graphics_main = scene.graphics_post = scene.cull_main =
+            scene.cull_post = {};
+        for (auto& sets : scene.hzb_sets)
+            sets.clear();
+        scene.shader_layouts = {};
+    }
     void cleanup() {
         if (device)
             vkDeviceWaitIdle(device);
@@ -271,19 +315,7 @@ struct Renderer::Impl {
         destroy(depth);
         destroy(shadow);
         if (device) {
-            for (auto pipeline : {scene.graphics_pipeline, scene.cull_pipeline,
-                                  scene.post_pipeline, scene.hzb_pipeline})
-                if (pipeline)
-                    vkDestroyPipeline(device, pipeline, nullptr);
-            for (auto layout : {scene.graphics_pipeline_layout, scene.cull_pipeline_layout,
-                                scene.hzb_pipeline_layout})
-                if (layout)
-                    vkDestroyPipelineLayout(device, layout, nullptr);
-            if (scene.descriptor_pool)
-                vkDestroyDescriptorPool(device, scene.descriptor_pool, nullptr);
-            for (auto layout : {scene.graphics_layout, scene.cull_layout, scene.hzb_layout})
-                if (layout)
-                    vkDestroyDescriptorSetLayout(device, layout, nullptr);
+            destroy_scene_interfaces();
             if (pipeline)
                 vkDestroyPipeline(device, pipeline, nullptr);
             if (ui_pipeline)
@@ -610,14 +642,26 @@ struct Renderer::Impl {
                     statistics.device = properties.deviceName;
                     timestamp_period = properties.limits.timestampPeriod;
                     timestamp_bits = queues[i].timestampValidBits;
+                    max_compute_groups_x = properties.limits.maxComputeWorkGroupCount[0];
+                    max_storage_buffer_range = properties.limits.maxStorageBufferRange;
+                    max_image_dimension = properties.limits.maxImageDimension2D;
                     scene.available = (queues[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
-                                      f11.shaderDrawParameters;
+                                      f11.shaderDrawParameters &&
+                                      properties.limits.maxPerStageDescriptorStorageBuffers >= 8 &&
+                                      properties.limits.maxDescriptorSetStorageBuffers >= 8 &&
+                                      properties.limits.maxComputeWorkGroupInvocations >= 64 &&
+                                      properties.limits.maxComputeWorkGroupSize[0] >= 64 &&
+                                      max_compute_groups_x > 0;
                     scene.hzb_supported = scene.available &&
                         (hzb_props.optimalTilingFeatures &
                          (VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
-                          VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)) ==
+                          VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
+                          VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
+                          VK_FORMAT_FEATURE_TRANSFER_DST_BIT)) ==
                         (VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
-                         VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
+                         VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
+                         VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
+                         VK_FORMAT_FEATURE_TRANSFER_DST_BIT);
                 }
             }
         }
@@ -680,7 +724,7 @@ struct Renderer::Impl {
             VkQueryPoolCreateInfo query{};
             query.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
             query.queryType = VK_QUERY_TYPE_TIMESTAMP;
-            query.queryCount = 2;
+            query.queryCount = 12;
             check(vkCreateQueryPool(device, &query, nullptr, &timestamp_pool),
                   "Create GPU timestamp queries");
         }
@@ -691,7 +735,7 @@ struct Renderer::Impl {
         make_targets();
         make_descriptors();
         make_pipelines();
-        if (scene.available)
+        if (scene.available && c.visibility_mode != VisibilityMode::Direct)
             make_scene_descriptors_and_pipelines();
         white = std::make_shared<Texture>();
         white->width = white->height = 1;
@@ -715,17 +759,24 @@ struct Renderer::Impl {
                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
                                VK_IMAGE_USAGE_SAMPLED_BIT,
                            VK_IMAGE_ASPECT_DEPTH_BIT);
-        if (scene.hzb_supported) {
-            const auto padded_width = std::bit_ceil(width);
-            const auto padded_height = std::bit_ceil(height);
+        const auto padded_width = std::bit_ceil(width);
+        const auto padded_height = std::bit_ceil(height);
+        scene.hzb_extent_supported = scene.hzb_supported &&
+            padded_width <= max_image_dimension && padded_height <= max_image_dimension &&
+            (padded_width + 7u) / 8u <= max_compute_groups_x;
+        if (scene.hzb_extent_supported &&
+            config.visibility_mode == VisibilityMode::GpuOcclusion) {
             scene.hzb_mips = std::bit_width(std::max(padded_width, padded_height));
             for (auto& pyramid : scene.hzb)
                 pyramid = make_image(padded_width, padded_height, VK_FORMAT_R32_SFLOAT,
                                      VK_IMAGE_USAGE_SAMPLED_BIT |
                                          VK_IMAGE_USAGE_STORAGE_BIT |
+                                         VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                      VK_IMAGE_ASPECT_COLOR_BIT, scene.hzb_mips);
             scene.hzb_current = 0;
+        } else {
+            scene.hzb_mips = 0;
         }
         // CPU reads this allocation every frame. Prefer cached coherent memory when available.
         readback =
@@ -1086,7 +1137,7 @@ struct Renderer::Impl {
         scene.graphics_main = scene.graphics_post = scene.cull_main = scene.cull_post = {};
         for (auto& sets : scene.hzb_sets)
             sets.clear();
-        const std::uint32_t hzb_sets = scene.hzb_supported ? scene.hzb_mips * 2 : 0;
+        const std::uint32_t hzb_sets = scene.hzb_mips * 2;
         const std::array<VkDescriptorPoolSize, 3> sizes{{
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 64},
             {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16 + hzb_sets},
@@ -1094,7 +1145,7 @@ struct Renderer::Impl {
         VkDescriptorPoolCreateInfo pool{};
         pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         pool.maxSets = 4 + hzb_sets;
-        pool.poolSizeCount = static_cast<std::uint32_t>(sizes.size());
+        pool.poolSizeCount = hzb_sets ? static_cast<std::uint32_t>(sizes.size()) : 2;
         pool.pPoolSizes = sizes.data();
         check(vkCreateDescriptorPool(device, &pool, nullptr, &scene.descriptor_pool),
               "Create GPU visibility descriptor pool");
@@ -1112,7 +1163,7 @@ struct Renderer::Impl {
         scene.graphics_post = sets[1];
         scene.cull_main = sets[2];
         scene.cull_post = sets[3];
-        if (!scene.hzb_supported)
+        if (!scene.hzb_mips)
             return;
         for (std::uint32_t image = 0; image < 2; ++image) {
             auto& target_sets = scene.hzb_sets[image];
@@ -1197,6 +1248,10 @@ struct Renderer::Impl {
         check(vkCreatePipelineLayout(device, &pipeline_info, nullptr,
                                      &scene.hzb_pipeline_layout),
               "Create HZB pipeline layout");
+        make_scene_pipelines();
+        refresh_scene_descriptors();
+    }
+    void make_scene_pipelines() {
         const auto gpu_shaders = detail::load_gpu_shader_bundle(shader_directory());
         const auto baseline_shaders = detail::load_shader_bundle(shader_directory());
         for (std::size_t i = 0; i < gpu_shaders.size(); ++i)
@@ -1206,7 +1261,8 @@ struct Renderer::Impl {
         VkShaderModule vertex = shader(gpu_shaders[0]);
         VkShaderModule fragment = shader(baseline_shaders[1]);
         VkShaderModule main_cull = shader(gpu_shaders[2]);
-        VkShaderModule hzb_shader = shader(gpu_shaders[3]);
+        VkShaderModule hzb_shader = scene.hzb_supported ? shader(gpu_shaders[3])
+                                                        : VK_NULL_HANDLE;
         VkShaderModule post_cull = shader(gpu_shaders[4]);
         try {
             VkPipelineShaderStageCreateInfo stages[2]{};
@@ -1309,7 +1365,6 @@ struct Renderer::Impl {
                 make_compute(hzb_shader, scene.hzb_pipeline_layout, scene.hzb_pipeline);
             for (std::size_t i = 0; i < gpu_shaders.size(); ++i)
                 scene.shader_layouts[i] = gpu_shaders[i].layout_fingerprint;
-            refresh_scene_descriptors();
         } catch (...) {
             for (auto module : {vertex, fragment, main_cull, hzb_shader, post_cull})
                 vkDestroyShaderModule(device, module, nullptr);
@@ -1446,6 +1501,8 @@ struct Renderer::Impl {
     void upload_scene_buffer(Buffer& buffer, const void* bytes, std::size_t count,
                              VkBufferUsageFlags usage) {
         const VkDeviceSize required = std::max<VkDeviceSize>(16, count);
+        if (required > max_storage_buffer_range)
+            throw std::overflow_error("GPU scene buffer exceeds maxStorageBufferRange");
         if (buffer.size < required) {
             destroy(buffer);
             buffer = make_buffer(required, usage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -1535,6 +1592,26 @@ struct Renderer::Impl {
         dependency.pMemoryBarriers = &barrier;
         vkCmdPipelineBarrier2(command, &dependency);
     }
+    Bounds world_bounds(const std::shared_ptr<const Mesh>& mesh, const Mat4& model) {
+        auto found = bounds_cache.find(mesh.get());
+        if (found == bounds_cache.end() || found->second.owner.lock() != mesh) {
+            auto local = local_bounds(*mesh);
+            found = bounds_cache.insert_or_assign(mesh.get(), CachedBounds{mesh, local}).first;
+        }
+        return transformed_bounds(found->second.local, model);
+    }
+    bool is_opaque(const std::shared_ptr<const Texture>& texture) {
+        if (!texture)
+            return true;
+        auto found = opacity_cache.find(texture.get());
+        if (found == opacity_cache.end() || found->second.owner.lock() != texture ||
+            found->second.revision != texture->revision) {
+            const bool opaque = opaque_texture(texture.get());
+            found = opacity_cache.insert_or_assign(
+                texture.get(), CachedOpacity{texture, texture->revision, opaque}).first;
+        }
+        return found->second.opaque;
+    }
     void render(const Snapshot& snapshot) {
         auto start = std::chrono::steady_clock::now();
         statistics.draw_calls = statistics.culled_meshes = statistics.gpu_label_count = 0;
@@ -1542,9 +1619,14 @@ struct Renderer::Impl {
             statistics.gpu_frustum_rejected = statistics.gpu_occlusion_deferred =
                 statistics.gpu_post_visible = 0;
         statistics.lod_counts = {};
+        statistics.visibility_counters_valid = false;
+        for (auto it = bounds_cache.begin(); it != bounds_cache.end();)
+            it = it->second.owner.expired() ? bounds_cache.erase(it) : std::next(it);
+        for (auto it = opacity_cache.begin(); it != opacity_cache.end();)
+            it = it->second.owner.expired() ? opacity_cache.erase(it) : std::next(it);
         const bool gpu_active = scene.available &&
             config.visibility_mode != VisibilityMode::Direct;
-        const bool occlusion = gpu_active && scene.hzb_supported &&
+        const bool occlusion = gpu_active && scene.hzb_supported && scene.hzb_mips &&
             config.visibility_mode == VisibilityMode::GpuOcclusion;
         statistics.gpu_visibility_active = gpu_active;
         statistics.hzb_valid = false;
@@ -1594,7 +1676,8 @@ struct Renderer::Impl {
         const std::string view_id = snapshot.view_id.empty() ? "default" : snapshot.view_id;
         const bool history_compatible = occlusion && scene.hzb_history_valid &&
             !snapshot.camera_cut && scene.previous_view_id == view_id &&
-            scene.previous_viewport == scene_viewport;
+            scene.previous_viewport == scene_viewport &&
+            scene.previous_projection == snapshot.projection;
         if (!history_compatible)
             instance_tracker.invalidate_view(view_id);
         if (occlusion)
@@ -1604,7 +1687,7 @@ struct Renderer::Impl {
         gpu_frame.view.previous_vp = scene.previous_vp;
         gpu_frame.view.viewport = scene_viewport;
         gpu_frame.view.previous_viewport = scene.previous_viewport;
-        if (scene.hzb_supported) {
+        if (scene.hzb_mips) {
             const auto dimensions = std::array<std::uint32_t, 4>{
                 std::bit_ceil(width), std::bit_ceil(height), scene.hzb_mips, 0};
             gpu_frame.view.hzb_dimensions = dimensions;
@@ -1616,6 +1699,7 @@ struct Renderer::Impl {
             const DrawItem* source;
             std::shared_ptr<const Mesh> mesh;
             bool gpu{};
+            bool opaque{};
         };
         std::vector<SelectedDraw> selected_draws;
         selected_draws.reserve(snapshot.draws.size());
@@ -1631,7 +1715,7 @@ struct Renderer::Impl {
         for (const auto& item : snapshot.draws) {
             if (!item.mesh || item.mesh->vertices.empty())
                 continue;
-            const auto source_bounds = transformed_bounds(*item.mesh, item.model);
+            const auto source_bounds = world_bounds(item.mesh, item.model);
             std::vector<float> thresholds;
             std::vector<std::uint8_t> available;
             std::shared_ptr<const Mesh> selected_mesh = item.mesh;
@@ -1657,14 +1741,14 @@ struct Renderer::Impl {
             if (!item.instance_key.empty())
                 current_lods[item.instance_key] = lod;
             const auto bounds = selected_mesh == item.mesh
-                ? source_bounds : transformed_bounds(*selected_mesh, item.model);
+                ? source_bounds : world_bounds(selected_mesh, item.model);
             InstanceUpdate previous{};
             if (!item.instance_key.empty())
                 previous = instance_tracker.update(item.instance_key, selected_mesh,
                                                    item.model, bounds, view_id);
-            const bool eligible = gpu_active && item.color[3] >= 1.f &&
-                opaque_texture(item.texture.get());
-            selected_draws.push_back({&item, selected_mesh, eligible});
+            const bool opaque = item.color[3] >= 1.f && is_opaque(item.texture);
+            const bool eligible = gpu_active && opaque;
+            selected_draws.push_back({&item, selected_mesh, eligible, opaque});
             if (!eligible)
                 continue;
             auto [range_it, inserted] = mesh_ranges.try_emplace(selected_mesh.get());
@@ -1761,7 +1845,8 @@ struct Renderer::Impl {
         }
         gpu_frame.candidate_count = static_cast<std::uint32_t>(gpu_frame.candidates.size());
         std::vector<GpuVertex> data;
-        std::vector<Batch> scene_batches, shadow_batches, sprite_batches, ui_batches;
+        std::vector<Batch> scene_batches, transparent_batches, shadow_batches,
+            sprite_batches, ui_batches;
         for (const auto& selected : selected_draws) {
             const auto& item = *selected.source;
             if (selected.gpu && !item.cast_shadow)
@@ -1792,6 +1877,8 @@ struct Renderer::Impl {
             if (!selected.gpu) {
                 if (outside(data, first))
                     ++statistics.culled_meshes;
+                else if (gpu_active && !selected.opaque)
+                    transparent_batches.push_back(batch);
                 else
                     scene_batches.push_back(batch);
             }
@@ -1938,9 +2025,12 @@ struct Renderer::Impl {
             }
         }
         begin();
+        std::uint32_t timestamp_cursor = 0;
+        std::vector<std::string> timestamp_labels;
         if (timestamp_pool) {
-            vkCmdResetQueryPool(command, timestamp_pool, 0, 2);
-            vkCmdWriteTimestamp2(command, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, timestamp_pool, 0);
+            vkCmdResetQueryPool(command, timestamp_pool, 0, 12);
+            vkCmdWriteTimestamp2(command, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                                 timestamp_pool, timestamp_cursor++);
         }
         VkDeviceSize offset{};
         vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
@@ -1953,12 +2043,100 @@ struct Renderer::Impl {
             vkCmdSetViewport(command, 0, 1, &viewport);
             vkCmdSetScissor(command, 0, 1, &scissor);
         };
+        auto set_scene_viewport = [&] {
+            VkViewport viewport{scene_viewport[0], scene_viewport[1],
+                                scene_viewport[2], scene_viewport[3], 0, 1};
+            VkRect2D scissor{{static_cast<int>(scene_viewport[0]),
+                              static_cast<int>(scene_viewport[1])},
+                             {static_cast<std::uint32_t>(scene_viewport[2]),
+                              static_cast<std::uint32_t>(scene_viewport[3])}};
+            vkCmdSetViewport(command, 0, 1, &viewport);
+            vkCmdSetScissor(command, 0, 1, &scissor);
+        };
+        auto draw_transparent = [&] {
+            if (transparent_batches.empty())
+                return;
+            vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            vkCmdPushConstants(command, pipeline_layout,
+                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                               0, sizeof(push), &push);
+            for (auto batch : transparent_batches) {
+                auto descriptor = textures.at(batch.texture).descriptor;
+                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        pipeline_layout, 0, 1, &descriptor, 0, nullptr);
+                vkCmdDraw(command, batch.count, 1, batch.first, 0);
+                ++statistics.draw_calls;
+            }
+        };
+        auto draw_sprites_and_ui = [&] {
+            vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, sprite_pipeline);
+            vkCmdPushConstants(command, pipeline_layout,
+                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                               sizeof(push), &push);
+            for (auto batch : sprite_batches) {
+                auto descriptor = textures.at(batch.texture).descriptor;
+                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
+                                        0, 1, &descriptor, 0, nullptr);
+                vkCmdDraw(command, batch.count, 1, batch.first, 0);
+                ++statistics.draw_calls;
+            }
+            set_viewport(width, height);
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline);
+            for (auto batch : ui_batches) {
+                VkRect2D scissor{{0, 0}, {width, height}};
+                if (batch.clip_rect[2] > 0 && batch.clip_rect[3] > 0) {
+                    const auto& clip = batch.clip_rect;
+                    const float x = std::clamp(clip[0], 0.f, float(width));
+                    const float y = std::clamp(clip[1], 0.f, float(height));
+                    const float right = std::clamp(clip[0] + clip[2], x, float(width));
+                    const float bottom = std::clamp(clip[1] + clip[3], y, float(height));
+                    scissor.offset = {static_cast<int>(x), static_cast<int>(y)};
+                    scissor.extent = {static_cast<unsigned>(right) - static_cast<unsigned>(x),
+                                      static_cast<unsigned>(bottom) - static_cast<unsigned>(y)};
+                }
+                if (!scissor.extent.width || !scissor.extent.height)
+                    continue;
+                vkCmdSetScissor(command, 0, 1, &scissor);
+                auto descriptor = textures.at(batch.texture).descriptor;
+                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
+                                        0, 1, &descriptor, 0, nullptr);
+                vkCmdDraw(command, batch.count, 1, batch.first, 0);
+                ++statistics.draw_calls;
+            }
+        };
+        auto dispatch_scene = [&](VkPipeline compute_pipeline, VkDescriptorSet descriptor) {
+            if (!gpu_frame.candidate_count)
+                return;
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                              compute_pipeline);
+            vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    scene.cull_pipeline_layout, 0, 1, &descriptor, 0,
+                                    nullptr);
+            const std::uint64_t max_threads = std::uint64_t(max_compute_groups_x) * 64;
+            for (std::uint64_t base = 0; base < gpu_frame.candidate_count;
+                 base += max_threads) {
+                const auto remaining = std::uint64_t(gpu_frame.candidate_count) - base;
+                const auto groups = static_cast<std::uint32_t>(
+                    std::min<std::uint64_t>(max_compute_groups_x,
+                                            (remaining + 63) / 64));
+                const std::array<std::uint32_t, 4> parameters{
+                    gpu_frame.candidate_count, gpu_frame.candidate_count,
+                    static_cast<std::uint32_t>(base), 0};
+                vkCmdPushConstants(command, scene.cull_pipeline_layout,
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                                   sizeof(parameters), parameters.data());
+                vkCmdDispatch(command, groups, 1, 1);
+            }
+        };
         RenderGraph graph;
         auto add_pass = [&](std::string name, std::vector<std::string> reads,
                             std::vector<std::string> writes, RenderGraph::Callback callback) {
             const auto label_name = name;
             graph.add(std::move(name), std::move(reads), std::move(writes),
-                      [this, label_name, callback = std::move(callback)] {
+                      [this, &timestamp_cursor, &timestamp_labels, label_name,
+                       callback = std::move(callback)] {
                           if (statistics.gpu_labels_enabled) {
                               VkDebugUtilsLabelEXT label{};
                               label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
@@ -1978,6 +2156,12 @@ struct Renderer::Impl {
                               }
                           } end{*this};
                           callback();
+                          if (timestamp_pool && timestamp_cursor < 12) {
+                              vkCmdWriteTimestamp2(command,
+                                                   VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+                                                   timestamp_pool, timestamp_cursor++);
+                              timestamp_labels.push_back(label_name);
+                          }
                       });
         };
         add_pass("ShadowMap", {}, {"shadow"}, [&] {
@@ -2010,22 +2194,33 @@ struct Renderer::Impl {
                        VK_IMAGE_ASPECT_DEPTH_BIT);
         });
         if (gpu_active)
-            add_pass("MainCull", {"shadow"}, {"main_indirect", "main_visible"}, [&] {
+            add_pass("MainCull", {"shadow"},
+                     {"main_indirect", "main_visible", "deferred_ids"}, [&] {
+                if (occlusion) {
+                    for (auto& pyramid : scene.hzb) {
+                        if (pyramid.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+                            transition(command, pyramid, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_ASPECT_COLOR_BIT);
+                            VkClearColorValue far_depth{};
+                            far_depth.float32[0] = 1.f;
+                            VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0,
+                                                          pyramid.mip_levels, 0, 1};
+                            vkCmdClearColorImage(command, pyramid.handle,
+                                                 VK_IMAGE_LAYOUT_GENERAL, &far_depth, 1,
+                                                 &range);
+                        }
+                    }
+                    scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                                  VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+                }
                 scene_barrier(VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_WRITE_BIT,
                               VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                               VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                                   VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
                 if (gpu_frame.candidate_count) {
-                    vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                      scene.cull_pipeline);
-                    vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                            scene.cull_pipeline_layout, 0, 1,
-                                            &scene.cull_main, 0, nullptr);
-                    const std::array<std::uint32_t, 4> push{
-                        gpu_frame.candidate_count, gpu_frame.candidate_count, 0, 0};
-                    vkCmdPushConstants(command, scene.cull_pipeline_layout,
-                                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push.data());
-                    vkCmdDispatch(command, (gpu_frame.candidate_count + 63) / 64, 1, 1);
+                    dispatch_scene(scene.cull_pipeline, scene.cull_main);
                     scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                                   VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
                                   VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
@@ -2034,7 +2229,10 @@ struct Renderer::Impl {
                                       VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
                 }
             });
-        add_pass("ForwardAndUI", {"shadow"}, {"color", "depth"}, [&] {
+        add_pass(occlusion ? "MainRaster" : "ForwardAndUI",
+                 gpu_active ? std::vector<std::string>{"shadow", "main_indirect", "main_visible"}
+                            : std::vector<std::string>{"shadow"},
+                 {"color", "depth"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
             transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -2052,7 +2250,8 @@ struct Renderer::Impl {
             da.imageView = depth.view;
             da.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             da.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            da.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            da.storeOp = occlusion ? VK_ATTACHMENT_STORE_OP_STORE
+                                   : VK_ATTACHMENT_STORE_OP_DONT_CARE;
             da.clearValue.depthStencil = {1, 0};
             VkRenderingInfo rendering{};
             rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -2062,18 +2261,7 @@ struct Renderer::Impl {
             rendering.pColorAttachments = &ca;
             rendering.pDepthAttachment = &da;
             vkCmdBeginRendering(command, &rendering);
-            set_viewport(width, height);
-            if (snapshot.scene_rect[2] > 0 && snapshot.scene_rect[3] > 0) {
-                auto r = snapshot.scene_rect;
-                float x = std::clamp(r[0], 0.f, float(width)),
-                      y = std::clamp(r[1], 0.f, float(height));
-                float w = std::min(r[2], float(width) - x), h = std::min(r[3], float(height) - y);
-                VkViewport viewport{x, y, w, h, 0, 1};
-                VkRect2D scissor{{static_cast<int>(x), static_cast<int>(y)},
-                                 {static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h)}};
-                vkCmdSetViewport(command, 0, 1, &viewport);
-                vkCmdSetScissor(command, 0, 1, &scissor);
-            }
+            set_scene_viewport();
             vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
             vkCmdPushConstants(command, pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
@@ -2116,42 +2304,123 @@ struct Renderer::Impl {
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
-            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, sprite_pipeline);
-            for (auto batch : sprite_batches) {
-                auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
-                vkCmdDraw(command, batch.count, 1, batch.first, 0);
-                ++statistics.draw_calls;
-            }
-            set_viewport(width, height);
-            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline);
-            vkCmdPushConstants(command, pipeline_layout,
-                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                               sizeof(push), &push);
-            for (auto batch : ui_batches) {
-                VkRect2D scissor{{0, 0}, {width, height}};
-                if (batch.clip_rect[2] > 0 && batch.clip_rect[3] > 0) {
-                    const auto& clip = batch.clip_rect;
-                    const float x = std::clamp(clip[0], 0.f, float(width));
-                    const float y = std::clamp(clip[1], 0.f, float(height));
-                    const float right = std::clamp(clip[0] + clip[2], x, float(width));
-                    const float bottom = std::clamp(clip[1] + clip[3], y, float(height));
-                    scissor.offset = {static_cast<int>(x), static_cast<int>(y)};
-                    scissor.extent = {static_cast<unsigned>(right) - static_cast<unsigned>(x),
-                                      static_cast<unsigned>(bottom) - static_cast<unsigned>(y)};
-                }
-                if (!scissor.extent.width || !scissor.extent.height)
-                    continue;
-                vkCmdSetScissor(command, 0, 1, &scissor);
-                auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
-                vkCmdDraw(command, batch.count, 1, batch.first, 0);
-                ++statistics.draw_calls;
+            if (!occlusion) {
+                draw_transparent();
+                draw_sprites_and_ui();
             }
             vkCmdEndRendering(command);
         });
+        if (occlusion) {
+            add_pass("BuildCurrentHZB", {"depth"}, {"current_hzb"}, [&] {
+                transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_DEPTH_BIT);
+                auto& pyramid = scene.hzb[scene.hzb_current];
+                transition(command, pyramid, VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                  scene.hzb_pipeline);
+                const auto padded_width = std::bit_ceil(width);
+                const auto padded_height = std::bit_ceil(height);
+                for (std::uint32_t mip = 0; mip < scene.hzb_mips; ++mip) {
+                    const std::uint32_t source_width = mip == 0 ? width
+                        : std::max(1u, padded_width >> (mip - 1));
+                    const std::uint32_t source_height = mip == 0 ? height
+                        : std::max(1u, padded_height >> (mip - 1));
+                    const std::uint32_t output_width =
+                        std::max(1u, padded_width >> mip);
+                    const std::uint32_t output_height =
+                        std::max(1u, padded_height >> mip);
+                    const auto descriptor = scene.hzb_sets[scene.hzb_current][mip];
+                    vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                            scene.hzb_pipeline_layout, 0, 1,
+                                            &descriptor, 0, nullptr);
+                    const std::array<std::uint32_t, 4> dimensions{
+                        source_width, source_height, output_width, output_height};
+                    vkCmdPushConstants(command, scene.hzb_pipeline_layout,
+                                       VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                                       sizeof(dimensions), dimensions.data());
+                    vkCmdDispatch(command, (output_width + 7) / 8,
+                                  (output_height + 7) / 8, 1);
+                    scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                  VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+                }
+            });
+            add_pass("PostCull", {"deferred_ids", "current_hzb"},
+                     {"post_indirect", "post_visible"}, [&] {
+                scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+                if (gpu_frame.candidate_count) {
+                    dispatch_scene(scene.post_pipeline, scene.cull_post);
+                    scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                  VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+                                      VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+                                  VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
+                                      VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+                }
+            });
+            add_pass("PostRasterAndUI", {"color", "depth", "post_indirect", "post_visible"},
+                     {"color", "depth"}, [&] {
+                transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_ASPECT_DEPTH_BIT);
+                VkRenderingAttachmentInfo ca{};
+                ca.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                ca.imageView = color.view;
+                ca.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                ca.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                ca.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                VkRenderingAttachmentInfo da{};
+                da.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                da.imageView = depth.view;
+                da.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                da.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                da.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                VkRenderingInfo rendering{};
+                rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                rendering.renderArea = {{0, 0}, {width, height}};
+                rendering.layerCount = 1;
+                rendering.colorAttachmentCount = 1;
+                rendering.pColorAttachments = &ca;
+                rendering.pDepthAttachment = &da;
+                vkCmdBeginRendering(command, &rendering);
+                set_scene_viewport();
+                if (!gpu_frame.bins.empty()) {
+                    VkDeviceSize scene_offset{};
+                    vkCmdBindVertexBuffers(command, 0, 1, &scene.vertices.handle,
+                                           &scene_offset);
+                    vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                      scene.graphics_pipeline);
+                    for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
+                        auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
+                        const std::array<VkDescriptorSet, 2> sets{descriptor,
+                                                                   scene.graphics_post};
+                        vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                                scene.graphics_pipeline_layout, 0,
+                                                sets.size(), sets.data(), 0, nullptr);
+                        ScenePush draw_push{push, {gpu_frame.bins[bin].visible_base,
+                                                   0, 0, 0}};
+                        vkCmdPushConstants(command, scene.graphics_pipeline_layout,
+                                           VK_SHADER_STAGE_VERTEX_BIT |
+                                               VK_SHADER_STAGE_FRAGMENT_BIT,
+                                           0, sizeof(draw_push), &draw_push);
+                        vkCmdDrawIndirect(command, scene.post_args.handle,
+                                          VkDeviceSize(bin) * sizeof(SceneIndirect), 1,
+                                          sizeof(SceneIndirect));
+                        ++statistics.draw_calls;
+                    }
+                }
+                draw_transparent();
+                draw_sprites_and_ui();
+                vkCmdEndRendering(command);
+            });
+        }
         add_pass("Readback", {"color"}, {"capture"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
@@ -2179,20 +2448,35 @@ struct Renderer::Impl {
                            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT);
             });
         graph.execute();
-        if (timestamp_pool)
-            vkCmdWriteTimestamp2(command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, timestamp_pool,
-                                 1);
         submit(swap_index.has_value());
         if (timestamp_pool) {
-            std::uint64_t stamps[2]{};
-            check(vkGetQueryPoolResults(device, timestamp_pool, 0, 2, sizeof(stamps), stamps,
+            std::array<std::uint64_t, 12> stamps{};
+            check(vkGetQueryPoolResults(device, timestamp_pool, 0, timestamp_cursor,
+                                        timestamp_cursor * sizeof(std::uint64_t), stamps.data(),
                                         sizeof(std::uint64_t),
                                         VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT),
                   "Read GPU timestamps");
-            auto delta = stamps[1] - stamps[0];
-            if (timestamp_bits < 64)
-                delta &= (std::uint64_t(1) << timestamp_bits) - 1;
-            statistics.gpu_ms = double(delta) * timestamp_period / 1000000.0;
+            auto milliseconds = [&](std::uint64_t before, std::uint64_t after) {
+                auto delta = after - before;
+                if (timestamp_bits < 64)
+                    delta &= (std::uint64_t(1) << timestamp_bits) - 1;
+                return double(delta) * timestamp_period / 1000000.0;
+            };
+            statistics.gpu_ms = milliseconds(stamps[0], stamps[timestamp_cursor - 1]);
+            statistics.gpu_main_cull_ms = statistics.gpu_main_raster_ms =
+                statistics.gpu_hzb_ms = statistics.gpu_post_cull_ms =
+                    statistics.gpu_post_raster_ms = 0;
+            for (std::size_t i = 0; i < timestamp_labels.size(); ++i) {
+                const auto elapsed = milliseconds(stamps[i], stamps[i + 1]);
+                const auto& label = timestamp_labels[i];
+                if (label == "MainCull") statistics.gpu_main_cull_ms = elapsed;
+                else if (label == "MainRaster" || label == "ForwardAndUI")
+                    statistics.gpu_main_raster_ms = elapsed;
+                else if (label == "BuildCurrentHZB") statistics.gpu_hzb_ms = elapsed;
+                else if (label == "PostCull") statistics.gpu_post_cull_ms = elapsed;
+                else if (label == "PostRasterAndUI")
+                    statistics.gpu_post_raster_ms = elapsed;
+            }
         }
         if (swap_index) {
             VkPresentInfoKHR present{};
@@ -2218,7 +2502,7 @@ struct Renderer::Impl {
         statistics.readback_cpu_ms = std::chrono::duration<double, std::milli>(
                                          std::chrono::steady_clock::now() - readback_started)
                                          .count();
-        if (gpu_active) {
+        if (gpu_active && config.visibility_diagnostics) {
             void* counts{};
             check(vkMapMemory(device, scene.main_args.memory, 0, scene.main_args.size, 0,
                               &counts), "Read GPU scene indirect counts");
@@ -2244,13 +2528,14 @@ struct Renderer::Impl {
                 std::min(gpu_frame.candidate_count,
                          main_visible + statistics.gpu_occlusion_deferred);
             statistics.culled_meshes += statistics.gpu_frustum_rejected;
+            statistics.visibility_counters_valid = true;
         }
         instance_tracker.finish_frame();
         scene.previous_vp = snapshot.view_projection;
+        scene.previous_projection = snapshot.projection;
         scene.previous_viewport = scene_viewport;
         scene.previous_view_id = view_id;
-        if (!occlusion)
-            scene.hzb_history_valid = false;
+        scene.hzb_history_valid = occlusion;
         ++statistics.frame;
         statistics.gpu_allocated_bytes = vertices.allocation_size + readback.allocation_size +
                                          color.allocation_size + depth.allocation_size +
@@ -2290,13 +2575,23 @@ bool Renderer::reload_shaders(std::string& error) {
     auto previous_ui = r.ui_pipeline;
     auto previous_shadow = r.shadow_pipeline;
     auto previous_sprite = r.sprite_pipeline;
+    auto previous_layout_fingerprints = r.shader_layouts;
+    auto previous_gpu_fingerprints = r.scene.shader_layouts;
+    auto previous_gpu = r.scene.graphics_pipeline;
+    auto previous_cull = r.scene.cull_pipeline;
+    auto previous_post = r.scene.post_pipeline;
+    auto previous_hzb = r.scene.hzb_pipeline;
     r.pipeline_layout = {};
     r.pipeline = {};
     r.ui_pipeline = {};
     r.shadow_pipeline = {};
     r.sprite_pipeline = {};
+    r.scene.graphics_pipeline = r.scene.cull_pipeline = r.scene.post_pipeline =
+        r.scene.hzb_pipeline = {};
     try {
         r.make_pipelines();
+        if (r.scene.graphics_pipeline_layout)
+            r.make_scene_pipelines();
     } catch (const std::exception& exception) {
         if (r.pipeline)
             vkDestroyPipeline(r.device, r.pipeline, nullptr);
@@ -2308,11 +2603,21 @@ bool Renderer::reload_shaders(std::string& error) {
             vkDestroyPipeline(r.device, r.sprite_pipeline, nullptr);
         if (r.pipeline_layout)
             vkDestroyPipelineLayout(r.device, r.pipeline_layout, nullptr);
+        for (auto pipeline : {r.scene.graphics_pipeline, r.scene.cull_pipeline,
+                              r.scene.post_pipeline, r.scene.hzb_pipeline})
+            if (pipeline)
+                vkDestroyPipeline(r.device, pipeline, nullptr);
         r.pipeline_layout = previous_layout;
         r.pipeline = previous;
         r.ui_pipeline = previous_ui;
         r.shadow_pipeline = previous_shadow;
         r.sprite_pipeline = previous_sprite;
+        r.scene.graphics_pipeline = previous_gpu;
+        r.scene.cull_pipeline = previous_cull;
+        r.scene.post_pipeline = previous_post;
+        r.scene.hzb_pipeline = previous_hzb;
+        r.shader_layouts = previous_layout_fingerprints;
+        r.scene.shader_layouts = previous_gpu_fingerprints;
         error = exception.what();
         return false;
     }
@@ -2320,6 +2625,9 @@ bool Renderer::reload_shaders(std::string& error) {
     vkDestroyPipeline(r.device, previous_ui, nullptr);
     vkDestroyPipeline(r.device, previous_shadow, nullptr);
     vkDestroyPipeline(r.device, previous_sprite, nullptr);
+    for (auto pipeline : {previous_gpu, previous_cull, previous_post, previous_hzb})
+        if (pipeline)
+            vkDestroyPipeline(r.device, pipeline, nullptr);
     vkDestroyPipelineLayout(r.device, previous_layout, nullptr);
     error.clear();
     return true;
@@ -2339,12 +2647,77 @@ void Renderer::resize(std::uint32_t w, std::uint32_t h) {
 void Renderer::set_visibility_mode(VisibilityMode mode) {
     if (impl_->config.visibility_mode == mode)
         return;
+    if (mode != VisibilityMode::Direct && impl_->scene.available &&
+        !impl_->scene.graphics_layout) {
+        try {
+            impl_->make_scene_descriptors_and_pipelines();
+        } catch (...) {
+            impl_->destroy_scene_interfaces();
+            throw;
+        }
+    }
     impl_->config.visibility_mode = mode;
+    if (mode == VisibilityMode::GpuOcclusion && impl_->scene.hzb_supported &&
+        !impl_->scene.hzb[0].handle)
+        impl_->make_targets();
     impl_->scene.hzb_history_valid = false;
     impl_->instance_tracker.invalidate_view(impl_->scene.previous_view_id);
 }
 VisibilityMode Renderer::visibility_mode() const {
     return impl_->config.visibility_mode;
+}
+void Renderer::set_visibility_diagnostics(bool enabled) {
+    impl_->config.visibility_diagnostics = enabled;
+}
+std::optional<HzbDebugImage> Renderer::hzb_debug_image(std::uint32_t mip) {
+    auto& renderer = *impl_;
+    if (!renderer.scene.hzb_history_valid || !renderer.scene.hzb_supported)
+        return std::nullopt;
+    if (mip >= renderer.scene.hzb_mips)
+        throw std::out_of_range("HZB debug mip outside pyramid");
+    const std::uint32_t w = std::max(1u, std::bit_ceil(renderer.width) >> mip);
+    const std::uint32_t h = std::max(1u, std::bit_ceil(renderer.height) >> mip);
+    auto staging = renderer.make_buffer(VkDeviceSize(w) * h * sizeof(float),
+                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                        VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+    try {
+        renderer.begin();
+        auto& pyramid = renderer.scene.hzb[renderer.scene.hzb_current];
+        renderer.transition(renderer.command, pyramid, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                            VK_IMAGE_ASPECT_COLOR_BIT);
+        VkBufferImageCopy copy{};
+        copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip, 0, 1};
+        copy.imageExtent = {w, h, 1};
+        vkCmdCopyImageToBuffer(renderer.command, pyramid.handle,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging.handle, 1,
+                               &copy);
+        renderer.transition(renderer.command, pyramid, VK_IMAGE_LAYOUT_GENERAL,
+                            VK_IMAGE_ASPECT_COLOR_BIT);
+        renderer.submit();
+        HzbDebugImage result;
+        result.width = w;
+        result.height = h;
+        result.rgba.resize(std::size_t(w) * h * 4);
+        void* mapped{};
+        check(vkMapMemory(renderer.device, staging.memory, 0, staging.size, 0, &mapped),
+              "Map HZB debug image");
+        const auto* depth = static_cast<const float*>(mapped);
+        for (std::size_t i = 0; i < std::size_t(w) * h; ++i) {
+            const float value = std::isfinite(depth[i]) ? std::clamp(depth[i], 0.f, 1.f) : 1.f;
+            const auto gray = static_cast<std::uint8_t>(std::lround(std::pow(value, 32.f) * 255));
+            result.rgba[4 * i] = result.rgba[4 * i + 1] =
+                result.rgba[4 * i + 2] = gray;
+            result.rgba[4 * i + 3] = 255;
+        }
+        vkUnmapMemory(renderer.device, staging.memory);
+        renderer.destroy(staging);
+        return result;
+    } catch (...) {
+        renderer.destroy(staging);
+        throw;
+    }
 }
 std::uint32_t Renderer::width() const {
     return impl_->width;

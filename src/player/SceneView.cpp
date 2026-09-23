@@ -377,10 +377,10 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
         if (!std::isfinite(height) || height <= 0)
             throw std::invalid_argument("Orthographic height must be positive");
         const auto center = foundCamera ? camera.eye : camera.target;
-        out.view_projection =
-            render::multiply(render::orthographic(-height * aspect / 2, height * aspect / 2,
-                                                  -height / 2, height / 2, -100, 100),
-                             render::transform({-center[0], -center[1], 0}));
+        out.projection = render::orthographic(-height * aspect / 2, height * aspect / 2,
+                                              -height / 2, height / 2, -100, 100);
+        out.view_projection = render::multiply(
+            out.projection, render::transform({-center[0], -center[1], 0}));
         out.eye = {center[0], center[1], 10};
     } else {
         if (!std::isfinite(camera.verticalFovDegrees) || camera.verticalFovDegrees <= 0 ||
@@ -405,10 +405,11 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
             cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2] < 1e-10f)
             throw std::invalid_argument("Camera basis is degenerate");
         out.eye = camera.eye;
+        out.projection = render::perspective(
+            camera.verticalFovDegrees * std::numbers::pi_v<float> / 180, aspect,
+            camera.nearPlane, camera.farPlane);
         out.view_projection = render::multiply(
-            render::perspective(camera.verticalFovDegrees * std::numbers::pi_v<float> / 180, aspect,
-                                camera.nearPlane, camera.farPlane),
-            render::look_at(camera.eye, camera.target, cameraUp));
+            out.projection, render::look_at(camera.eye, camera.target, cameraUp));
     }
     std::sort(impl_->messages.begin(), impl_->messages.end());
     impl_->messages.erase(std::unique(impl_->messages.begin(), impl_->messages.end()),

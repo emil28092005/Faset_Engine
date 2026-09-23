@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -84,6 +85,9 @@ struct Snapshot {
     // target.
     std::array<float, 4> scene_rect{};
     Mat4 view_projection{identity};
+    // Supplying the projection separately lets temporal visibility invalidate
+    // history on FOV/near/far changes without invalidating normal camera motion.
+    Mat4 projection{identity};
     Vec3 eye{4, 3, 5};
     Vec3 light_direction{-0.5f, -1, -0.3f};
     Color clear_color{0.055f, 0.065f, 0.085f, 1};
@@ -107,6 +111,8 @@ struct RendererConfig {
     bool headless{false};
     bool validation{true};
     VisibilityMode visibility_mode{VisibilityMode::Direct};
+    // GPU counter readback is diagnostic-only; normal visibility uses no CPU feedback.
+    bool visibility_diagnostics{false};
     // Optional isolated shader bundle, useful for editor preview and shader reload tests.
     std::filesystem::path shader_directory{};
 };
@@ -143,11 +149,18 @@ struct FrameStats {
     std::uint32_t texture_count{};
     std::uint32_t vertices{}, draw_calls{}, culled_meshes{}, validation_errors{};
     bool gpu_visibility_active{}, hzb_valid{};
+    bool visibility_counters_valid{};
     std::uint32_t gpu_bins{}, gpu_visible_instances{}, gpu_frustum_rejected{};
     std::uint32_t gpu_occlusion_deferred{}, gpu_post_visible{};
     std::array<std::uint32_t, 4> lod_counts{};
     double cpu_ms{}, gpu_ms{}, readback_cpu_ms{};
+    double gpu_main_cull_ms{}, gpu_main_raster_ms{}, gpu_hzb_ms{};
+    double gpu_post_cull_ms{}, gpu_post_raster_ms{};
     std::string device;
+};
+struct HzbDebugImage {
+    std::uint32_t width{}, height{};
+    std::vector<std::uint8_t> rgba;
 };
 class Renderer {
   public:
@@ -162,6 +175,10 @@ class Renderer {
     void resize(std::uint32_t width, std::uint32_t height);
     void set_visibility_mode(VisibilityMode);
     VisibilityMode visibility_mode() const;
+    void set_visibility_diagnostics(bool enabled);
+    // Reads the most recently completed HZB mip for editor diagnostics only.
+    // Normal visibility decisions remain entirely on the GPU.
+    std::optional<HzbDebugImage> hzb_debug_image(std::uint32_t mip = 0);
     // Rebuilds graphics pipelines from SPIR-V; a failure preserves the current pipelines.
     bool reload_shaders(std::string& error);
     // Saves the latest completed frame as a portable RGB PPM image.

@@ -33,7 +33,11 @@ Bounds local_bounds(const Mesh& mesh) {
 }
 
 Bounds transformed_bounds(const Mesh& mesh, const Mat4& model) {
-    const auto local = local_bounds(mesh);
+    return transformed_bounds(local_bounds(mesh), model);
+}
+
+Bounds transformed_bounds(const Bounds& local, const Mat4& model) {
+    validate(local);
     for (float value : model)
         if (!std::isfinite(value))
             throw std::invalid_argument("Nonfinite mesh transform");

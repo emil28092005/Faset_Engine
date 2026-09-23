@@ -65,6 +65,46 @@ int main() {
         configuration.validation = true;
         configuration.shader_directory = bundle;
         render::Renderer renderer(configuration);
+        const auto baseline_only = temporary / "baseline-only";
+        fs::create_directories(baseline_only);
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
+            for (const auto* extension : {".spv", ".reflection.json"}) {
+                const auto name = std::string(entry) + extension;
+                fs::copy_file(bundle / name, baseline_only / name);
+            }
+        auto direct_only_configuration = configuration;
+        direct_only_configuration.shader_directory = baseline_only;
+        render::Renderer direct_only(direct_only_configuration);
+        direct_only.render(render::Snapshot{});
+        require(direct_only.stats().validation_errors == 0,
+                "Direct renderer starts without optional GPU shader bundle");
+        bool unavailable_gpu_bundle = false;
+        try {
+            direct_only.set_visibility_mode(render::VisibilityMode::GpuFrustum);
+        } catch (const std::exception&) {
+            unavailable_gpu_bundle = true;
+        }
+        require(unavailable_gpu_bundle,
+                "Switching to GPU visibility reports missing optional shader bundle");
+        direct_only.render(render::Snapshot{});
+        require(direct_only.visibility_mode() == render::VisibilityMode::Direct &&
+                    direct_only.stats().validation_errors == 0,
+                "Failed GPU initialization preserves the direct renderer");
+        auto gpu_configuration = configuration;
+        gpu_configuration.visibility_mode = render::VisibilityMode::GpuFrustum;
+        render::Renderer gpu_renderer(gpu_configuration);
+        render::Snapshot opaque_scene;
+        opaque_scene.eye = {0, 0, 5};
+        opaque_scene.view_projection = render::multiply(
+            render::perspective(.8f, 1.f, .1f, 20.f),
+            render::look_at(opaque_scene.eye, {0, 0, 0}));
+        render::DrawItem opaque_cube;
+        opaque_cube.mesh = render::cube_mesh();
+        opaque_cube.instance_key = "shader-reload-cube";
+        opaque_cube.cast_shadow = false;
+        opaque_scene.draws.push_back(opaque_cube);
+        gpu_renderer.render(opaque_scene);
+        const auto gpu_expected = gpu_renderer.pixels();
         render::Snapshot scene;
         scene.ui_quads.push_back({0, 0, 32, 64, {1, .8f, .4f, 1}});
         scene.sprites.push_back({{.5f, 0, .5f}, {1, 2}, {.2f, 1, .4f, 1}});
@@ -161,6 +201,12 @@ int main() {
                 "Source-only behavior edit preserves normalized layout fingerprint");
         std::string error;
         require(renderer.reload_shaders(error), "Compatible shader edit reloads successfully");
+        require(gpu_renderer.reload_shaders(error),
+                "Compatible fragment edit reloads GPU scene pipeline");
+        gpu_renderer.render(opaque_scene);
+        const auto gpu_changed = gpu_renderer.pixels();
+        require(gpu_changed != gpu_expected,
+                "Compatible fragment reload must change GPU opaque pixels");
         renderer.render(scene);
         const auto changed = renderer.pixels();
         require(changed[0] + 50 < expected[0], "Compatible reload changes actual rendered pixels");
