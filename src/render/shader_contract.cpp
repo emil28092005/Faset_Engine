@@ -34,13 +34,21 @@ void validate_layout(const Json& layout, std::string_view entry) {
     const bool fragment = entry == "fragmentMain";
     require(layout.at("stage") == (fragment ? "fragment" : "vertex"), "shader stage changed");
     const auto& descriptors = layout.at("descriptors");
-    require(descriptors.is_array() && descriptors.size() == 4, "descriptor count changed");
+    require(descriptors.is_array() && descriptors.size() == 8, "descriptor count changed");
     for (std::size_t i = 0; i < descriptors.size(); ++i) {
         const auto& binding = descriptors[i];
-        require(binding.at("set") == 0 && binding.at("binding") == i && binding.at("count") == 1,
+        const auto set = i < 4 ? 0 : 1;
+        const auto slot = i % 4;
+        require(binding.at("set") == set && binding.at("binding") == slot &&
+                    binding.at("count") == 1,
                 "descriptor set, binding or array count changed");
-        require(binding.at("type") == (i % 2 ? "sampler" : "sampled_image_2d"),
+        const auto* expected_type = set == 0 ? (slot % 2 ? "sampler" : "sampled_image_2d")
+                                    : slot == 3 ? "sampled_image_2d" : "storage_buffer";
+        require(binding.at("type") == expected_type,
                 "descriptor type changed");
+        if (set == 1 && slot < 3)
+            require(binding.at("element_stride") == (slot == 2 ? 112 : 80),
+                    "lighting storage record stride changed");
         require(fragment || !binding.at("used").get<bool>(),
                 "vertex texture bindings are unsupported");
     }
@@ -98,7 +106,7 @@ void validate_gpu_layout(const Json& layout, std::string_view entry) {
     const std::array<int, 3> graphics_strides{224, 4, 208};
     for (std::size_t i = 0; i < expected_count; ++i) {
         const auto& binding = descriptors[i];
-        require(binding.at("set") == (graphics ? 1 : 0) && binding.at("binding") == i &&
+        require(binding.at("set") == (graphics ? 2 : 0) && binding.at("binding") == i &&
                     binding.at("count") == 1,
                 "GPU descriptor set, binding or count changed");
         const int stride = graphics ? graphics_strides[i] : hzb ? 0 : compute_strides[i];

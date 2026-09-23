@@ -135,6 +135,18 @@ void lightingExtraction(faset::player::SceneView& view) {
     scene["entities"][0]["components"][0]["fields"] = {{"kind", "area"}};
     rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "kind");
     scene["entities"][0]["components"][0]["fields"] =
+        {{"kind", "point"}, {"shadow_priority", std::int64_t{2147483648}}};
+    rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "shadow_priority");
+    scene["entities"][0]["components"][0]["fields"] = {{"kind", "point"}};
+    scene["entities"][0]["components"].insert(
+        scene["entities"][0]["components"].begin(),
+        component("faset.transform", {{"scale", {1, 1, 0}}}));
+    const auto flatPoint = view.build(scene, 1);
+    check(flatPoint.local_lights.size() == 1 &&
+              flatPoint.local_lights[0].kind == faset::render::LocalLight::Kind::Point,
+          "Point light accepts a zero Z scale because it needs only a position");
+    scene["entities"][0]["components"].erase(scene["entities"][0]["components"].begin());
+    scene["entities"][0]["components"][0]["fields"] =
         {{"kind", "point"},
          {"color", Json::array({1, std::numeric_limits<double>::quiet_NaN(), 1, 1})}};
     rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "color");

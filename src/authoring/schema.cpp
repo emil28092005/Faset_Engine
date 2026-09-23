@@ -156,6 +156,15 @@ void SchemaRegistry::validate_component(const Json& component) const {
     for (const auto& [id, value] : component["fields"].items())
         if (metadata["fields"].contains(id))
             validate_field(value, metadata["fields"][id]);
+    if (type == "faset.light") {
+        auto effective = default_fields(type);
+        effective.update(component.at("fields"));
+        if (effective.at("kind") == "spot")
+            require(effective.at("inner_angle").get<double>() <=
+                        effective.at("outer_angle").get<double>(),
+                    "validation.light_cone",
+                    "Spotlight inner_angle must not exceed outer_angle");
+    }
 }
 void SchemaRegistry::add_migration(const std::string& type, int from_version, Json rules) {
     require(contains(type) && from_version > 0 && from_version < schema(type).value("version", 1) &&
@@ -267,7 +276,10 @@ SchemaRegistry builtin_schemas() {
                               {"default", 0.7}, {"min", 0.001}, {"max", 1.55},
                               {"unit", "radians"}}},
          {"casts_shadow", field("boolean", true)},
-         {"shadow_priority", field("integer", 0)}});
+         {"shadow_priority", Json{{"type", "integer"},
+                                   {"default", 0},
+                                   {"min", std::numeric_limits<int>::min()},
+                                   {"max", std::numeric_limits<int>::max()}}}});
     for (int dimension : {2, 3}) {
         Json vector = dimension == 2 ? Json{0, 0} : Json{0, 0, 0};
         Json extents = dimension == 2 ? Json{0.5, 0.5} : Json{0.5, 0.5, 0.5};

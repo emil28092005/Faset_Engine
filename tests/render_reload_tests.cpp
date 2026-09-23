@@ -59,6 +59,27 @@ int main() {
         const auto original_reflection = read_text(bundle / "fragmentMain.reflection.json");
         const auto original_fingerprint = Json::parse(original_reflection).at("layout_fingerprint");
         render::validate_shader_bundle(bundle);
+        auto bad_lighting_stride = Json::parse(original_reflection);
+        auto& lighting_descriptors = bad_lighting_stride["layout"]["descriptors"];
+        bool found_local_buffer = false;
+        for (auto& descriptor : lighting_descriptors)
+            if (descriptor["set"] == 1 && descriptor["binding"] == 1) {
+                descriptor["element_stride"] = 96;
+                found_local_buffer = true;
+            }
+        require(found_local_buffer, "Lighting stride fixture exists");
+        bad_lighting_stride["layout_fingerprint"] =
+            sha256(bad_lighting_stride["layout"].dump());
+        atomic_write_json(bundle / "fragmentMain.reflection.json", bad_lighting_stride);
+        bool rejected_lighting_stride = false;
+        try {
+            render::validate_shader_bundle(bundle);
+        } catch (const std::exception&) {
+            rejected_lighting_stride = true;
+        }
+        require(rejected_lighting_stride,
+                "Rehashed incompatible local-light element stride must be rejected");
+        atomic_write(bundle / "fragmentMain.reflection.json", original_reflection);
         render::RendererConfig configuration;
         configuration.width = configuration.height = 64;
         configuration.headless = true;
@@ -161,6 +182,18 @@ int main() {
         atomic_write(bundle / "fragmentMain.spv", "damaged bytecode");
         retained();
         restore();
+        auto incompatible = original_source;
+        auto at = incompatible.find("    float4 reserved;");
+        require(at != std::string::npos, "Local-light stride fixture exists");
+        incompatible.replace(at, std::string("    float4 reserved;").size(),
+                             "    float4 reserved;\n    float4 incompatibleExtraLane;");
+        atomic_write(source, incompatible);
+        require(compile(source, bundle) == 0, "Compile incompatible light-buffer stride");
+        require(read_json(bundle / "fragmentMain.reflection.json").at("layout_fingerprint") !=
+                    original_fingerprint,
+                "Lighting stride edit changes normalized layout fingerprint");
+        retained();
+        restore();
         auto malformed = original_spirv;
         for (int i = 0; i < 4; ++i)
             malformed[20 + i] = 0; // zero-word SPIR-V instruction
@@ -170,8 +203,8 @@ int main() {
         atomic_write_json(bundle / "fragmentMain.reflection.json", metadata);
         retained();
         restore();
-        auto incompatible = original_source;
-        auto at = incompatible.find("[[vk::binding(2,0)]]");
+        incompatible = original_source;
+        at = incompatible.find("[[vk::binding(2,0)]]");
         require(at != std::string::npos, "Shader descriptor fixture exists");
         incompatible.replace(at, std::string("[[vk::binding(2,0)]]").size(),
                              "[[vk::binding(7,0)]]");

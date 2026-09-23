@@ -44,6 +44,7 @@ nav:
       - Editor workspace: editor/workspace.md
       - Scene templates: editor/templates.md
       - Assets and Blender: editor/assets.md
+      - Lighting: editor/lighting.md
       - GPU visibility and mesh LOD: editor/visibility-lod.md
       - Build, Play, and export: editor/export.md
       - Profiling and measurements: editor/profiling.md

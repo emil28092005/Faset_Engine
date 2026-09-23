@@ -2,6 +2,7 @@
 #include <faset/authoring/templates.hpp>
 #include <faset/authoring/transforms.hpp>
 #include <faset/core/io.hpp>
+#include <cstdint>
 #include <iostream>
 
 #define CHECK(x)                                                                                   \
@@ -44,6 +45,13 @@ int main() {
         light_component["fields"]["range"] = 10;
         light_component["fields"]["intensity"] = -1;
         fails([&] { schemas.validate_component(light_component); }, "validation.minimum");
+        light_component["fields"] = {{"kind", "spot"}, {"inner_angle", 0.9}};
+        fails([&] { schemas.validate_component(light_component); }, "validation.light_cone");
+        light_component["fields"] = {{"kind", "spot"},
+                                      {"inner_angle", 0.2},
+                                      {"outer_angle", 0.5},
+                                      {"shadow_priority", std::int64_t{2147483648}}};
+        fails([&] { schemas.validate_component(light_component); }, "validation.maximum");
         AuthoringService service(root, schemas);
         auto created = service.create("Courtyard", 3);
         const std::string id = created["id"];

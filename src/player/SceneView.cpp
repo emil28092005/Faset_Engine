@@ -397,7 +397,9 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
                     for (const auto coordinate : local.position)
                         if (!std::isfinite(coordinate))
                             invalid("position");
-                    local.direction = normalized(direction(model, {0, 0, -1}), id, "direction");
+                    if (local.kind == render::LocalLight::Kind::Spot)
+                        local.direction = normalized(direction(model, {0, 0, -1}), id,
+                                                     "direction");
                     local.color = color;
                     local.intensity = intensity;
                     local.range = number("range", 10);
@@ -405,12 +407,18 @@ render::Snapshot SceneView::build(const Json& scene, float aspect, CameraSetting
                         invalid("range");
                     local.inner_angle = number("inner_angle", 0.35f);
                     local.outer_angle = number("outer_angle", 0.7f);
-                    if (local.inner_angle < 0 || local.inner_angle > local.outer_angle ||
-                        local.outer_angle <= 0 || local.outer_angle >= std::numbers::pi_v<float> / 2)
+                    if (local.kind == render::LocalLight::Kind::Spot &&
+                        (local.inner_angle < 0 || local.inner_angle > local.outer_angle ||
+                         local.outer_angle <= 0 ||
+                         local.outer_angle >= std::numbers::pi_v<float> / 2))
                         invalid("inner_angle/outer_angle");
                     local.casts_shadow = castsShadow;
                     if (fields.contains("shadow_priority")) {
                         if (!fields.at("shadow_priority").is_number_integer())
+                            invalid("shadow_priority");
+                        const auto priority = fields.at("shadow_priority").get<double>();
+                        if (priority < std::numeric_limits<int>::min() ||
+                            priority > std::numeric_limits<int>::max())
                             invalid("shadow_priority");
                         local.shadow_priority = fields.at("shadow_priority").get<int>();
                     }

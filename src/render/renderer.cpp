@@ -6,6 +6,7 @@
 #include <bit>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <faset/core/io.hpp>
 #include <faset/render/render_graph.hpp>
@@ -14,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <numbers>
 #include <optional>
 #include <stdexcept>
 #include <unordered_map>
@@ -72,6 +74,40 @@ struct ScenePush {
     std::array<std::uint32_t, 4> draw_info;
 };
 static_assert(sizeof(ScenePush) == 112);
+struct LightingHeaderGpu {
+    std::array<std::uint32_t, 4> counts{};
+    std::array<float, 4> sun_direction_intensity{};
+    std::array<float, 4> sun_color{};
+    std::array<float, 4> camera_forward_shadow_distance{};
+    std::array<float, 4> cascade_splits{};
+};
+struct LocalLightGpu {
+    std::array<float, 4> position_range{};
+    std::array<float, 4> direction_cos_outer{};
+    std::array<float, 4> color_intensity{};
+    std::array<float, 4> cone_type_shadow_view{};
+    std::array<float, 4> reserved{};
+};
+struct ShadowViewGpu {
+    Mat4 view_projection{identity};
+    std::array<float, 4> tile_scale_offset{};
+    std::array<float, 4> guarded_clamp{};
+    std::array<float, 4> bias_flags{};
+};
+static_assert(sizeof(LightingHeaderGpu) == 80 &&
+              offsetof(LightingHeaderGpu, sun_direction_intensity) == 16 &&
+              offsetof(LightingHeaderGpu, sun_color) == 32 &&
+              offsetof(LightingHeaderGpu, camera_forward_shadow_distance) == 48 &&
+              offsetof(LightingHeaderGpu, cascade_splits) == 64);
+static_assert(sizeof(LocalLightGpu) == 80 &&
+              offsetof(LocalLightGpu, direction_cos_outer) == 16 &&
+              offsetof(LocalLightGpu, color_intensity) == 32 &&
+              offsetof(LocalLightGpu, cone_type_shadow_view) == 48 &&
+              offsetof(LocalLightGpu, reserved) == 64);
+static_assert(sizeof(ShadowViewGpu) == 112 &&
+              offsetof(ShadowViewGpu, tile_scale_offset) == 64 &&
+              offsetof(ShadowViewGpu, guarded_clamp) == 80 &&
+              offsetof(ShadowViewGpu, bias_flags) == 96);
 std::array<float, 4> point(const Mat4& m, std::array<float, 4> p) {
     std::array<float, 4> o{};
     for (int r = 0; r < 4; ++r)
@@ -196,6 +232,7 @@ struct Renderer::Impl {
     std::vector<VkImageLayout> swap_layouts;
     Image color, depth, shadow;
     Buffer vertices, readback;
+    Buffer lighting_header, lighting_locals, lighting_views;
     SceneResources scene;
     InstanceTracker instance_tracker;
     std::unordered_map<std::string, std::size_t> previous_lods;
@@ -212,6 +249,9 @@ struct Renderer::Impl {
     std::unordered_map<const Texture*, CachedOpacity> opacity_cache;
     VkDescriptorSetLayout descriptor_layout{};
     VkDescriptorPool descriptor_pool{};
+    VkDescriptorSetLayout lighting_layout{};
+    VkDescriptorPool lighting_pool{};
+    VkDescriptorSet lighting_set{};
     VkSampler shadow_sampler{}, color_sampler{};
     VkPipelineLayout pipeline_layout{};
     VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{}, sprite_pipeline{};
@@ -316,6 +356,9 @@ struct Renderer::Impl {
         destroy(scene.hzb[1]);
         destroy(vertices);
         destroy(readback);
+        destroy(lighting_header);
+        destroy(lighting_locals);
+        destroy(lighting_views);
         destroy(color);
         destroy(depth);
         destroy(shadow);
@@ -333,8 +376,12 @@ struct Renderer::Impl {
                 vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
             if (descriptor_pool)
                 vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+            if (lighting_pool)
+                vkDestroyDescriptorPool(device, lighting_pool, nullptr);
             if (descriptor_layout)
                 vkDestroyDescriptorSetLayout(device, descriptor_layout, nullptr);
+            if (lighting_layout)
+                vkDestroyDescriptorSetLayout(device, lighting_layout, nullptr);
             if (shadow_sampler)
                 vkDestroySampler(device, shadow_sampler, nullptr);
             if (color_sampler)
@@ -889,6 +936,31 @@ struct Renderer::Impl {
         pi.pPoolSizes = sizes;
         check(vkCreateDescriptorPool(device, &pi, nullptr, &descriptor_pool),
               "Create descriptor pool");
+        std::array<VkDescriptorSetLayoutBinding, 4> lighting_bindings{};
+        for (std::uint32_t i = 0; i < lighting_bindings.size(); ++i)
+            lighting_bindings[i] = {i,
+                                    i == 3 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+                                           : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                    1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+        li.bindingCount = static_cast<std::uint32_t>(lighting_bindings.size());
+        li.pBindings = lighting_bindings.data();
+        check(vkCreateDescriptorSetLayout(device, &li, nullptr, &lighting_layout),
+              "Create lighting descriptor layout");
+        VkDescriptorPoolSize lighting_sizes[] = {
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1}};
+        pi.flags = 0;
+        pi.maxSets = 1;
+        pi.poolSizeCount = 2;
+        pi.pPoolSizes = lighting_sizes;
+        check(vkCreateDescriptorPool(device, &pi, nullptr, &lighting_pool),
+              "Create lighting descriptor pool");
+        VkDescriptorSetAllocateInfo lighting_allocation{};
+        lighting_allocation.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        lighting_allocation.descriptorPool = lighting_pool;
+        lighting_allocation.descriptorSetCount = 1;
+        lighting_allocation.pSetLayouts = &lighting_layout;
+        check(vkAllocateDescriptorSets(device, &lighting_allocation, &lighting_set),
+              "Allocate lighting descriptors");
         VkSamplerCreateInfo si{};
         si.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         si.magFilter = si.minFilter = VK_FILTER_NEAREST;
@@ -1009,8 +1081,9 @@ struct Renderer::Impl {
                                  sizeof(Push)};
         VkPipelineLayoutCreateInfo li{};
         li.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        li.setLayoutCount = 1;
-        li.pSetLayouts = &descriptor_layout;
+        const std::array<VkDescriptorSetLayout, 2> set_layouts{descriptor_layout, lighting_layout};
+        li.setLayoutCount = static_cast<std::uint32_t>(set_layouts.size());
+        li.pSetLayouts = set_layouts.data();
         li.pushConstantRangeCount = 1;
         li.pPushConstantRanges = &push;
         check(vkCreatePipelineLayout(device, &li, nullptr, &pipeline_layout),
@@ -1220,14 +1293,14 @@ struct Renderer::Impl {
         layout.pBindings = hzb.data();
         check(vkCreateDescriptorSetLayout(device, &layout, nullptr, &scene.hzb_layout),
               "Create HZB descriptor layout");
-        const std::array<VkDescriptorSetLayout, 2> scene_layouts{descriptor_layout,
-                                                                  scene.graphics_layout};
+        const std::array<VkDescriptorSetLayout, 3> scene_layouts{
+            descriptor_layout, lighting_layout, scene.graphics_layout};
         VkPushConstantRange graphics_push{VK_SHADER_STAGE_VERTEX_BIT |
                                               VK_SHADER_STAGE_FRAGMENT_BIT,
                                           0, sizeof(ScenePush)};
         VkPipelineLayoutCreateInfo pipeline_info{};
         pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipeline_info.setLayoutCount = 2;
+        pipeline_info.setLayoutCount = static_cast<std::uint32_t>(scene_layouts.size());
         pipeline_info.pSetLayouts = scene_layouts.data();
         pipeline_info.pushConstantRangeCount = 1;
         pipeline_info.pPushConstantRanges = &graphics_push;
@@ -1532,6 +1605,29 @@ struct Renderer::Impl {
     void upload_scene_vector(Buffer& buffer, const std::vector<T>& values,
                              VkBufferUsageFlags usage = 0) {
         upload_scene_buffer(buffer, values.data(), values.size() * sizeof(T), usage);
+    }
+    void update_lighting_descriptors() {
+        const std::array<VkDescriptorBufferInfo, 3> buffers{{
+            {lighting_header.handle, 0, lighting_header.size},
+            {lighting_locals.handle, 0, lighting_locals.size},
+            {lighting_views.handle, 0, lighting_views.size}}};
+        const VkDescriptorImageInfo atlas{VK_NULL_HANDLE, shadow.view,
+                                          VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL};
+        std::array<VkWriteDescriptorSet, 4> writes{};
+        for (std::uint32_t i = 0; i < writes.size(); ++i) {
+            writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[i].dstSet = lighting_set;
+            writes[i].dstBinding = i;
+            writes[i].descriptorCount = 1;
+            writes[i].descriptorType = i == 3 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+                                               : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            if (i == 3)
+                writes[i].pImageInfo = &atlas;
+            else
+                writes[i].pBufferInfo = &buffers[i];
+        }
+        vkUpdateDescriptorSets(device, static_cast<std::uint32_t>(writes.size()),
+                               writes.data(), 0, nullptr);
     }
     void update_scene_descriptors(bool occlusion) {
         auto write_buffers = [&](VkDescriptorSet set, std::span<const Buffer* const> buffers,
@@ -2017,15 +2113,87 @@ struct Renderer::Impl {
                                     VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             update_scene_descriptors(occlusion);
         }
-        Vec3 direction = snapshot.light_direction;
+        std::optional<SunLight> sun = snapshot.sun;
+        if (!sun && !snapshot.authored_lights_present && snapshot.local_lights.empty())
+            sun = SunLight{"legacy-sun", snapshot.light_direction, {1, 1, 1, 1}, 1, true};
+        Vec3 direction = sun ? sun->direction : snapshot.light_direction;
         float length = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1] +
                                  direction[2] * direction[2]);
-        if (length < 1e-5f) {
+        if (!std::isfinite(length) || length < 1e-5f) {
+            if (sun && sun->stable_id != "legacy-sun")
+                throw std::invalid_argument("Authored sun direction must be finite and nonzero");
             direction = {-.5f, -1, -.3f};
             length = std::sqrt(1.34f);
         }
         for (auto& v : direction)
             v /= length;
+        LightingHeaderGpu lighting{};
+        lighting.counts[1] = sun ? 1u : 0u;
+        lighting.counts[2] = sun && sun->casts_shadow ? 1u : 0u;
+        lighting.sun_direction_intensity = {direction[0], direction[1], direction[2],
+                                            sun ? sun->intensity : 0};
+        lighting.sun_color = sun ? sun->color : Color{0, 0, 0, 1};
+        if (sun && (!std::isfinite(sun->intensity) || sun->intensity < 0 ||
+                    std::any_of(sun->color.begin(), sun->color.end(),
+                                [](float v) { return !std::isfinite(v) || v < 0; })))
+            throw std::invalid_argument("Authored sun radiance must be finite and nonnegative");
+        lighting.camera_forward_shadow_distance = {0, 0, -1, 80};
+        if (snapshot.camera_frustum) {
+            const auto& view = snapshot.camera_frustum->view;
+            lighting.camera_forward_shadow_distance = {-view[2], -view[6], -view[10], 80};
+        }
+        auto sorted_lights = snapshot.local_lights;
+        std::stable_sort(sorted_lights.begin(), sorted_lights.end(),
+                         [](const auto& a, const auto& b) { return a.stable_id < b.stable_id; });
+        constexpr std::size_t max_local_lights = 128;
+        std::vector<LocalLightGpu> gpu_lights;
+        gpu_lights.reserve(std::min(sorted_lights.size(), max_local_lights));
+        for (const auto& local : sorted_lights) {
+            if (gpu_lights.size() == max_local_lights)
+                break;
+            const auto finite_color = std::all_of(local.color.begin(), local.color.end(),
+                                                  [](float v) { return std::isfinite(v) && v >= 0; });
+            const auto finite_position = std::all_of(local.position.begin(), local.position.end(),
+                                                      [](float v) { return std::isfinite(v); });
+            if (!finite_color || !finite_position || !std::isfinite(local.intensity) ||
+                local.intensity < 0 || !std::isfinite(local.range) || local.range <= 0)
+                throw std::invalid_argument("Local light radiance, position and range must be finite");
+            if (local.kind == LocalLight::Kind::Spot &&
+                (!std::isfinite(local.inner_angle) || !std::isfinite(local.outer_angle) ||
+                 local.inner_angle < 0 || local.inner_angle > local.outer_angle ||
+                 local.outer_angle >= std::numbers::pi_v<float> / 2))
+                throw std::invalid_argument("Spotlight cone angles are invalid");
+            auto spot_direction = local.direction;
+            float spot_length = std::hypot(spot_direction[0], spot_direction[1],
+                                           spot_direction[2]);
+            if (!std::isfinite(spot_length) || spot_length < 1e-6f) {
+                if (local.kind == LocalLight::Kind::Spot)
+                    throw std::invalid_argument("Spotlight direction must be finite and nonzero");
+                spot_direction = {0, 0, -1};
+                spot_length = 1;
+            }
+            for (auto& axis : spot_direction)
+                axis /= spot_length;
+            LocalLightGpu gpu{};
+            gpu.position_range = {local.position[0], local.position[1], local.position[2],
+                                  local.range};
+            const bool spot = local.kind == LocalLight::Kind::Spot;
+            gpu.direction_cos_outer = {spot_direction[0], spot_direction[1], spot_direction[2],
+                                       spot ? std::cos(local.outer_angle) : 0.f};
+            gpu.color_intensity = {local.color[0], local.color[1], local.color[2],
+                                   local.intensity};
+            gpu.cone_type_shadow_view = {spot ? std::cos(local.inner_angle) : 1.f,
+                                         spot ? 1.f : 0.f, -1, 0};
+            gpu_lights.push_back(gpu);
+        }
+        lighting.counts[0] = static_cast<std::uint32_t>(gpu_lights.size());
+        if (gpu_lights.empty())
+            gpu_lights.push_back({}); // Descriptors always point at a full initialized record.
+        const ShadowViewGpu empty_shadow_view{};
+        upload_scene_buffer(lighting_header, &lighting, sizeof(lighting), 0);
+        upload_scene_vector(lighting_locals, gpu_lights);
+        upload_scene_buffer(lighting_views, &empty_shadow_view, sizeof(empty_shadow_view), 0);
+        update_lighting_descriptors();
         Vec3 light_eye{-direction[0] * 30, -direction[1] * 30, -direction[2] * 30};
         Vec3 light_up = std::abs(direction[1]) > .98f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
         Push push{multiply(orthographic(-20, 20, -20, 20, .1f, 80),
@@ -2078,6 +2246,12 @@ struct Renderer::Impl {
             vkCmdSetViewport(command, 0, 1, &viewport);
             vkCmdSetScissor(command, 0, 1, &scissor);
         };
+        auto bind_material = [&](VkDescriptorSet material) {
+            const std::array<VkDescriptorSet, 2> sets{material, lighting_set};
+            vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
+                                    0, static_cast<std::uint32_t>(sets.size()), sets.data(),
+                                    0, nullptr);
+        };
         auto draw_transparent = [&] {
             if (transparent_batches.empty())
                 return;
@@ -2088,8 +2262,7 @@ struct Renderer::Impl {
                                0, sizeof(push), &push);
             for (auto batch : transparent_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        pipeline_layout, 0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2102,8 +2275,7 @@ struct Renderer::Impl {
                                sizeof(push), &push);
             for (auto batch : sprite_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2125,8 +2297,7 @@ struct Renderer::Impl {
                     continue;
                 vkCmdSetScissor(command, 0, 1, &scissor);
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2313,8 +2484,7 @@ struct Renderer::Impl {
             vkCmdPushConstants(command, pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                sizeof(push), &push);
-            vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1,
-                                    &white_descriptor, 0, nullptr);
+            bind_material(white_descriptor);
             if (gpu_active && !gpu_frame.bins.empty()) {
                 VkDeviceSize scene_offset{};
                 vkCmdBindVertexBuffers(command, 0, 1, &scene.vertices.handle, &scene_offset);
@@ -2322,7 +2492,7 @@ struct Renderer::Impl {
                                   scene.graphics_pipeline);
                 for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
                     auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
-                    const std::array<VkDescriptorSet, 2> sets{descriptor,
+                    const std::array<VkDescriptorSet, 3> sets{descriptor, lighting_set,
                                                                scene.graphics_main};
                     vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                             scene.graphics_pipeline_layout, 0, sets.size(),
@@ -2346,8 +2516,7 @@ struct Renderer::Impl {
             }
             for (auto batch : scene_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2446,7 +2615,7 @@ struct Renderer::Impl {
                                       scene.graphics_pipeline);
                     for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
                         auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
-                        const std::array<VkDescriptorSet, 2> sets{descriptor,
+                        const std::array<VkDescriptorSet, 3> sets{descriptor, lighting_set,
                                                                    scene.graphics_post};
                         vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                                 scene.graphics_pipeline_layout, 0,
@@ -2618,7 +2787,10 @@ struct Renderer::Impl {
         ++statistics.frame;
         statistics.gpu_allocated_bytes = vertices.allocation_size + readback.allocation_size +
                                          color.allocation_size + depth.allocation_size +
-                                         shadow.allocation_size;
+                                         shadow.allocation_size +
+                                         lighting_header.allocation_size +
+                                         lighting_locals.allocation_size +
+                                         lighting_views.allocation_size;
         statistics.texture_count = static_cast<std::uint32_t>(textures.size());
         for (const auto& [_, texture] : textures)
             statistics.gpu_allocated_bytes += texture.image.allocation_size;
