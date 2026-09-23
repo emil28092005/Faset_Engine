@@ -10,6 +10,7 @@
 #include <cstring>
 #include <faset/core/io.hpp>
 #include <faset/render/render_graph.hpp>
+#include <faset/render/lighting.hpp>
 #include <faset/render/renderer.hpp>
 #include <faset/render/visibility.hpp>
 #include <fstream>
@@ -1721,6 +1722,7 @@ struct Renderer::Impl {
     void render(const Snapshot& snapshot) {
         auto start = std::chrono::steady_clock::now();
         statistics.draw_calls = statistics.culled_meshes = statistics.gpu_label_count = 0;
+        statistics.submitted_local_lights = statistics.omitted_local_lights = 0;
         statistics.gpu_bins = statistics.gpu_visible_instances =
             statistics.gpu_frustum_rejected = statistics.gpu_occlusion_deferred =
                 statistics.gpu_post_visible = 0;
@@ -1811,6 +1813,8 @@ struct Renderer::Impl {
         };
         std::vector<SelectedDraw> selected_draws;
         selected_draws.reserve(snapshot.draws.size());
+        std::vector<ShadowCasterBounds> shadow_casters;
+        shadow_casters.reserve(snapshot.draws.size());
         struct BuildingBin {
             const Mesh* mesh{};
             const Texture* texture{};
@@ -1820,10 +1824,17 @@ struct Renderer::Impl {
         std::vector<BuildingBin> building_bins;
         std::unordered_map<const Mesh*, std::pair<std::uint32_t, std::uint32_t>> mesh_ranges;
         std::unordered_map<std::string, std::size_t> current_lods;
-        for (const auto& item : snapshot.draws) {
+        for (std::size_t source_index = 0; source_index < snapshot.draws.size(); ++source_index) {
+            const auto& item = snapshot.draws[source_index];
             if (!item.mesh || item.mesh->vertices.empty())
                 continue;
             const auto source_bounds = world_bounds(item.mesh, item.model);
+            if (item.cast_shadow) {
+                if (source_index > UINT32_MAX)
+                    throw std::overflow_error("Shadow source draw index exceeds 32-bit capacity");
+                shadow_casters.push_back(
+                    {source_bounds, static_cast<std::uint32_t>(source_index)});
+            }
             std::vector<float> thresholds;
             std::vector<std::uint8_t> available;
             std::shared_ptr<const Mesh> selected_mesh = item.mesh;
@@ -2142,27 +2153,12 @@ struct Renderer::Impl {
             const auto& view = snapshot.camera_frustum->view;
             lighting.camera_forward_shadow_distance = {-view[2], -view[6], -view[10], 80};
         }
-        auto sorted_lights = snapshot.local_lights;
-        std::stable_sort(sorted_lights.begin(), sorted_lights.end(),
-                         [](const auto& a, const auto& b) { return a.stable_id < b.stable_id; });
-        constexpr std::size_t max_local_lights = 128;
+        const auto shadow_plan = build_shadow_plan(snapshot, shadow_casters);
+        statistics.omitted_local_lights = shadow_plan.omitted_local_lights;
         std::vector<LocalLightGpu> gpu_lights;
-        gpu_lights.reserve(std::min(sorted_lights.size(), max_local_lights));
-        for (const auto& local : sorted_lights) {
-            if (gpu_lights.size() == max_local_lights)
-                break;
-            const auto finite_color = std::all_of(local.color.begin(), local.color.end(),
-                                                  [](float v) { return std::isfinite(v) && v >= 0; });
-            const auto finite_position = std::all_of(local.position.begin(), local.position.end(),
-                                                      [](float v) { return std::isfinite(v); });
-            if (!finite_color || !finite_position || !std::isfinite(local.intensity) ||
-                local.intensity < 0 || !std::isfinite(local.range) || local.range <= 0)
-                throw std::invalid_argument("Local light radiance, position and range must be finite");
-            if (local.kind == LocalLight::Kind::Spot &&
-                (!std::isfinite(local.inner_angle) || !std::isfinite(local.outer_angle) ||
-                 local.inner_angle < 0 || local.inner_angle > local.outer_angle ||
-                 local.outer_angle >= std::numbers::pi_v<float> / 2))
-                throw std::invalid_argument("Spotlight cone angles are invalid");
+        gpu_lights.reserve(shadow_plan.submitted_local_indices.size());
+        for (const auto source : shadow_plan.submitted_local_indices) {
+            const auto& local = snapshot.local_lights[source];
             auto spot_direction = local.direction;
             float spot_length = std::hypot(spot_direction[0], spot_direction[1],
                                            spot_direction[2]);
@@ -2187,6 +2183,7 @@ struct Renderer::Impl {
             gpu_lights.push_back(gpu);
         }
         lighting.counts[0] = static_cast<std::uint32_t>(gpu_lights.size());
+        statistics.submitted_local_lights = lighting.counts[0];
         if (gpu_lights.empty())
             gpu_lights.push_back({}); // Descriptors always point at a full initialized record.
         const ShadowViewGpu empty_shadow_view{};

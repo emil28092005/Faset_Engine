@@ -183,6 +183,7 @@ struct FrameStats {
     std::uint64_t gpu_allocated_bytes{};
     std::uint32_t texture_count{};
     std::uint32_t vertices{}, draw_calls{}, culled_meshes{}, validation_errors{};
+    std::uint32_t submitted_local_lights{}, omitted_local_lights{};
     bool gpu_visibility_active{}, hzb_valid{};
     // Requested and actual paths for the last frame; actual may be less capable.
     VisibilityMode requested_visibility_mode{VisibilityMode::Direct};

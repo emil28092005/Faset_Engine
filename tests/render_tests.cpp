@@ -193,6 +193,43 @@ int main(int argc, char** argv) {
             two_lights.local_lights.clear();
         }
         renderer.set_visibility_mode(VisibilityMode::Direct);
+        renderer.render(two_lights);
+        const auto unlit_overflow = renderer.pixels();
+        for (int i = 0; i < 128; ++i) {
+            LocalLight local;
+            local.stable_id = "low-priority-" + std::to_string(i);
+            local.position = {20, 20, 20};
+            local.range = 1;
+            local.intensity = 0;
+            local.casts_shadow = false;
+            two_lights.local_lights.push_back(local);
+        }
+        LocalLight high;
+        high.stable_id = "last-high-priority";
+        high.position = {-1.4f, 0, 1.4f};
+        high.color = {1, 0, 0, 1};
+        high.range = 2.2f;
+        high.intensity = 8;
+        high.shadow_priority = 10;
+        high.casts_shadow = false;
+        two_lights.local_lights.push_back(high);
+        two_lights.local_lights.back().range = -1;
+        bool overflow_validation_failed = false;
+        try {
+            renderer.render(two_lights);
+        } catch (const std::invalid_argument&) {
+            overflow_validation_failed = true;
+        }
+        require(overflow_validation_failed,
+                "Renderer validates light records beyond the 128-light cap");
+        two_lights.local_lights.back().range = 2.2f;
+        renderer.render(two_lights);
+        const auto ranked_pixels = renderer.pixels();
+        const auto ranked_left = (120 * 320 + 99) * 4;
+        require(renderer.stats().submitted_local_lights == 128 &&
+                    renderer.stats().omitted_local_lights == 1 &&
+                    ranked_pixels[ranked_left] > unlit_overflow[ranked_left] + 20,
+                "High-priority last light is submitted and omitted count is observable");
         if (argc > 2)
             renderer.capture(argv[2]);
         renderer.resize(400, 300);
