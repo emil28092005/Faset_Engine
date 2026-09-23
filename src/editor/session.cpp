@@ -502,51 +502,102 @@ void Session::register_commands() {
                         {"configuration_created", create_configuration},
                         {"scripts_configuration_created", create_scripts_configuration}};
         });
-    commands_.add(
-        "faset_script_open",
-        "Open a project Lua source in an external editor, never as an executable. Optional editor "
-        "is an argv array (default: project editor.script_editor, then zed). Exact {file} and "
-        "{project} arguments are replaced; no shell expansion is performed.",
-        schema({{"path", text}, {"editor", {{"type", "array"}, {"items", text}, {"minItems", 1}}}},
-               {"path"}),
-        [&](const Json& args) {
-            const auto file = project_path(config_.project_root,
-                                           path_from_utf8(args.at("path").get<std::string>()));
-            require(file.extension() == ".lua" && std::filesystem::is_regular_file(file),
-                    "lua.source", "Select an existing .lua file inside the project");
-            Json command = Json::array({"zed", "{file}"});
-            const auto settings = project();
-            if (settings.contains("editor") && settings.at("editor").is_object() &&
-                settings.at("editor").contains("script_editor"))
-                command = settings.at("editor").at("script_editor");
-            if (args.contains("editor"))
-                command = args.at("editor");
-            require(command.is_array() && !command.empty(), "lua.editor",
-                    "Configure editor.script_editor as a nonempty executable/argument array");
-            std::vector<std::string> arguments;
-            bool has_file = false;
-            for (const auto& part : command) {
-                require(part.is_string(), "lua.editor", "Editor arguments must be strings");
-                auto argument = part.get<std::string>();
-                require(argument.find('\0') == std::string::npos, "lua.editor",
-                        "Editor arguments cannot contain NUL");
-                if (argument == "{file}") {
-                    require(!arguments.empty(), "lua.editor", "The first argument is the editor");
-                    argument = path_to_utf8(file);
-                    has_file = true;
-                } else if (argument == "{project}") {
-                    require(!arguments.empty(), "lua.editor", "The first argument is the editor");
-                    argument = path_to_utf8(std::filesystem::absolute(config_.project_root));
-                }
-                arguments.push_back(std::move(argument));
+    const auto open_source = [this](const Json& args, bool lua_only) -> Json {
+        const auto path_error = lua_only ? "lua.source" : "source.path";
+        const auto editor_error = lua_only ? "lua.editor" : "source.editor";
+        const auto requested = path_from_utf8(args.at("path").get<std::string>());
+        require(!requested.empty() && !requested.is_absolute(), path_error,
+                "Choose an existing source inside Scripts");
+        for (const auto& part : requested)
+            require(part != "..", path_error, "Source path cannot traverse outside Scripts");
+        std::filesystem::path file;
+        try {
+            file = project_path(config_.project_root, requested);
+        } catch (const std::exception&) {
+            throw Error(path_error, "Source path must stay inside project Scripts");
+        }
+        const auto project_root = std::filesystem::weakly_canonical(config_.project_root);
+        const auto relative = file.lexically_relative(project_root);
+        const auto name = generic_path_to_utf8(relative);
+        const auto extension = path_to_utf8(file.extension());
+        const bool supported = extension == ".cpp" || extension == ".hpp" ||
+                               extension == ".h" || extension == ".cc" ||
+                               extension == ".cxx" || extension == ".lua";
+        require(name.starts_with("Scripts/") && supported &&
+                    (!lua_only || extension == ".lua") &&
+                    std::filesystem::is_regular_file(file),
+                path_error, "Choose an existing source file inside Scripts");
+        const auto line = args.value("line", 1);
+        const auto column = args.value("column", 1);
+        require(line > 0 && column > 0, path_error, "Source line and column must be positive");
+        Json command = Json::array({"zed", "{file}:{line}:{column}"});
+        const auto settings = project();
+        if (settings.contains("editor") && settings.at("editor").is_object() &&
+            settings.at("editor").contains("script_editor"))
+            command = settings.at("editor").at("script_editor");
+        if (args.contains("editor"))
+            command = args.at("editor");
+        require(command.is_array() && !command.empty(), editor_error,
+                "Configure editor.script_editor as a nonempty executable/argument array");
+        auto replace = [](std::string& target, std::string_view token,
+                          const std::string& replacement) {
+            bool found = false;
+            std::size_t position = 0;
+            while ((position = target.find(token, position)) != std::string::npos) {
+                target.replace(position, token.size(), replacement);
+                position += replacement.size();
+                found = true;
             }
-            require(!arguments.front().empty(), "lua.editor", "Choose an editor executable");
-            if (!has_file)
-                arguments.push_back(path_to_utf8(file));
+            return found;
+        };
+        std::vector<std::string> arguments;
+        bool has_file = false;
+        for (const auto& part : command) {
+            require(part.is_string(), editor_error, "Editor arguments must be strings");
+            auto argument = part.get<std::string>();
+            require(argument.find('\0') == std::string::npos, editor_error,
+                    "Editor arguments cannot contain NUL");
+            if (arguments.empty())
+                require(!argument.empty() && argument.find('{') == std::string::npos,
+                        editor_error, "The first argument must be an editor executable");
+            else {
+                has_file |= replace(argument, "{file}", path_to_utf8(file));
+                replace(argument, "{line}", std::to_string(line));
+                replace(argument, "{column}", std::to_string(column));
+                replace(argument, "{project}", path_to_utf8(project_root));
+            }
+            arguments.push_back(std::move(argument));
+        }
+        if (!has_file)
+            arguments.push_back(path_to_utf8(file));
+        try {
             launch_detached(arguments, config_.project_root);
-            log("Opened Lua source in external editor: " + args.at("path").get<std::string>());
-            return Json{{"opened", args.at("path")}};
-        });
+        } catch (const std::exception& error) {
+            throw Error(editor_error, "Could not launch external source editor",
+                        {{"reason", error.what()}});
+        }
+        log("Opened source in external editor: " + name);
+        return {{"opened", name}, {"path", name}, {"line", line}, {"column", column}};
+    };
+    const auto source_schema = schema(
+        {{"path", text},
+         {"line", {{"type", "integer"}, {"minimum", 1}}},
+         {"column", {{"type", "integer"}, {"minimum", 1}}},
+         {"editor", {{"type", "array"}, {"items", text}, {"minItems", 1}}}},
+        {"path"});
+    commands_.add("faset_source_open",
+                  "Open a C++ or Lua source under Scripts at a one-based line and column. "
+                  "The editor is an argv array; {file}, {line}, {column} and {project} are "
+                  "substituted without a shell.",
+                  source_schema, [open_source](const Json& args) {
+                      return open_source(args, false);
+                  });
+    commands_.add("faset_script_open",
+                  "Open a project Lua source in an external editor. This compatibility command "
+                  "retains Lua-only validation and uses the same safe source launcher.",
+                  source_schema, [open_source](const Json& args) {
+                      return open_source(args, true);
+                  });
     commands_.add("faset_export",
                   "Build, validate and export a resolved authoring snapshot to a project-relative "
                   "output directory. Returns a job ID.",

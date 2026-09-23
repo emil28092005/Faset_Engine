@@ -1,9 +1,18 @@
 #include <faset/core/io.hpp>
 #include <faset/editor/session.hpp>
+#include <chrono>
 #include <iostream>
+#include <thread>
 
-int main() {
+int main(int argc, char** argv) {
     using namespace faset;
+    if (argc >= 3 && std::string_view(argv[1]) == "--editor-probe") {
+        Json arguments = Json::array();
+        for (int index = 3; index < argc; ++index)
+            arguments.push_back(argv[index]);
+        atomic_write_json(path_from_utf8(argv[2]), arguments);
+        return 0;
+    }
     const auto root = std::filesystem::temp_directory_path() /
                       path_from_utf8("Faset Café 世界 session " + new_id());
     try {
@@ -115,6 +124,32 @@ int main() {
                        {{"path", "Scripts/behavior.lua"}, {"editor", {"{file}"}}}, "lua.editor");
         reject_command("faset_script_open", {{"path", "Scripts/behavior.lua"}, {"editor", {""}}},
                        "lua.editor");
+        const auto probe = root / "editor-argv.json";
+        const auto opened = commands.call(
+            "faset_source_open",
+            {{"path", "Scripts/Gameplay.cpp"}, {"line", 17}, {"column", 4},
+             {"editor", Json::array({path_to_utf8(std::filesystem::absolute(path_from_utf8(argv[0]))),
+                                     "--editor-probe", path_to_utf8(probe),
+                                     "{file}:{line}:{column}", "{project}"})}});
+        for (int attempt = 0; attempt < 100 && !std::filesystem::exists(probe); ++attempt)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        require(opened.at("path") == "Scripts/Gameplay.cpp" && opened.at("line") == 17 &&
+                    std::filesystem::is_regular_file(probe) &&
+                    read_json(probe) ==
+                        Json::array({path_to_utf8(root / "Scripts/Gameplay.cpp") + ":17:4",
+                                     path_to_utf8(root)}),
+                "test", "Source navigation passes a Unicode path and location as literal argv");
+        reject_command("faset_source_open", {{"path", "../outside.cpp"}}, "source.path");
+        reject_command("faset_source_open", {{"path", "Scripts/missing.cpp"}}, "source.path");
+        reject_command("faset_source_open", {{"path", "Scripts"}}, "source.path");
+        atomic_write(root / "Scripts/tool.exe", "not a source\n");
+        reject_command("faset_source_open", {{"path", "Scripts/tool.exe"}}, "source.path");
+        std::filesystem::create_directories(root / "Outside");
+        std::error_code link_error;
+        std::filesystem::create_symlink(root / "Outside/secret.cpp",
+                                        root / "Scripts/escape.cpp", link_error);
+        if (!link_error)
+            reject_command("faset_source_open", {{"path", "Scripts/escape.cpp"}}, "source.path");
         auto bad_lua_project = session.project();
         bad_lua_project["scripting"] = {{"lua", {{"scripts", {"Scripts/missing.lua"}}}}};
         atomic_write_json(root / "project.faset.json", bad_lua_project);
