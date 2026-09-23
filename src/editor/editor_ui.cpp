@@ -168,7 +168,7 @@ struct EditorUI::Impl {
     Json instance_selection = Json::array(), template_conflicts = Json::array();
     std::string document, selected, source_file, asset_filter,
         active_bottom = "assets", menu, command_name = "faset_documents", status = "Ready",
-        gizmo_mode = "Move";
+        gizmo_mode = "Move", expanded_job_log;
     Json current, resolved, files = Json::array(), assets = Json::array(), schemas = Json::object(),
                             recovery = Json::array();
     std::uint64_t shown_revision = std::numeric_limits<std::uint64_t>::max();
@@ -2043,6 +2043,45 @@ struct EditorUI::Impl {
         trim_children(conflict_list, conflict_keep);
         auto& console = *ui.find("console-items");
         std::set<std::string> keep;
+        std::size_t shown_diagnostics{};
+        for (const auto& job : all_jobs) {
+            const auto id = job.at("id").get<std::string>();
+            const auto diagnostics = job.value("diagnostics", Json::array());
+            if (!diagnostics.is_array())
+                continue;
+            for (std::size_t index = 0; index < diagnostics.size() && shown_diagnostics < 60;
+                 ++index, ++shown_diagnostics) {
+                const auto& diagnostic = diagnostics[index];
+                const auto row_id = "diagnostic-" + id + "-" + std::to_string(index);
+                auto& row = console.add(Kind::Row, row_id);
+                row.layout.height = 27;
+                row.layout.gap = 8;
+                keep.insert(row_id);
+                const auto severity = diagnostic.value("severity", std::string("error"));
+                label(row, row_id + "-severity", severity, 68);
+                auto message = diagnostic.value("message", std::string());
+                auto& detail = row.add(Kind::Label, row_id + "-message", message);
+                detail.layout.flex = 1;
+                detail.tooltip = diagnostic.value("phase", std::string()) + ": " + message;
+                const auto file = diagnostic.value("file", std::string());
+                const auto line = diagnostic.value("line", 1);
+                const auto column = diagnostic.value("column", 1);
+                const auto location = file.empty()
+                                          ? std::string("—")
+                                          : file + ":" + std::to_string(line) + ":" +
+                                                std::to_string(column);
+                label(row, row_id + "-location", location, 235);
+                auto& open = button(
+                    row, row_id + "-open", "Open source",
+                    [this, file, line, column] {
+                        call("faset_source_open",
+                             {{"path", file}, {"line", line}, {"column", column}});
+                    },
+                    115);
+                open.enabled = !file.empty();
+                open.appearance = ui::Appearance::Quiet;
+            }
+        }
         const auto& logs = session.logs();
         for (std::size_t i = logs.size() > 150 ? logs.size() - 150 : 0; i < logs.size(); ++i) {
             std::string line = logs[i];
@@ -2065,11 +2104,25 @@ struct EditorUI::Impl {
             row.layout.height = 28;
             keep.insert(row.id);
             const auto state = job.value("state", std::string());
+            const auto result = job.value("result", Json::object());
+            std::string reuse;
+            if (result.is_object() && result.value("schema_cache_hit", false))
+                reuse = " · verified reuse";
+            if (result.is_object() && result.contains("phase_times_ms") &&
+                result.at("phase_times_ms").is_object())
+                reuse += " · " +
+                         std::to_string(result.at("phase_times_ms").value("total", 0)) + " ms";
             auto& text = row.add(Kind::Label, "job-text-" + id,
                                  job.value("kind", std::string("Job")) + " · " + state + " · " +
                                      job.value("stage", std::string()) + " " +
-                                     std::to_string(int(job.value("progress", 0.0) * 100)) + "%");
+                                     std::to_string(int(job.value("progress", 0.0) * 100)) + "%" +
+                                     reuse);
             text.layout.flex = 1;
+            auto& log_button = button(
+                row, "job-log-toggle-" + id,
+                expanded_job_log == id ? "Hide log" : "View log",
+                [this, id] { expanded_job_log = expanded_job_log == id ? "" : id; }, 86);
+            log_button.appearance = ui::Appearance::Quiet;
             auto& cancel = button(
                 row, "job-cancel-" + id, "Cancel",
                 [this, id] { call("faset_job_cancel", {{"id", id}}); }, 72);
@@ -2078,6 +2131,38 @@ struct EditorUI::Impl {
                 row, "job-review-" + id, "Review removals", [this] { active_bottom = "conflicts"; },
                 135);
             review.visible = job.value("kind", std::string()) == "import" && state == "conflict";
+            if (expanded_job_log == id) {
+                const auto panel_id = "job-log-panel-" + id;
+                auto& panel = jobs.add(Kind::Column, panel_id);
+                panel.layout.height = 170;
+                panel.layout.scroll = true;
+                panel.layout.gap = 1;
+                keep.insert(panel_id);
+                std::set<std::string> log_keep;
+                const auto raw = job.value("log", std::string());
+                auto& copy = button(panel, panel_id + "-copy", "Copy full log",
+                                    [this, raw] { renderer.set_clipboard(raw); }, 110);
+                copy.appearance = ui::Appearance::Quiet;
+                log_keep.insert(copy.id);
+                std::vector<std::string> lines;
+                std::size_t begin{};
+                while (begin < raw.size()) {
+                    const auto end = raw.find('\n', begin);
+                    lines.push_back(raw.substr(begin, end == std::string::npos
+                                                         ? std::string::npos
+                                                         : end - begin));
+                    if (end == std::string::npos)
+                        break;
+                    begin = end + 1;
+                }
+                const auto first = lines.size() > 100 ? lines.size() - 100 : 0;
+                for (std::size_t index = first; index < lines.size(); ++index) {
+                    const auto line_id = panel_id + "-line-" + std::to_string(index);
+                    label(panel, line_id, lines[index].substr(0, 600));
+                    log_keep.insert(line_id);
+                }
+                trim_children(panel, log_keep);
+            }
         }
         if (keep.empty()) {
             label(jobs, "jobs-empty", "No active import, build or export jobs.");

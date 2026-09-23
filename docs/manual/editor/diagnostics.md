@@ -1,5 +1,28 @@
 # Developer diagnostics
 
+## Build errors and source navigation
+
+Build and export jobs report compiler, clang-cl/MSVC, and Lua errors as structured
+Console rows. Each row shows severity, message, and a one-based source location.
+Choose **Open source** to open a file under the current project's `Scripts/`
+directory at that line and column. Diagnostics from engine or external files remain
+visible but have no source action. The **Jobs** tab shows whether a verified build
+generation was reused, the elapsed phases, and an expandable raw process log;
+**Copy full log** retains the complete available output for troubleshooting.
+
+The same action is available over Editor MCP:
+
+```json
+{"command":"faset_source_open","arguments":{"path":"Scripts/Gameplay.cpp","line":17,"column":4}}
+```
+
+`faset_script_open` remains Lua-only. Both commands use the project's optional
+`editor.script_editor` argv array, or Zed by default. The tokens `{file}`,
+`{line}`, `{column}`, and `{project}` may appear within one argument, for
+example `["zed", "{file}:{line}:{column}"]`. Faset passes each argument
+literally to the editor process without shell expansion. An invalid editor
+command produces a source-editor error without changing the build result.
+
 The optional Dear ImGui overlay shows renderer counters inside the Editor. The Editor's normal interface remains the retained Faset UI. Enable the diagnostic build explicitly:
 
 ```sh
