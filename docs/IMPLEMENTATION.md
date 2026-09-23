@@ -362,8 +362,12 @@ Shader reload rebuilds both direct and GPU scene pipelines, preserving the worki
 pipelines on failure.
 
 The Editor's ImGui diagnostics can select Direct, GPU frustum or GPU occlusion,
-inspect pass timings/counters and request a current-HZB preview. Counter and HZB
-readback are opt-in diagnostics; the visibility decision itself stays on the GPU.
+inspect pass timings/counters and request a current-HZB preview. A Player run can
+choose `--visibility direct|gpu-frustum|gpu-occlusion`; Direct remains its default.
+The profile records the requested mode and per-frame `gpu_visibility_active` so a
+silent fallback is not mistaken for measured GPU work. The Release Player CLI test
+checks all three modes and rejects an invalid value. Counter and HZB readback are
+opt-in diagnostics; the visibility decision itself stays on the GPU.
 The existing framebuffer capture still waits for completion and reads back each
 frame. Consequently, full-frame benchmark times include that path and must not be
 presented as isolated culling costs.
@@ -376,13 +380,48 @@ multi-view history, LOD hysteresis, shadow independence and transparency. Shader
 reflection/export and GPU shader reload have focused tests. The
 [P2 acceptance protocol](studies/19-p2-gpu-visibility-acceptance.md) contains the
 command, tolerance and scene definitions. The
-[three-run benchmark report](studies/20-p2-gpu-visibility-benchmark-2026-09-23.md)
+[initial three-run benchmark report](studies/20-p2-gpu-visibility-benchmark-2026-09-23.md)
 retains all 810 raw frame records, device/build details, p50/p95 values and limits.
-In that Debug build with validation and diagnostic counters, GPU `MainCull` took
-about 3.9–18.2 ms p50 across the three synthetic scenes, far above the direct
-path's 0.24–0.50 ms whole-GPU p50. The GPU route reduced synchronous CPU render-call
-time, but this is not evidence of a shipping-frame speedup. Profile the cull pass
-and repeat in Release before considering a different default. These checks establish
-the tested Linux configuration; they do not
+At that pre-optimization checkpoint, GPU `MainCull` took about 3.9–18.2 ms p50 in
+three synthetic Debug/validation scenes, far above the direct path's 0.24–0.50 ms
+whole-GPU p50. This was an actionable regression, not the final P2 performance.
+
+Optimization checkpoint `3be3d0d` moves GPU-written indirect arguments, visible IDs
+and deferred buffers into device-local memory, uses staging copies for initialization
+and optional diagnostics, and replaces contended CAS loops with bounded atomic add.
+The [three-variant follow-up](studies/21-p2-gpu-visibility-optimization-2026-09-23.md)
+isolates memory placement and then the shader change. With the same Debug/validation
+scenes, `MainCull` p50 fell to 0.030–0.042 ms. Full GPU-command p50 for the open
+GPU-frustum scene was 0.139 ms versus 0.498 ms direct; the occluded GPU-occlusion
+scene was 0.188 ms versus 0.496 ms direct. All 2,430 sampled frames across variants
+reported zero Vulkan validation errors; the final focused suite passed 18/18 and
+both culling shaders passed `spirv-val`. These synthetic results do not establish
+a shipping-frame speedup, especially on another device or game scene. These checks
+establish the tested Linux configuration; they do not
 establish P2 behavior on a physical Windows GPU or a broad driver matrix. The
 [profiling manual](manual/editor/profiling.md) explains how to interpret the timings.
+
+The independent Linux Release build completed all targets, including the prepared
+LOD example. Its full CTest run reported 57 registered tests, zero failures and
+one existing native-window lifecycle skip. The focused Release Player CLI test
+selected all three visibility modes, verified active GPU status in the profile,
+and rejected an invalid mode. Release build/test success establishes functional
+coverage; it does not replace a Release performance comparison or a Windows P2 run.
+
+As an additional Linux software-Vulkan check, Lavapipe ran all 15 labelled P2
+acceptance cases plus the standalone GPU visibility test and both example modes.
+The GPU route was active and Vulkan validation reported zero errors. This adds a
+second implementation for functional checks; Lavapipe timings are not physical-GPU
+performance evidence.
+
+The [P2 Linux evidence dossier](validation/p2-gpu-visibility-2026-09-23/README.md)
+retains the exact Release builds, labelled GPU cases and relocated standalone Player
+checks. Both sample games passed a fresh Release export, Unicode relocation away
+from the SDK and 120 headless frames with validation and zero errors. Their packages
+also ran six frames in each GPU visibility mode with an active GPU path and zero
+validation errors. The 2D Direct/GPU captures matched pixel-for-pixel. The 3D GPU
+modes matched each other; each differed from Direct at 7 of 921,600 raster-edge
+pixels, with no missing geometry. Direct CPU vertex transformation and GPU shader
+vertex transformation round differently at subpixel triangle boundaries. The
+Debug benchmarks above and this Release functional record have different purposes;
+neither establishes physical Windows GPU coverage.

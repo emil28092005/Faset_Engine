@@ -72,9 +72,19 @@ correct execution, not a frame-time threshold.
 The Editor diagnostics panel (**F12**) can switch its current viewport between
 **Direct**, **GPU frustum**, and **GPU occlusion**. Direct is the default reference.
 The selector is an Editor viewport setting; it does not change the saved scene or
-automatically change an exported Player. Check **Path: active** in the panel before
-interpreting a GPU-mode measurement: a selected mode alone does not prove that the
-GPU path ran. See [Diagnostics](diagnostics.md) for the counters and HZB preview.
+automatically change an exported Player. An exported Player can select a mode for a
+bounded run:
+
+```sh
+./faset_player --headless --frames 240 --profile gpu-frustum.json --visibility gpu-frustum
+```
+
+Accepted values are `direct`, `gpu-frustum`, and `gpu-occlusion`; Direct is the
+default. The profile records the requested `visibility_mode` and each frame's
+`gpu_visibility_active` state. Check that state when interpreting a GPU run: a
+requested mode can fall back if the required device profile is unavailable. The
+Editor reports the same distinction as **Path: active**. See
+[Diagnostics](diagnostics.md) for the counters and HZB preview.
 
 For a repeatable offscreen comparison, build and run the P2 benchmark harness:
 
@@ -89,9 +99,13 @@ shader bundle, validation state and source revision with any published result. T
 [P2 acceptance protocol](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/19-p2-gpu-visibility-acceptance.md)
 documents the scenes and CSV columns. The
 [first measured report](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/20-p2-gpu-visibility-benchmark-2026-09-23.md)
-retains three raw runs, p50/p95 and limits. Its Debug/validation profile found
-GPU MainCull substantially more expensive than direct GPU work, even though the
-GPU route reduced synchronous CPU render-call time.
+is a **pre-optimization baseline**: its Debug/validation profile found GPU MainCull
+substantially more expensive than direct GPU work. The
+[optimized follow-up](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/21-p2-gpu-visibility-optimization-2026-09-23.md)
+retains three additional raw runs and isolates the effects of device-local output
+buffers and bounded atomic append. MainCull p50 fell to 0.030–0.042 ms in those
+synthetic scenes. That comparison is useful for diagnosis, not a guarantee that
+GPU visibility speeds up a particular game or device.
 
 The harness enables GPU visibility counters, so diagnostic readback is part of its
 timings. In the Editor, opening diagnostics likewise enables these counters, and
