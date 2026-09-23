@@ -76,6 +76,33 @@ class ReflectionTests(unittest.TestCase):
             self.assertEqual([bindings[n]["type"] for n in (7, 8)],
                              ["sampled_image_2d", "sampled_image_2d"])
 
+    def test_hzb_storage_image_has_explicit_r32f_format(self):
+        compiler = os.environ["FASET_TEST_SLANGC"]
+        with tempfile.TemporaryDirectory(prefix="faset-hzb-format-") as directory:
+            process = subprocess.run(
+                [sys.executable, str(SCRIPT), "--compiler", compiler, "--source",
+                 str(SCRIPT.parents[1] / "shaders" / "gpu_scene.slang"), "--entry",
+                 "gpuHzbMain", "--define", "FASET_GPU_HZB=1", "--output", directory],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            bytecode = (Path(directory) / "gpuHzbMain.spv").read_bytes()
+            words = struct.unpack(f"<{len(bytecode) // 4}I", bytecode)
+            capabilities = set()
+            image_formats = []
+            offset = 5
+            while offset < len(words):
+                count, opcode = words[offset] >> 16, words[offset] & 0xffff
+                self.assertGreater(count, 0)
+                if opcode == 17:  # OpCapability
+                    capabilities.add(words[offset + 1])
+                elif opcode == 25:  # OpTypeImage; last operand is ImageFormat
+                    image_formats.append((words[offset + 7], words[offset + 8]))
+                offset += count
+            self.assertNotIn(55, capabilities)  # StorageImageReadWithoutFormat
+            self.assertNotIn(56, capabilities)  # StorageImageWriteWithoutFormat
+            self.assertIn((2, 3), image_formats)  # storage image, R32f
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -190,7 +190,7 @@ bool appendDeferred(uint candidateIndex) {
 [shader("compute")]
 [numthreads(64, 1, 1)]
 void gpuCullMain(uint3 dispatchId : SV_DispatchThreadID) {
-    uint index = dispatchId.x;
+    uint index = dispatchId.x + cullParameters.reserved0;
     if (index >= cullParameters.candidateCount) return;
     Candidate candidate = candidates[index];
     InstanceRecord instance = cullInstances[candidate.instanceId];
@@ -207,7 +207,7 @@ void gpuCullMain(uint3 dispatchId : SV_DispatchThreadID) {
 [shader("compute")]
 [numthreads(64, 1, 1)]
 void gpuPostCullMain(uint3 dispatchId : SV_DispatchThreadID) {
-    uint index = dispatchId.x;
+    uint index = dispatchId.x + cullParameters.reserved0;
     if (index >= cullParameters.deferredCapacity || index >= deferredCount[0]) return;
     Candidate candidate = candidates[deferredIds[index]];
     InstanceRecord instance = cullInstances[candidate.instanceId];
@@ -224,7 +224,7 @@ struct HzbParameters {
 };
 [[vk::push_constant]] ConstantBuffer<HzbParameters> hzbParameters;
 [[vk::binding(0,0)]] Texture2D<float> hzbSource;
-[[vk::binding(1,0)]] RWTexture2D<float> hzbOutput;
+[[vk::binding(1,0)]] [vk::image_format("r32f")] RWTexture2D<float> hzbOutput;
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void gpuHzbMain(uint3 dispatchId : SV_DispatchThreadID) {
