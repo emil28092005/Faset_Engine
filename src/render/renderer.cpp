@@ -146,6 +146,8 @@ bool opaque_texture(const Texture* texture) {
 struct SceneResources {
     Buffer vertices, instances, candidates, bins, view;
     Buffer main_ids, post_ids, main_args, post_args, deferred_ids, deferred_count;
+    // CPU-owned templates double as optional diagnostic readback destinations.
+    Buffer main_args_stage, post_args_stage, deferred_count_stage;
     Image hzb[2];
     VkDescriptorSetLayout graphics_layout{}, cull_layout{}, hzb_layout{};
     VkDescriptorPool descriptor_pool{};
@@ -307,6 +309,9 @@ struct Renderer::Impl {
         destroy(scene.post_args);
         destroy(scene.deferred_ids);
         destroy(scene.deferred_count);
+        destroy(scene.main_args_stage);
+        destroy(scene.post_args_stage);
+        destroy(scene.deferred_count_stage);
         destroy(scene.hzb[0]);
         destroy(scene.hzb[1]);
         destroy(vertices);
@@ -1518,6 +1523,19 @@ struct Renderer::Impl {
             vkUnmapMemory(device, buffer.memory);
         }
     }
+    void reserve_scene_output(Buffer& buffer, std::size_t count,
+                              VkBufferUsageFlags usage = 0) {
+        const VkDeviceSize required = std::max<VkDeviceSize>(16, count);
+        if (required > max_storage_buffer_range)
+            throw std::overflow_error("GPU scene buffer exceeds maxStorageBufferRange");
+        if (buffer.size < required) {
+            destroy(buffer);
+            buffer = make_buffer(required, usage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                         VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        }
+    }
     template <typename T>
     void upload_scene_vector(Buffer& buffer, const std::vector<T>& values,
                              VkBufferUsageFlags usage = 0) {
@@ -1978,18 +1996,29 @@ struct Renderer::Impl {
             upload_scene_vector(scene.candidates, gpu_frame.candidates);
             upload_scene_vector(scene.bins, gpu_frame.bins);
             upload_scene_buffer(scene.view, &gpu_frame.view, sizeof(gpu_frame.view), 0);
-            upload_scene_buffer(scene.main_ids, nullptr,
-                                gpu_frame.candidate_count * sizeof(std::uint32_t), 0);
-            upload_scene_buffer(scene.post_ids, nullptr,
-                                gpu_frame.candidate_count * sizeof(std::uint32_t), 0);
-            upload_scene_vector(scene.main_args, gpu_frame.commands,
-                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-            upload_scene_vector(scene.post_args, gpu_frame.commands,
-                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-            upload_scene_buffer(scene.deferred_ids, nullptr,
-                                gpu_frame.candidate_count * sizeof(std::uint32_t), 0);
+            reserve_scene_output(scene.main_ids,
+                                 gpu_frame.candidate_count * sizeof(std::uint32_t));
+            reserve_scene_output(scene.post_ids,
+                                 gpu_frame.candidate_count * sizeof(std::uint32_t));
+            reserve_scene_output(scene.main_args,
+                                 gpu_frame.commands.size() * sizeof(SceneIndirect),
+                                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+            reserve_scene_output(scene.post_args,
+                                 gpu_frame.commands.size() * sizeof(SceneIndirect),
+                                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+            reserve_scene_output(scene.deferred_ids,
+                                 gpu_frame.candidate_count * sizeof(std::uint32_t));
+            upload_scene_vector(scene.main_args_stage, gpu_frame.commands,
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+            upload_scene_vector(scene.post_args_stage, gpu_frame.commands,
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             const std::uint32_t zero = 0;
-            upload_scene_buffer(scene.deferred_count, &zero, sizeof(zero), 0);
+            reserve_scene_output(scene.deferred_count, sizeof(zero));
+            upload_scene_buffer(scene.deferred_count_stage, &zero, sizeof(zero),
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             update_scene_descriptors(occlusion);
         }
         Vec3 direction = snapshot.light_direction;
@@ -2196,6 +2225,28 @@ struct Renderer::Impl {
         if (gpu_active)
             add_pass("MainCull", {"shadow"},
                      {"main_indirect", "main_visible", "deferred_ids"}, [&] {
+                scene_barrier(VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_READ_BIT);
+                const VkDeviceSize command_bytes =
+                    gpu_frame.commands.size() * sizeof(SceneIndirect);
+                if (command_bytes) {
+                    const VkBufferCopy copy{0, 0, command_bytes};
+                    vkCmdCopyBuffer(command, scene.main_args_stage.handle,
+                                    scene.main_args.handle, 1, &copy);
+                    vkCmdCopyBuffer(command, scene.post_args_stage.handle,
+                                    scene.post_args.handle, 1, &copy);
+                }
+                const VkBufferCopy count_copy{0, 0, sizeof(std::uint32_t)};
+                vkCmdCopyBuffer(command, scene.deferred_count_stage.handle,
+                                scene.deferred_count.handle, 1, &count_copy);
+                scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                                  VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                                  VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                                  VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
                 if (occlusion) {
                     for (auto& pyramid : scene.hzb) {
                         if (pyramid.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
@@ -2429,6 +2480,35 @@ struct Renderer::Impl {
             copy.imageExtent = {width, height, 1};
             vkCmdCopyImageToBuffer(command, color.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                    readback.handle, 1, &copy);
+            if (gpu_active && config.visibility_diagnostics) {
+                // The staging buffers were transfer sources at the start of
+                // this frame; finish those reads before reusing them as copies'
+                // destinations for diagnostic counters.
+                scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                                  VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                                  VK_ACCESS_2_TRANSFER_READ_BIT,
+                              VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_READ_BIT |
+                                  VK_ACCESS_2_TRANSFER_WRITE_BIT);
+                const VkDeviceSize command_bytes =
+                    gpu_frame.commands.size() * sizeof(SceneIndirect);
+                if (command_bytes) {
+                    const VkBufferCopy command_copy{0, 0, command_bytes};
+                    vkCmdCopyBuffer(command, scene.main_args.handle,
+                                    scene.main_args_stage.handle, 1, &command_copy);
+                    if (occlusion)
+                        vkCmdCopyBuffer(command, scene.post_args.handle,
+                                        scene.post_args_stage.handle, 1, &command_copy);
+                }
+                const VkBufferCopy count_copy{0, 0, sizeof(std::uint32_t)};
+                vkCmdCopyBuffer(command, scene.deferred_count.handle,
+                                scene.deferred_count_stage.handle, 1, &count_copy);
+                scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_HOST_BIT,
+                              VK_ACCESS_2_HOST_READ_BIT);
+            }
         });
         if (swap_index)
             add_pass("Presentation", {"color"}, {"swapchain"}, [&] {
@@ -2504,24 +2584,27 @@ struct Renderer::Impl {
                                          .count();
         if (gpu_active && config.visibility_diagnostics) {
             void* counts{};
-            check(vkMapMemory(device, scene.main_args.memory, 0, scene.main_args.size, 0,
+            check(vkMapMemory(device, scene.main_args_stage.memory, 0,
+                              scene.main_args_stage.size, 0,
                               &counts), "Read GPU scene indirect counts");
             auto* commands = static_cast<const SceneIndirect*>(counts);
             std::uint32_t main_visible{};
             for (std::size_t i = 0; i < gpu_frame.commands.size(); ++i)
                 main_visible += commands[i].instance_count;
-            vkUnmapMemory(device, scene.main_args.memory);
-            check(vkMapMemory(device, scene.deferred_count.memory, 0, scene.deferred_count.size,
-                              0, &counts), "Read GPU deferred count");
+            vkUnmapMemory(device, scene.main_args_stage.memory);
+            check(vkMapMemory(device, scene.deferred_count_stage.memory, 0,
+                              scene.deferred_count_stage.size, 0, &counts),
+                  "Read GPU deferred count");
             statistics.gpu_occlusion_deferred = *static_cast<const std::uint32_t*>(counts);
-            vkUnmapMemory(device, scene.deferred_count.memory);
+            vkUnmapMemory(device, scene.deferred_count_stage.memory);
             if (occlusion && statistics.gpu_occlusion_deferred) {
-                check(vkMapMemory(device, scene.post_args.memory, 0, scene.post_args.size, 0,
+                check(vkMapMemory(device, scene.post_args_stage.memory, 0,
+                                  scene.post_args_stage.size, 0,
                                   &counts), "Read GPU post counts");
                 commands = static_cast<const SceneIndirect*>(counts);
                 for (std::size_t i = 0; i < gpu_frame.commands.size(); ++i)
                     statistics.gpu_post_visible += commands[i].instance_count;
-                vkUnmapMemory(device, scene.post_args.memory);
+                vkUnmapMemory(device, scene.post_args_stage.memory);
             }
             statistics.gpu_visible_instances = main_visible + statistics.gpu_post_visible;
             statistics.gpu_frustum_rejected = gpu_frame.candidate_count -
@@ -2547,7 +2630,9 @@ struct Renderer::Impl {
             for (const Buffer* buffer : {&scene.vertices, &scene.instances, &scene.candidates,
                                          &scene.bins, &scene.view, &scene.main_ids,
                                          &scene.post_ids, &scene.main_args, &scene.post_args,
-                                         &scene.deferred_ids, &scene.deferred_count})
+                                         &scene.deferred_ids, &scene.deferred_count,
+                                         &scene.main_args_stage, &scene.post_args_stage,
+                                         &scene.deferred_count_stage})
                 statistics.gpu_allocated_bytes += buffer->allocation_size;
             for (const auto& image : scene.hzb)
                 statistics.gpu_allocated_bytes += image.allocation_size;

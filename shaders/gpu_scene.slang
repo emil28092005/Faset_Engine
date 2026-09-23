@@ -162,29 +162,29 @@ bool occluded(float4 center, float4 extent, float4x4 viewProjection,
 }
 bool appendVisible(uint binIndex, uint instanceId) {
     BinRecord bin = bins[binIndex];
-    uint observed = args[binIndex].instanceCount;
-    while (observed < bin.capacity) {
-        uint previous;
-        InterlockedCompareExchange(args[binIndex].instanceCount, observed, observed + 1, previous);
-        if (previous == observed) {
-            visibleIds[bin.visibleBase + observed] = instanceId;
-            return true;
-        }
-        observed = previous;
+    // Every candidate is dispatched once and each bin reserves its full candidate
+    // count. A fetch-add therefore needs no retry on valid host-generated input.
+    uint slot;
+    InterlockedAdd(args[binIndex].instanceCount, 1u, slot);
+    if (slot < bin.capacity) {
+        visibleIds[bin.visibleBase + slot] = instanceId;
+        return true;
     }
+    // Keep the final indirect count bounded even if a malformed candidate table
+    // violates that invariant. No raster pass reads it until this dispatch ends.
+    uint ignored;
+    InterlockedAdd(args[binIndex].instanceCount, 0xffffffffu, ignored);
     return false;
 }
 bool appendDeferred(uint candidateIndex) {
-    uint observed = deferredCount[0];
-    while (observed < cullParameters.deferredCapacity) {
-        uint previous;
-        InterlockedCompareExchange(deferredCount[0], observed, observed + 1, previous);
-        if (previous == observed) {
-            deferredIds[observed] = candidateIndex;
-            return true;
-        }
-        observed = previous;
+    uint slot;
+    InterlockedAdd(deferredCount[0], 1u, slot);
+    if (slot < cullParameters.deferredCapacity) {
+        deferredIds[slot] = candidateIndex;
+        return true;
     }
+    uint ignored;
+    InterlockedAdd(deferredCount[0], 0xffffffffu, ignored);
     return false;
 }
 [shader("compute")]
