@@ -1,0 +1,39 @@
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p2/build/p2-release
+      Start 26: render_gpu_lifecycle
+      Start 29: render_gpu_open_sequence
+ 1/15 Test #26: render_gpu_lifecycle .............   Passed    0.80 sec
+      Start 30: render_gpu_transparent
+ 2/15 Test #30: render_gpu_transparent ...........   Passed    0.43 sec
+      Start 27: render_gpu_views
+ 3/15 Test #27: render_gpu_views .................   Passed    0.43 sec
+      Start 25: render_gpu_near
+ 4/15 Test #25: render_gpu_near ..................   Passed    0.36 sec
+      Start 23: render_gpu_lod
+ 5/15 Test #23: render_gpu_lod ...................   Passed    0.69 sec
+      Start 28: render_gpu_projection
+ 6/15 Test #29: render_gpu_open_sequence .........   Passed    3.05 sec
+      Start 17: render_gpu_capacity
+ 7/15 Test #28: render_gpu_projection ............   Passed    0.43 sec
+      Start 22: render_gpu_resize
+ 8/15 Test #17: render_gpu_capacity ..............   Passed    0.37 sec
+      Start 18: render_gpu_dense
+ 9/15 Test #22: render_gpu_resize ................   Passed    0.38 sec
+      Start 24: render_gpu_teleport
+10/15 Test #18: render_gpu_dense .................   Passed    0.30 sec
+      Start 16: render_gpu_empty
+11/15 Test #24: render_gpu_teleport ..............   Passed    0.38 sec
+      Start 21: render_gpu_cut
+12/15 Test #16: render_gpu_empty .................   Passed    0.31 sec
+      Start 19: render_gpu_door
+13/15 Test #21: render_gpu_cut ...................   Passed    0.44 sec
+      Start 20: render_gpu_shadow
+14/15 Test #19: render_gpu_door ..................   Passed    0.42 sec
+15/15 Test #20: render_gpu_shadow ................   Passed    0.30 sec
+
+100% tests passed, 0 tests failed out of 15
+
+Label Time Summary:
+gpu    =   9.09 sec*proc (15 tests)
+p2     =   9.09 sec*proc (15 tests)
+
+Total Test time (real) =   4.65 sec

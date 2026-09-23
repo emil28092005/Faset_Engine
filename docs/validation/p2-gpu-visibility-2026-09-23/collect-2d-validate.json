@@ -1,0 +1,12 @@
+{
+  "arguments": [
+    "/tmp/faset-playable-exports-u_8rjufs/Faset Café 世界/collect-2d/faset_player",
+    "--validate"
+  ],
+  "cwd": "/tmp/faset-playable-exports-u_8rjufs/empty-working-directory",
+  "seconds": 0.011183144990354776,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"dimension\":2,\"validated\":true}\n",
+  "stderr": ""
+}

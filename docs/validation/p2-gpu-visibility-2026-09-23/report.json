@@ -1,0 +1,435 @@
+{
+  "format": "faset.playable-export-verification",
+  "version": 1,
+  "started_utc": "2026-09-23T20:13:26.594779+00:00",
+  "platform": "linux",
+  "engine": "/home/emil/Desktop/.worktrees/Faset_Engine-p2",
+  "editor": "/home/emil/Desktop/.worktrees/Faset_Engine-p2/build/p2-release/faset_editor",
+  "standalone_root": "/tmp/faset-playable-exports-u_8rjufs",
+  "frames_per_game": 120,
+  "status": "passed",
+  "projects": [
+    {
+      "name": "collect-2d",
+      "dimension": 2,
+      "source_inputs": [
+        {
+          "path": ".gitignore",
+          "sha256": "53aa4d7124d4c8d93b8d7c4cb470b6c82b844e019a660d6243ffeadc50602de1"
+        },
+        {
+          "path": "README.md",
+          "sha256": "8cf5a2d6de849eb090b9ea6d5e27841f551bd06947e5054f0d2f59639a90edd0"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "be48a6d21385e717b6c8ebf9a3b4322eebbeff6bb067428e089ab5214be79854"
+        },
+        {
+          "path": "Scripts/Gameplay.cpp",
+          "sha256": "6b581b24da613e1915819de0a0f0ea820dd3333efa62c4b479a9ea7ffdbc6bcc"
+        },
+        {
+          "path": "Scripts/Gameplay.hpp",
+          "sha256": "4121587182ed4f74901b1c0757c53daadbf309af1d6bb5dd87fef142130ccbbe"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "36e2acd32210f5489372a2331346a3294ead2395f0713e3e5fd2da4e83263689"
+        }
+      ],
+      "generation": "e10bfc78-962f-45ef-a570-1237628cc7ec",
+      "configuration": "Release",
+      "standalone_directory": "/tmp/faset-playable-exports-u_8rjufs/Faset Café 世界/collect-2d",
+      "executable": "faset_player",
+      "package_file_count": 27,
+      "asset_generations": {},
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "validation_enabled": true,
+      "validation_errors": 0,
+      "completed_frames": 120,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.581792,
+          "min": 0.55696,
+          "p50": 0.56032,
+          "p95": 0.571968,
+          "samples": 120
+        },
+        "render_call": {
+          "max": 8.92785,
+          "min": 1.767093,
+          "p50": 2.388886,
+          "p95": 4.916754,
+          "samples": 120
+        },
+        "renderer_cpu": {
+          "max": 8.922791,
+          "min": 1.762985,
+          "p50": 2.372405,
+          "p95": 4.910192,
+          "samples": 120
+        },
+        "renderer_readback_cpu": {
+          "max": 3.480115,
+          "min": 0.461981,
+          "p50": 0.631702,
+          "p95": 1.483368,
+          "samples": 120
+        },
+        "simulation": {
+          "max": 4.035202,
+          "min": 0.141437,
+          "p50": 0.213794,
+          "p95": 0.321327,
+          "samples": 120
+        },
+        "snapshot": {
+          "max": 0.740767,
+          "min": 0.13285,
+          "p50": 0.194106,
+          "p95": 0.407779,
+          "samples": 120
+        },
+        "wall": {
+          "max": 9.833829,
+          "min": 2.085394,
+          "p50": 2.880784,
+          "p95": 5.96917,
+          "samples": 120
+        }
+      },
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 7,
+        "sha256": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a"
+      },
+      "source_project_paths_unavailable": true,
+      "status": "passed"
+    },
+    {
+      "name": "collect-3d",
+      "dimension": 3,
+      "source_inputs": [
+        {
+          "path": ".gitignore",
+          "sha256": "53aa4d7124d4c8d93b8d7c4cb470b6c82b844e019a660d6243ffeadc50602de1"
+        },
+        {
+          "path": "Assets/exit-arch/create.py",
+          "sha256": "9c7291124fb1498a3f992ef74afc39cd98f9cc3e2ff4687c633bece85d580905"
+        },
+        {
+          "path": "Assets/exit-arch/manifest.json",
+          "sha256": "7a13347adc89761fb02ebeab3c58ba87f319cd62f53ec87a3bb61bcd066ffa55"
+        },
+        {
+          "path": "Assets/exit-arch/manifest.json.faset-import.json",
+          "sha256": "ef4eef28a18a0cc40a40df75db34c97faa5d783b891265f862633f3aec514afc"
+        },
+        {
+          "path": "Assets/exit-arch/payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb",
+          "sha256": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3"
+        },
+        {
+          "path": "Assets/exit-arch/source.blend",
+          "sha256": "ff2676bec97ab778e531e87a185ad716049ea3b05b4a4f0027a6345737735035"
+        },
+        {
+          "path": "README.md",
+          "sha256": "2df5ca4df47ab5d3d05d41508201296d4ad5ec876245f19f061767ade6a30e8f"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "61b65baf79e52f07ac386a7f98acf985a1b09e88770cdde37ef461dc94b9dcd7"
+        },
+        {
+          "path": "Scripts/Extensions/Beacon.hpp",
+          "sha256": "c60d56161eead16f541835053ad32ac3333383d83015709c060b7d45e0af5a97"
+        },
+        {
+          "path": "Scripts/Gameplay.cpp",
+          "sha256": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a"
+        },
+        {
+          "path": "Scripts/Gameplay.hpp",
+          "sha256": "4121587182ed4f74901b1c0757c53daadbf309af1d6bb5dd87fef142130ccbbe"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "43d273b1054ec9069369073f54cc1fc7efb3d6b699dcd342c552a2dc2ef852ef"
+        }
+      ],
+      "import": {
+        "asset_id": "5832763b-3ed0-44d6-9088-0b524f196a91",
+        "cache_hit": false,
+        "diagnostics": [],
+        "generation": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2",
+        "manifest": {
+          "asset_id": "5832763b-3ed0-44d6-9088-0b524f196a91",
+          "files": [
+            {
+              "path": "meshes/mesh-fc069a07a87e0f831fd92efdbc4efa1f-0.fmesh",
+              "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+              "size": 928
+            },
+            {
+              "path": "meshes/mesh-0961e2a3f92977836a3aa80cab09277e-0.fmesh",
+              "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+              "size": 928
+            },
+            {
+              "path": "meshes/mesh-93b5b3e52cb6bb120fefb80e2d8e222b-0.fmesh",
+              "sha256": "3875c16ea628d4126373ebfe07816621fbad3961596a2fcd112f1eec0e378071",
+              "size": 928
+            }
+          ],
+          "generation": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2",
+          "importer": "faset-gltf-1/cgltf-1.15",
+          "input_key": {
+            "bundle_sha256": "7a13347adc89761fb02ebeab3c58ba87f319cd62f53ec87a3bb61bcd066ffa55",
+            "dependencies": {},
+            "importer": "faset-gltf-1/cgltf-1.15",
+            "settings": {},
+            "source": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+            "target_profile": "desktop-static-pbr-v1",
+            "toolchain": {
+              "cgltf": "360db1a95480fe102ae9c69b27c5d101167ff5ba",
+              "stb": "2c980bb59875b0d32144a71867fbdebb2f77cd20"
+            }
+          },
+          "kind": "scene",
+          "materials": [
+            {
+              "alpha_cutoff": 0.5,
+              "alpha_mode": "OPAQUE",
+              "base_color": [
+                0.2199999988079071,
+                0.28999999165534973,
+                0.3400000035762787,
+                1.0
+              ],
+              "base_color_texture": -1,
+              "double_sided": true,
+              "emissive": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "emissive_texture": -1,
+              "format": "faset.material",
+              "id": "material-bb63b094febbf90bb7049c9bcf7587bc",
+              "metallic": 0.07999999821186066,
+              "metallic_roughness_texture": -1,
+              "name": "Weathered stone",
+              "normal_texture": -1,
+              "occlusion_texture": -1,
+              "roughness": 0.800000011920929,
+              "unlit": false,
+              "version": 1
+            }
+          ],
+          "meshes": [
+            {
+              "id": "mesh-fc069a07a87e0f831fd92efdbc4efa1f",
+              "name": "Cube.001",
+              "primitives": [
+                {
+                  "material": 0,
+                  "path": "meshes/mesh-fc069a07a87e0f831fd92efdbc4efa1f-0.fmesh"
+                }
+              ]
+            },
+            {
+              "id": "mesh-0961e2a3f92977836a3aa80cab09277e",
+              "name": "Cube.002",
+              "primitives": [
+                {
+                  "material": 0,
+                  "path": "meshes/mesh-0961e2a3f92977836a3aa80cab09277e-0.fmesh"
+                }
+              ]
+            },
+            {
+              "id": "mesh-93b5b3e52cb6bb120fefb80e2d8e222b",
+              "name": "Cube.003",
+              "primitives": [
+                {
+                  "material": 0,
+                  "path": "meshes/mesh-93b5b3e52cb6bb120fefb80e2d8e222b-0.fmesh"
+                }
+              ]
+            }
+          ],
+          "nodes": [
+            {
+              "id": "node-cec6e8cea80cf5a98ba3263a0156bee4",
+              "local_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                1.4500000476837158,
+                1.2999999523162842,
+                1.0
+              ],
+              "mesh": 0,
+              "name": "Left post",
+              "parent_id": "",
+              "stable_source_id": true
+            },
+            {
+              "id": "node-5f8a90a6c4d27020d20bd4fa81d1d958",
+              "local_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                1.4500000476837158,
+                -1.2999999523162842,
+                1.0
+              ],
+              "mesh": 1,
+              "name": "Right post",
+              "parent_id": "",
+              "stable_source_id": true
+            },
+            {
+              "id": "node-482463e486a8d1fd741340c653cd128f",
+              "local_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                3.0,
+                0.0,
+                1.0
+              ],
+              "mesh": 2,
+              "name": "Lintel",
+              "parent_id": "",
+              "stable_source_id": true
+            }
+          ],
+          "outputs": [
+            "node-cec6e8cea80cf5a98ba3263a0156bee4",
+            "node-5f8a90a6c4d27020d20bd4fa81d1d958",
+            "node-482463e486a8d1fd741340c653cd128f",
+            "mesh-fc069a07a87e0f831fd92efdbc4efa1f",
+            "mesh-0961e2a3f92977836a3aa80cab09277e",
+            "mesh-93b5b3e52cb6bb120fefb80e2d8e222b",
+            "material-bb63b094febbf90bb7049c9bcf7587bc"
+          ],
+          "payload_source": "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/Faset Café 世界/collect-3d/Assets/exit-arch/payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb",
+          "schema_version": 1,
+          "settings": {},
+          "source": "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/Faset Café 世界/collect-3d/Assets/exit-arch/manifest.json",
+          "source_sha256": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+          "textures": []
+        },
+        "previous_generation": "",
+        "removed_output_ids": []
+      },
+      "generation": "013fe953-8787-45ac-963f-ffbd9ac5f636",
+      "configuration": "Release",
+      "standalone_directory": "/tmp/faset-playable-exports-u_8rjufs/Faset Café 世界/collect-3d",
+      "executable": "faset_player",
+      "package_file_count": 32,
+      "asset_generations": {
+        "5832763b-3ed0-44d6-9088-0b524f196a91": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2"
+      },
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "validation_enabled": true,
+      "validation_errors": 0,
+      "completed_frames": 120,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.603104,
+          "min": 0.57088,
+          "p50": 0.57456,
+          "p95": 0.587488,
+          "samples": 120
+        },
+        "render_call": {
+          "max": 15.27347,
+          "min": 1.95597,
+          "p50": 2.713318,
+          "p95": 8.219264,
+          "samples": 120
+        },
+        "renderer_cpu": {
+          "max": 15.265616,
+          "min": 1.95115,
+          "p50": 2.705423,
+          "p95": 8.212883,
+          "samples": 120
+        },
+        "renderer_readback_cpu": {
+          "max": 5.034867,
+          "min": 0.493391,
+          "p50": 0.680484,
+          "p95": 2.359841,
+          "samples": 120
+        },
+        "simulation": {
+          "max": 9.318287,
+          "min": 0.205918,
+          "p50": 0.288985,
+          "p95": 1.079266,
+          "samples": 120
+        },
+        "snapshot": {
+          "max": 2.595406,
+          "min": 0.178897,
+          "p50": 0.267054,
+          "p95": 0.536412,
+          "samples": 120
+        },
+        "wall": {
+          "max": 15.872521,
+          "min": 2.389648,
+          "p50": 3.497057,
+          "p95": 9.960939,
+          "samples": 120
+        }
+      },
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 42,
+        "sha256": "914060401de93d08b33bf09a1e210859e491a0060c331e5e2044f517356f4980"
+      },
+      "source_project_paths_unavailable": true,
+      "status": "passed"
+    }
+  ],
+  "finished_utc": "2026-09-23T20:19:17.315585+00:00"
+}

@@ -1,0 +1,138 @@
+{
+  "collect-2d": {
+    "direct_vs_gpu_frustum": {
+      "size": [
+        1280,
+        720
+      ],
+      "changed_pixels": 0,
+      "total_pixels": 921600,
+      "max_channel_delta": 0,
+      "coordinates_and_max_channel_delta": []
+    },
+    "direct_vs_gpu_occlusion": {
+      "size": [
+        1280,
+        720
+      ],
+      "changed_pixels": 0,
+      "total_pixels": 921600,
+      "max_channel_delta": 0,
+      "coordinates_and_max_channel_delta": []
+    },
+    "gpu_frustum_vs_gpu_occlusion": {
+      "size": [
+        1280,
+        720
+      ],
+      "changed_pixels": 0,
+      "total_pixels": 921600,
+      "max_channel_delta": 0,
+      "coordinates_and_max_channel_delta": []
+    }
+  },
+  "collect-3d": {
+    "direct_vs_gpu_frustum": {
+      "size": [
+        1280,
+        720
+      ],
+      "changed_pixels": 7,
+      "total_pixels": 921600,
+      "max_channel_delta": 41,
+      "coordinates_and_max_channel_delta": [
+        [
+          939,
+          361,
+          41
+        ],
+        [
+          647,
+          366,
+          11
+        ],
+        [
+          468,
+          465,
+          6
+        ],
+        [
+          588,
+          517,
+          6
+        ],
+        [
+          700,
+          566,
+          6
+        ],
+        [
+          827,
+          624,
+          11
+        ],
+        [
+          848,
+          627,
+          15
+        ]
+      ]
+    },
+    "direct_vs_gpu_occlusion": {
+      "size": [
+        1280,
+        720
+      ],
+      "changed_pixels": 7,
+      "total_pixels": 921600,
+      "max_channel_delta": 41,
+      "coordinates_and_max_channel_delta": [
+        [
+          939,
+          361,
+          41
+        ],
+        [
+          647,
+          366,
+          11
+        ],
+        [
+          468,
+          465,
+          6
+        ],
+        [
+          588,
+          517,
+          6
+        ],
+        [
+          700,
+          566,
+          6
+        ],
+        [
+          827,
+          624,
+          11
+        ],
+        [
+          848,
+          627,
+          15
+        ]
+      ]
+    },
+    "gpu_frustum_vs_gpu_occlusion": {
+      "size": [
+        1280,
+        720
+      ],
+      "changed_pixels": 0,
+      "total_pixels": 921600,
+      "max_channel_delta": 0,
+      "coordinates_and_max_channel_delta": []
+    }
+  }
+}

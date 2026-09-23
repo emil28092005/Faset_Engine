@@ -1,0 +1,97 @@
+{
+  "source_report": "report.json",
+  "runs": [
+    {
+      "name": "collect-2d",
+      "mode": "gpu-frustum",
+      "frames": 6,
+      "gpu_visibility_active": true,
+      "validation_errors": 0,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "capture_sha256": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a",
+      "profile": "collect-2d-gpu-frustum-profile.json",
+      "capture": "collect-2d-gpu-frustum.ppm",
+      "command": [
+        "/tmp/faset-playable-exports-u_8rjufs/Faset Café 世界/collect-2d/faset_player",
+        "--headless",
+        "--frames",
+        "6",
+        "--visibility",
+        "gpu-frustum",
+        "--profile",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-2d-gpu-frustum-profile.json",
+        "--capture",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-2d-gpu-frustum.ppm"
+      ]
+    },
+    {
+      "name": "collect-2d",
+      "mode": "gpu-occlusion",
+      "frames": 6,
+      "gpu_visibility_active": true,
+      "validation_errors": 0,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "capture_sha256": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a",
+      "profile": "collect-2d-gpu-occlusion-profile.json",
+      "capture": "collect-2d-gpu-occlusion.ppm",
+      "command": [
+        "/tmp/faset-playable-exports-u_8rjufs/Faset Café 世界/collect-2d/faset_player",
+        "--headless",
+        "--frames",
+        "6",
+        "--visibility",
+        "gpu-occlusion",
+        "--profile",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-2d-gpu-occlusion-profile.json",
+        "--capture",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-2d-gpu-occlusion.ppm"
+      ]
+    },
+    {
+      "name": "collect-3d",
+      "mode": "gpu-frustum",
+      "frames": 6,
+      "gpu_visibility_active": true,
+      "validation_errors": 0,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "capture_sha256": "7d18da12d685ed41705175fd7c65887d767668c1614b1b7669c99f05c694d435",
+      "profile": "collect-3d-gpu-frustum-profile.json",
+      "capture": "collect-3d-gpu-frustum.ppm",
+      "command": [
+        "/tmp/faset-playable-exports-u_8rjufs/Faset Café 世界/collect-3d/faset_player",
+        "--headless",
+        "--frames",
+        "6",
+        "--visibility",
+        "gpu-frustum",
+        "--profile",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-3d-gpu-frustum-profile.json",
+        "--capture",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-3d-gpu-frustum.ppm"
+      ]
+    },
+    {
+      "name": "collect-3d",
+      "mode": "gpu-occlusion",
+      "frames": 6,
+      "gpu_visibility_active": true,
+      "validation_errors": 0,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "capture_sha256": "7d18da12d685ed41705175fd7c65887d767668c1614b1b7669c99f05c694d435",
+      "profile": "collect-3d-gpu-occlusion-profile.json",
+      "capture": "collect-3d-gpu-occlusion.ppm",
+      "command": [
+        "/tmp/faset-playable-exports-u_8rjufs/Faset Café 世界/collect-3d/faset_player",
+        "--headless",
+        "--frames",
+        "6",
+        "--visibility",
+        "gpu-occlusion",
+        "--profile",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-3d-gpu-occlusion-profile.json",
+        "--capture",
+        "/home/emil/Desktop/.worktrees/Faset_Engine-p2/.cache/p2-playable-exports-retry/evidence/collect-3d-gpu-occlusion.ppm"
+      ]
+    }
+  ]
+}
