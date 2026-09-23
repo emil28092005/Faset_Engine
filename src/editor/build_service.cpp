@@ -241,6 +241,10 @@ struct BuildService::Impl {
         }
     }
     Json build(Job& job, bool exporting = false) {
+        const auto started = std::chrono::steady_clock::now();
+        const auto milliseconds = [](auto from, auto to) {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(to - from).count();
+        };
         const auto& configuration = exporting ? config.export_configuration : config.configuration;
         const auto native_directory = config.build_directory / configuration;
         checkpoint(job, "Configuring gameplay", .05);
@@ -252,8 +256,6 @@ struct BuildService::Impl {
         if (has_cpp != has_hpp || (!has_cpp && !job.lua.enabled()))
             throw std::runtime_error("Project requires Scripts/Gameplay.cpp and Gameplay.hpp, "
                                      "or Lua entry scripts declared in project.faset.json");
-        const auto cpp_source = has_cpp ? read_text(cpp) : std::string{};
-        const auto hpp_source = has_hpp ? read_text(hpp) : std::string{};
         ensure_native_toolchain_stamp(native_directory, inputs);
         std::vector<std::string> arguments = {config.cmake,
                                               "-S",
@@ -292,14 +294,62 @@ struct BuildService::Impl {
         arguments.push_back(std::string("-DFASET_ENABLE_LUA=") +
                             (job.lua.enabled() ? "ON" : "OFF"));
         run(job, std::move(arguments), config.project_root);
+        const auto configured = std::chrono::steady_clock::now();
         checkpoint(job, "Compiling and linking Player", .25);
         run(job,
             {config.cmake, "--build", path_to_utf8(native_directory), "--config", configuration,
              "--parallel", "4", "--target", "faset_player", "faset_schema_exporter"},
             config.project_root);
-        checkpoint(job, "Exporting gameplay schema", .58);
+        const auto compiled = std::chrono::steady_clock::now();
         auto player = build_executable(native_directory, configuration, "faset_player");
         auto exporter = build_executable(native_directory, configuration, "faset_schema_exporter");
+        const auto package_key =
+            build_package_key(inputs, native_directory, configuration, player, exporter);
+        const auto source_unchanged = [&] {
+            if (gameplay_source_hash(config.project_root,
+                                     scripting::loadLuaProject(config.project_root)) !=
+                inputs.source_hash)
+                throw std::runtime_error("Gameplay sources changed during the build; build again");
+        };
+        const auto result_for = [&](const std::string& id, const std::string& fingerprint,
+                                    bool reused) -> Json {
+            const auto directory = config.cache_root / "builds" / id;
+            const auto finished = std::chrono::steady_clock::now();
+            return {{"generation", id},
+                    {"directory", path_to_utf8(directory)},
+                    {"build_directory", path_to_utf8(native_directory)},
+                    {"configuration", configuration},
+                    {"player", path_to_utf8(directory / ("faset_player" + executable_suffix()))},
+                    {"schema", path_to_utf8(directory / "schema.json")},
+                    {"lua_enabled", job.lua.enabled()},
+                    {"lua_fingerprint", job.lua.fingerprint},
+                    {"fingerprint", fingerprint},
+                    {"schema_cache_hit", reused},
+                    {"generation_reused", reused},
+                    {"phase_times_ms",
+                     {{"configure", milliseconds(started, configured)},
+                      {"native_build", milliseconds(configured, compiled)},
+                      {"schema_package", reused ? 0 : milliseconds(compiled, finished)},
+                      {"total", milliseconds(started, finished)}}}};
+        };
+        const auto pointer_file = config.cache_root / "last_build.json";
+        if (fs::is_regular_file(pointer_file))
+            try {
+                const auto pointer = read_json(pointer_file);
+                const auto id = pointer.at("generation").get<std::string>();
+                const auto candidate =
+                    project_path(config.cache_root, fs::path("builds") / id);
+                if (validate_build_generation(candidate, package_key)) {
+                    source_unchanged();
+                    checkpoint(job, "Reusing verified build generation", .68);
+                    const auto manifest = read_json(candidate / "manifest.json");
+                    log(job, "Verified schema/package cache hit: " + id + "\n");
+                    return result_for(id, manifest.at("fingerprint").get<std::string>(), true);
+                }
+            } catch (const std::exception&) {
+                // A bad pointer or old/corrupt generation is a cache miss.
+            }
+        checkpoint(job, "Exporting gameplay schema", .58);
         const auto staging = config.cache_root / "builds" / (".staging-" + job.status.id);
         const auto generation = config.cache_root / "builds" / job.status.id;
         fs::create_directories(staging);
@@ -324,10 +374,7 @@ struct BuildService::Impl {
             // Validate the complete metadata before publishing either the schema or
             // its Player generation. Session uses this same authoring contract.
             (void)authoring::gameplay_schemas(schema);
-            std::string fingerprint = sha256_file(player) + sha256_file(exporter) +
-                                      read_text(native_directory / "CMakeCache.txt");
-            fingerprint += cpp_source + hpp_source + job.lua.fingerprint;
-            fingerprint = sha256(fingerprint);
+            const auto fingerprint = package_key;
             schema["build_fingerprint"] = fingerprint;
             if (job.lua.enabled())
                 schema["lua_fingerprint"] = job.lua.fingerprint;
@@ -343,36 +390,39 @@ struct BuildService::Impl {
                                      "gpuHzbMain.reflection.json", "gpuPostCullMain.reflection.json"})
                 copy_required_file(native_directory / "shaders" / file, staging / "shaders" / file);
             copy_runtime_libraries(job, player, staging, native_directory, configuration);
+            Json files = Json::array();
+            for (const auto& entry : fs::recursive_directory_iterator(staging)) {
+                if (entry.is_symlink())
+                    throw std::runtime_error("Build generation contains a symlink");
+                if (entry.is_regular_file())
+                    files.push_back(
+                        {{"path", generic_path_to_utf8(entry.path().lexically_relative(staging))},
+                         {"sha256", sha256_file(entry.path())},
+                         {"size", entry.file_size()}});
+            }
             Json manifest{{"format", "faset.build"},
-                          {"version", 1},
+                          {"version", 2},
                           {"id", job.status.id},
                           {"fingerprint", fingerprint},
+                          {"package_key", package_key},
                           {"configuration", configuration},
                           {"lua_enabled", job.lua.enabled()},
                           {"lua_fingerprint", job.lua.fingerprint},
                           {"player", "faset_player" + executable_suffix()},
-                          {"schema", "schema.json"}};
+                          {"schema", "schema.json"},
+                          {"files", files}};
             atomic_write_json(staging / "manifest.json", manifest);
             checkpoint(job, "Publishing build generation", .68);
             if (job.lua.enabled() &&
                 scripting::loadLuaProject(staging).fingerprint != job.lua.fingerprint)
                 throw std::runtime_error("Lua build snapshot changed during schema export");
-            if (gameplay_source_hash(config.project_root,
-                                     scripting::loadLuaProject(config.project_root)) !=
-                inputs.source_hash)
-                throw std::runtime_error("Gameplay sources changed during the build; build again");
+            source_unchanged();
+            if (!validate_build_generation(staging, package_key))
+                throw std::runtime_error("Build generation failed final integrity validation");
             fs::rename(staging, generation);
             atomic_write_json(config.cache_root / "last_build.json",
                               {{"generation", job.status.id}, {"fingerprint", fingerprint}});
-            return {{"generation", job.status.id},
-                    {"directory", path_to_utf8(generation)},
-                    {"build_directory", path_to_utf8(native_directory)},
-                    {"configuration", configuration},
-                    {"player", path_to_utf8(generation / ("faset_player" + executable_suffix()))},
-                    {"schema", path_to_utf8(generation / "schema.json")},
-                    {"lua_enabled", job.lua.enabled()},
-                    {"lua_fingerprint", job.lua.fingerprint},
-                    {"fingerprint", fingerprint}};
+            return result_for(job.status.id, fingerprint, false);
         } catch (...) {
             std::error_code error;
             fs::remove_all(staging, error);

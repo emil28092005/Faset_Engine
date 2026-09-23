@@ -72,6 +72,31 @@ void run(const fs::path& root) {
     check(!fs::exists(native / "sentinel"),
           "Changed toolchain invalidates only the generated native tree");
 
+    atomic_write(native / "faset_player", "player-v1\n");
+    atomic_write(native / "faset_schema_exporter", "exporter-v1\n");
+    atomic_write(native / "CMakeCache.txt", "recipe-v1\n");
+    atomic_write(native / "shaders/vertexMain.spv", "shader-v1\n");
+    atomic_write(native / "faset_runtime.dll", "runtime-v1\n");
+    auto package_key = [&] (const editor::BuildInputs& inputs) {
+        return editor::build_package_key(inputs, native, "Debug", native / "faset_player",
+                                         native / "faset_schema_exporter");
+    };
+    const auto first_key = package_key(changed_tool);
+    check(first_key != package_key(changed_declaration) &&
+              first_key != package_key(with_lua),
+          "Toolchain and Lua source changes invalidate package identity");
+    auto option_config = config;
+    option_config.configure_arguments.push_back("-DFASET_TEST_OPTION=ON");
+    check(first_key != package_key(editor::capture_build_inputs(option_config, lua)),
+          "Configure option changes invalidate package identity");
+    atomic_write(native / "shaders/vertexMain.spv", "shader-v2\n");
+    check(first_key != package_key(changed_tool),
+          "Shader bytes invalidate package identity");
+    atomic_write(native / "shaders/vertexMain.spv", "shader-v1\n");
+    atomic_write(native / "faset_runtime.dll", "runtime-v2\n");
+    check(first_key != package_key(changed_tool),
+          "Runtime DLL bytes invalidate package identity");
+
     fs::create_directories(root / "outside");
     std::error_code link_error;
     fs::create_directory_symlink(root / "outside", scripts / "linked", link_error);
@@ -92,7 +117,7 @@ int main() {
     try {
         run(root);
         fs::remove_all(root);
-        std::cout << "Complete source and toolchain snapshot contracts passed\n";
+        std::cout << "Source, toolchain and native package identity contracts passed\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

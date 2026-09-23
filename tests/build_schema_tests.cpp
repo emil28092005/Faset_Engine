@@ -147,8 +147,27 @@ int test_main(int argc, char** argv) {
         authoring::AuthoringService authoring(config.project_root, authoring::builtin_schemas());
         const auto valid = manifest();
         atomic_write_json(config.project_root / "schema-fixture.json", valid);
-        const auto first = builds.wait(builds.start_build());
+        auto first = builds.wait(builds.start_build());
         check(first.state == "succeeded", "Valid custom schema v2 publishes: " + first.error);
+        const auto repeated = builds.wait(builds.start_build());
+        check(repeated.state == "succeeded" &&
+                  repeated.result.at("generation") == first.result.at("generation") &&
+                  repeated.result.at("schema_cache_hit") == true &&
+                  repeated.result.at("generation_reused") == true &&
+                  read_text(config.project_root / "schema-export-count.txt") == "1",
+              "Unchanged native build reuses a verified schema generation");
+        atomic_write(path_from_utf8(first.result.at("schema").get<std::string>()), "truncated");
+        first = builds.wait(builds.start_build());
+        check(first.state == "succeeded" && first.result.at("schema_cache_hit") == false &&
+                  read_text(config.project_root / "schema-export-count.txt") == "2",
+              "Corrupt schema cannot be a cache hit");
+        atomic_write(path_from_utf8(first.result.at("directory").get<std::string>()) /
+                         "shaders/vertexMain.spv",
+                     "corrupt");
+        first = builds.wait(builds.start_build());
+        check(first.state == "succeeded" && first.result.at("schema_cache_hit") == false &&
+                  read_text(config.project_root / "schema-export-count.txt") == "3",
+              "Corrupt shader cannot be a cache hit");
         const auto directory = path_from_utf8(first.result.at("directory").get<std::string>());
         for (const auto* entry : {"gpuVertexMain", "gpuShadowMain", "gpuCullMain",
                                   "gpuHzbMain", "gpuPostCullMain"})
@@ -163,6 +182,8 @@ int test_main(int argc, char** argv) {
         const auto previous_player = sha256_file(player);
         const auto previous_schema = read_text(schema);
         const auto previous_manifest = read_text(directory / "manifest.json");
+        atomic_write(config.project_root / "Scripts/Extensions/BuildOnly.hpp",
+                     "#define BUILD_ONLY 3\n");
         atomic_write(config.project_root / "mutate-cpp-header-during-build", "fixture\n");
         const auto raced_header = builds.wait(builds.start_build());
         check(raced_header.state == "failed" && read_text(last_build) == previous_pointer,
@@ -178,6 +199,11 @@ int test_main(int argc, char** argv) {
               "C++-only build explicitly disables the Lua VM in CMake");
         authoring.replace_external_schemas(read_json(schema));
         const auto previous_registry = authoring.schemas().manifest();
+        std::size_t published_generations{};
+        for (const auto& entry : fs::directory_iterator(directory.parent_path())) {
+            (void)entry;
+            ++published_generations;
+        }
         check(authoring.schemas().schema("game.mover").at("version") == 2,
               "Matching custom v2 metadata reaches authoring");
         migration_contracts(config.project_root / "migration-contracts", read_json(schema));
@@ -261,9 +287,11 @@ int test_main(int argc, char** argv) {
             std::size_t generations{};
             for (const auto& entry : fs::directory_iterator(directory.parent_path())) {
                 ++generations;
-                check(entry.path() == directory, "Invalid build leaves no staging or generation");
+                check(!entry.path().filename().string().starts_with(".staging-"),
+                      "Invalid build leaves no staging generation");
             }
-            check(generations == 1, "Only the validated build generation remains");
+            check(generations == published_generations,
+                  "Invalid build publishes no new generation");
             bool rejected{};
             try {
                 authoring.replace_external_schemas(invalid[index]);
@@ -314,6 +342,8 @@ int test_main(int argc, char** argv) {
               "Later edits never mutate an already published Lua generation");
         const auto lua_pointer = read_text(last_build);
         for (const auto* marker : {"mutate-lua-during-build", "mutate-lua-snapshot"}) {
+            atomic_write(config.project_root / "Scripts/main.lua",
+                         std::string(lua_source) + "-- force a schema export\n");
             atomic_write(config.project_root / marker, "fixture\n");
             const auto raced = builds.wait(builds.start_build());
             check(raced.state == "failed" && read_text(last_build) == lua_pointer,

@@ -25,4 +25,17 @@ BuildInputs capture_build_inputs(const BuildConfig& config, const scripting::Lua
 void ensure_native_toolchain_stamp(const std::filesystem::path& native_directory,
                                    const BuildInputs& inputs);
 
+// Native build completes before package reuse is considered. Hash the actual
+// generated outputs, not their timestamps or just the gameplay sources.
+std::string build_package_key(const BuildInputs& inputs,
+                              const std::filesystem::path& native_directory,
+                              const std::string& configuration,
+                              const std::filesystem::path& player,
+                              const std::filesystem::path& exporter);
+
+// A hit is accepted only if the complete published file set and schema match
+// the manifest. Malformed or old manifests are safe cache misses.
+bool validate_build_generation(const std::filesystem::path& directory,
+                               const std::string& package_key);
+
 } // namespace faset::editor

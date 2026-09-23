@@ -8,6 +8,9 @@ using namespace faset;
 int tool_main(int argc, char** argv) {
     try {
         if (argc >= 3 && std::string_view(argv[1]) == "--output") {
+            const auto count_file = fs::path("schema-export-count.txt");
+            const auto count = fs::exists(count_file) ? std::stoi(read_text(count_file)) : 0;
+            atomic_write(count_file, std::to_string(count + 1));
             if (argc == 5 && std::string_view(argv[3]) == "--project") {
                 const auto snapshot = path_from_utf8(argv[4]);
                 const auto project = read_json(snapshot / "project.faset.json");

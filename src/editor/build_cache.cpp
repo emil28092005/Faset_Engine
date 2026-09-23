@@ -1,9 +1,12 @@
 #include <faset/editor/build_cache.hpp>
 
+#include <faset/authoring/schema.hpp>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
+#include <cctype>
 #include <cstdlib>
+#include <set>
 #include <stdexcept>
 
 namespace faset::editor {
@@ -149,6 +152,114 @@ void ensure_native_toolchain_stamp(const fs::path& native_directory,
         atomic_write_json(stamp, {{"format", "faset.toolchain-stamp"},
                                   {"version", 1},
                                   {"toolchain_hash", inputs.toolchain_hash}});
+}
+
+std::string build_package_key(const BuildInputs& inputs, const fs::path& native_directory,
+                              const std::string& configuration, const fs::path& player,
+                              const fs::path& exporter) {
+    Json files = Json::object();
+    for (const auto& [name, path] :
+         {std::pair{"player", player}, std::pair{"exporter", exporter},
+          std::pair{"cmake_cache", native_directory / "CMakeCache.txt"}}) {
+        if (!fs::is_regular_file(path) || fs::is_symlink(path))
+            throw std::runtime_error("Native build artifact is missing: " + path_to_utf8(path));
+        files[name] = sha256_file(path);
+    }
+    const auto shaders = native_directory / "shaders";
+    if (!fs::is_directory(shaders))
+        throw std::runtime_error("Native shader directory is missing");
+    for (const auto& entry : fs::recursive_directory_iterator(shaders)) {
+        if (entry.is_symlink())
+            throw std::runtime_error("Native shader is a symlink");
+        if (entry.is_regular_file())
+            files[generic_path_to_utf8(entry.path().lexically_relative(native_directory))] =
+                sha256_file(entry.path());
+    }
+    // On Windows, a changed runtime DLL must also invalidate a package hit.
+    for (const auto& root : {player.parent_path(), native_directory,
+                             native_directory / configuration}) {
+        if (!fs::is_directory(root))
+            continue;
+        for (const auto& entry : fs::directory_iterator(root)) {
+            auto extension = path_to_utf8(entry.path().extension());
+            for (auto& character : extension)
+                character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+            if (extension != ".dll")
+                continue;
+            if (!entry.is_regular_file() || entry.is_symlink())
+                throw std::runtime_error("Native runtime DLL is not a regular file");
+            files["dll:" + path_to_utf8(entry.path().filename())] = sha256_file(entry.path());
+        }
+    }
+    return normalized_hash({{"format", "faset.package-key.v1"},
+                            {"inputs", inputs.fingerprint()},
+                            {"configuration", configuration},
+                            {"files", files}});
+}
+
+bool validate_build_generation(const fs::path& directory, const std::string& package_key) {
+    try {
+        if (!fs::is_directory(directory) || fs::is_symlink(directory))
+            return false;
+        const auto manifest_file = directory / "manifest.json";
+        if (!fs::is_regular_file(manifest_file) || fs::is_symlink(manifest_file))
+            return false;
+        const auto manifest = read_json(manifest_file);
+        if (manifest.at("format") != "faset.build" || manifest.at("version") != 2 ||
+            manifest.at("package_key") != package_key || !manifest.at("files").is_array())
+            return false;
+        std::set<std::string> expected;
+        for (const auto& record : manifest.at("files")) {
+            const auto name = record.at("path").get<std::string>();
+            const auto relative = path_from_utf8(name);
+            if (relative.empty() || relative.is_absolute() || name == "manifest.json" ||
+                generic_path_to_utf8(relative) != name)
+                return false;
+            for (const auto& component : relative)
+                if (component == "." || component == "..")
+                    return false;
+            if (!expected.insert(name).second)
+                return false;
+            auto file = directory;
+            for (const auto& component : relative) {
+                file /= component;
+                if (fs::is_symlink(file))
+                    return false;
+            }
+            if (!fs::is_regular_file(file) || fs::is_symlink(file) ||
+                sha256_file(file) != record.at("sha256").get<std::string>() ||
+                fs::file_size(file) != record.at("size").get<std::uintmax_t>())
+                return false;
+        }
+        for (const auto& entry : fs::recursive_directory_iterator(directory)) {
+            if (entry.is_symlink())
+                return false;
+            if (entry.is_regular_file()) {
+                const auto name = generic_path_to_utf8(entry.path().lexically_relative(directory));
+                if (name != "manifest.json" && !expected.contains(name))
+                    return false;
+            }
+        }
+        const auto player_name = manifest.at("player").get<std::string>();
+        const auto schema_name = manifest.at("schema").get<std::string>();
+        if (!expected.contains(player_name) || !expected.contains(schema_name) ||
+            !expected.contains("faset_schema_exporter" + fs::path(player_name).extension().string()))
+            return false;
+        for (const auto* shader : {"vertexMain", "fragmentMain", "shadowMain",
+                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
+                                   "gpuHzbMain", "gpuPostCullMain"})
+            for (const auto* extension : {".spv", ".reflection.json"})
+                if (!expected.contains("shaders/" + std::string(shader) + extension))
+                    return false;
+        const auto schema = read_json(directory / schema_name);
+        if (schema.at("format") != "faset.schema" || schema.at("version") != 1 ||
+            schema.at("build_fingerprint") != manifest.at("fingerprint"))
+            return false;
+        (void)authoring::gameplay_schemas(schema);
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
 }
 
 } // namespace faset::editor
