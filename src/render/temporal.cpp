@@ -141,4 +141,26 @@ std::array<float, 2> temporal_jitter(std::uint64_t frame_index,
             (halton(phase, 3) - 0.5f) * (2.f / static_cast<float>(viewport_height))};
 }
 
+std::optional<std::array<float, 2>>
+project_motion(const std::array<float, 4>& current_clip,
+               const std::array<float, 4>& previous_clip) noexcept {
+    for (float coordinate : current_clip)
+        if (!std::isfinite(coordinate))
+            return std::nullopt;
+    for (float coordinate : previous_clip)
+        if (!std::isfinite(coordinate))
+            return std::nullopt;
+    if (current_clip[3] <= 0.f || previous_clip[3] <= 0.f)
+        return std::nullopt;
+    std::array<float, 2> motion{};
+    for (std::size_t axis = 0; axis < 2; ++axis) {
+        const float current_uv = current_clip[axis] / current_clip[3] * 0.5f + 0.5f;
+        const float previous_uv = previous_clip[axis] / previous_clip[3] * 0.5f + 0.5f;
+        motion[axis] = current_uv - previous_uv;
+        if (!std::isfinite(motion[axis]))
+            return std::nullopt;
+    }
+    return motion;
+}
+
 } // namespace faset::render

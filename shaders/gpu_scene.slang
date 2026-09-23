@@ -26,7 +26,7 @@ struct InstanceRecord {
     float4 currentExtent;         // 160..175: world AABB half extents
     float4 previousCenter;        // 176..191
     float4 previousExtent;        // 192..207
-    uint4 metadata;               // 208..223: x=previousValid, y=stableSlot,
+    uint4 metadata;               // 208..223: x bits 0=HZB, 1=temporal prior valid; y=stableSlot,
                                   // z=generation low 32, w=generation high 32 (zero = untracked)
 };
 struct ViewRecord {
@@ -200,7 +200,7 @@ void gpuCullMain(uint3 dispatchId : SV_DispatchThreadID) {
     ViewRecord view = cullViews[0];
     if (!inFrustum(instance.currentCenter, instance.currentExtent,
                    view.currentViewProjection)) return;
-    bool guessedHidden = view.flags.x != 0 && instance.metadata.x != 0 &&
+    bool guessedHidden = view.flags.x != 0 && (instance.metadata.x & 1u) != 0 &&
         occluded(instance.previousCenter, instance.previousExtent,
                  view.previousViewProjection, view.previousViewport,
                  view.previousHzbSize, previousHzb);

@@ -74,4 +74,11 @@ std::array<float, 2> temporal_jitter(std::uint64_t frame_index,
                                      std::uint32_t viewport_width,
                                      std::uint32_t viewport_height);
 
+// Scene-local normalized UV motion, current minus previous. Both clips use
+// their own jittered scene VP and the same local vertex. Invalid/behind-eye
+// clips have no usable history; the shader writes velocity validity zero.
+std::optional<std::array<float, 2>>
+project_motion(const std::array<float, 4>& current_clip,
+               const std::array<float, 4>& previous_clip) noexcept;
+
 } // namespace faset::render
