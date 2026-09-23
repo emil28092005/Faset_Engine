@@ -15,7 +15,7 @@ class DebugOverlay {
     void set_visible(bool);
     // F12 toggles the overlay; events captured by its widgets are removed for this frame.
     std::vector<render::Event> process_events(std::span<const render::Event>);
-    void append(render::Snapshot&, const render::Renderer&, float delta_seconds);
+    void append(render::Snapshot&, render::Renderer&, float delta_seconds);
 
   private:
     struct Impl;

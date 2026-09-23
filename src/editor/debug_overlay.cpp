@@ -168,7 +168,7 @@ std::vector<render::Event> DebugOverlay::process_events(std::span<const render::
     }
     return forwarded;
 }
-void DebugOverlay::append(render::Snapshot& output, const render::Renderer& renderer, float delta) {
+void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, float delta) {
     CurrentContext current(impl_->context);
     auto& state = *impl_;
     auto& io = ImGui::GetIO();
@@ -180,17 +180,36 @@ void DebugOverlay::append(render::Snapshot& output, const render::Renderer& rend
         auto& style = ImGui::GetStyle();
         style = ImGuiStyle{};
         ImGui::StyleColorsDark();
+        // Developer tooling follows the editor's neutral, low-contrast dark palette.
+        style.Colors[ImGuiCol_WindowBg] = {0.11f, 0.11f, 0.115f, 0.98f};
+        style.Colors[ImGuiCol_TitleBg] = {0.085f, 0.085f, 0.087f, 1.f};
+        style.Colors[ImGuiCol_TitleBgActive] = {0.11f, 0.11f, 0.115f, 1.f};
+        style.Colors[ImGuiCol_FrameBg] = {0.15f, 0.15f, 0.16f, 1.f};
+        style.Colors[ImGuiCol_FrameBgHovered] = {0.19f, 0.19f, 0.20f, 1.f};
+        style.Colors[ImGuiCol_Button] = {0.15f, 0.15f, 0.16f, 1.f};
+        style.Colors[ImGuiCol_ButtonHovered] = {0.21f, 0.21f, 0.22f, 1.f};
+        style.Colors[ImGuiCol_ButtonActive] = {0.24f, 0.23f, 0.28f, 1.f};
+        style.Colors[ImGuiCol_Border] = {0.23f, 0.23f, 0.24f, 1.f};
+        style.Colors[ImGuiCol_Separator] = style.Colors[ImGuiCol_Border];
+        style.Colors[ImGuiCol_Text] = {0.88f, 0.88f, 0.89f, 1.f};
+        style.Colors[ImGuiCol_TextDisabled] = {0.60f, 0.60f, 0.62f, 1.f};
+        style.Colors[ImGuiCol_CheckMark] = {0.66f, 0.63f, 0.76f, 1.f};
+        style.WindowRounding = 5.f;
+        style.FrameRounding = 4.f;
+        style.WindowBorderSize = 1.f;
         style.ScaleAllSizes(scale);
         style.FontScaleMain = scale;
         if (state.window_rect[2] == 0)
-            state.window_rect = {16 * scale, 44 * scale, 390 * scale, 310 * scale};
+            state.window_rect = {16 * scale, 44 * scale, 420 * scale, 455 * scale};
         state.scale = scale;
     }
     // Complete an ImGui frame while hidden too, so queued input cannot accumulate.
     ImGui::NewFrame();
     if (state.visible) {
         ImGui::SetNextWindowPos({16 * scale, 44 * scale}, ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize({390 * scale, 310 * scale}, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize({420 * scale,
+                                  std::min(455 * scale, std::max(220.f, io.DisplaySize.y - 60.f * scale))},
+                                 ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Faset diagnostics (F12)", &state.visible,
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse)) {
             const auto position = ImGui::GetWindowPos(), size = ImGui::GetWindowSize();
@@ -198,10 +217,33 @@ void DebugOverlay::append(render::Snapshot& output, const render::Renderer& rend
             if (!state.freeze)
                 state.displayed = renderer.stats();
             const auto& stats = state.displayed;
-            ImGui::TextUnformatted("Previous completed frame");
-            ImGui::TextWrapped("%s", stats.device.c_str());
-            ImGui::Checkbox("Freeze counters", &state.freeze);
+            ImGui::TextUnformatted("Visibility");
+            const auto current_mode = renderer.visibility_mode();
+            const struct {
+                const char* label;
+                render::VisibilityMode value;
+            } modes[] = {{"Direct", render::VisibilityMode::Direct},
+                         {"GPU frustum", render::VisibilityMode::GpuFrustum},
+                         {"GPU occlusion", render::VisibilityMode::GpuOcclusion}};
+            const float button_width =
+                (ImGui::GetContentRegionAvail().x - 2.f * ImGui::GetStyle().ItemSpacing.x) / 3.f;
+            for (int i = 0; i < 3; ++i) {
+                if (i)
+                    ImGui::SameLine();
+                const bool selected = current_mode == modes[i].value;
+                if (selected)
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{.35f, .33f, .43f, 1.f});
+                if (ImGui::Button(modes[i].label, {button_width, 0}))
+                    renderer.set_visibility_mode(modes[i].value);
+                if (selected)
+                    ImGui::PopStyleColor();
+            }
+            ImGui::TextDisabled("Renderer mode; no scene or export changes");
             ImGui::Separator();
+            ImGui::TextUnformatted("Previous completed frame");
+            ImGui::SameLine();
+            ImGui::Checkbox("Freeze counters", &state.freeze);
+            ImGui::TextWrapped("%s", stats.device.c_str());
             ImGui::Text("Frame: %llu", static_cast<unsigned long long>(stats.frame));
             ImGui::Text("Render call (wall): %.3f ms", stats.cpu_ms);
             if (stats.gpu_ms > 0)
@@ -212,6 +254,18 @@ void DebugOverlay::append(render::Snapshot& output, const render::Renderer& rend
             ImGui::Text("Draws: %u   Packed vertices: %u", stats.draw_calls, stats.vertices);
             ImGui::Text("Culled meshes: %u   Textures: %u", stats.culled_meshes,
                         stats.texture_count);
+            ImGui::Separator();
+            ImGui::TextUnformatted("GPU visibility");
+            ImGui::Text("Path: %s", stats.gpu_visibility_active ? "active" : "inactive");
+            ImGui::Text("Indirect bins: %u   Visible: %u", stats.gpu_bins,
+                        stats.gpu_visible_instances);
+            ImGui::Text("Frustum rejected: %u", stats.gpu_frustum_rejected);
+            ImGui::Text("HZB history: %s", stats.hzb_valid ? "valid" : "unavailable / invalid");
+            ImGui::Text("Deferred: %u   Post visible: %u", stats.gpu_occlusion_deferred,
+                        stats.gpu_post_visible);
+            ImGui::Text("Prepared LOD: %u / %u / %u / %u+", stats.lod_counts[0],
+                        stats.lod_counts[1], stats.lod_counts[2], stats.lod_counts[3]);
+            ImGui::Separator();
             ImGui::Text("Vulkan allocations: %.2f MiB",
                         double(stats.gpu_allocated_bytes) / 1048576.0);
             ImGui::Text("Validation: %s   Errors: %u",

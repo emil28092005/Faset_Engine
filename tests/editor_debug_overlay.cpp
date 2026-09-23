@@ -25,6 +25,26 @@ int main(int argc, char** argv) {
         overlay.append(scene, renderer, 1.f / 60.f);
         require(!scene.ui_triangles.empty() && scene.ui_triangles.front().texture,
                 "ImGui draw data reaches Faset's textured UI triangle API");
+        require(renderer.visibility_mode() == render::VisibilityMode::Direct,
+                "Diagnostic visibility mode starts with the renderer default");
+        render::Event mode_click;
+        mode_click.type = render::Event::Type::MouseDown;
+        mode_click.button = 1;
+        mode_click.x = 205;
+        mode_click.y = 99;
+        require(overlay.process_events(std::span(&mode_click, 1)).empty(),
+                "Visibility mode button captures pointer down");
+        scene.ui_triangles.clear();
+        overlay.append(scene, renderer, 1.f / 60.f);
+        mode_click.type = render::Event::Type::MouseUp;
+        require(overlay.process_events(std::span(&mode_click, 1)).empty(),
+                "Visibility mode button captures pointer up");
+        scene.ui_triangles.clear();
+        overlay.append(scene, renderer, 1.f / 60.f);
+        require(renderer.visibility_mode() == render::VisibilityMode::GpuFrustum,
+                "Clicking GPU frustum switches the live renderer");
+        scene.ui_triangles.clear();
+        overlay.append(scene, renderer, 1.f / 60.f);
         renderer.render(scene);
         auto shown = renderer.pixels();
         std::size_t changed{};
