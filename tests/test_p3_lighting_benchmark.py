@@ -115,7 +115,8 @@ class LightingBenchmarkTests(unittest.TestCase):
             output = root / "café 世界"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123"],
+                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertEqual(process.returncode, 0, process.stderr)
             raw = list((output / "raw").glob("*.csv"))
@@ -144,7 +145,8 @@ class LightingBenchmarkTests(unittest.TestCase):
             output = root / "invalid"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123"],
+                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertNotEqual(process.returncode, 0)
             self.assertIn("gpu_main_raster_ms", process.stderr)
@@ -160,7 +162,8 @@ class LightingBenchmarkTests(unittest.TestCase):
             output = root / "fallback-output"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123"],
+                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertNotEqual(process.returncode, 0)
             self.assertIn("effective_visibility", process.stderr)
@@ -176,12 +179,51 @@ class LightingBenchmarkTests(unittest.TestCase):
             output = root / "wrong-count-output"
             process = subprocess.run(
                 [sys.executable, SCRIPT, "--sweep", "--executable", fake,
-                 "--output", output, "--shadows", "off", "--commit", "abc123"],
+                 "--output", output, "--shadows", "off", "--commit", "abc123",
+                 "--driver", "Fake Driver"],
                 text=True, capture_output=True)
             self.assertNotEqual(process.returncode, 0)
             self.assertIn("submitted_local_lights", process.stderr)
             self.assertFalse((output / "summary.json").exists())
 
+    def test_sweep_requires_known_driver_identity(self):
+        from benchmark_p3_lighting import sweep
+        with tempfile.TemporaryDirectory() as temporary:
+            fake = Path(temporary) / "fake.py"
+            fake.write_text(FAKE_BENCHMARK, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "--driver"):
+                sweep(fake, Path(temporary) / "out", "off", "abc123")
+
+
+def real_executable_smoke(executable: Path) -> None:
+    from benchmark_p3_lighting import REQUIRED_COLUMNS
+
+    choices = subprocess.run([executable, "--list-runs"], capture_output=True,
+                             text=True, check=True)
+    declared = json.loads(choices.stdout)
+    if declared["lights"] != [0, 4, 16, 32, 64, 128] or len(declared["visibility"]) != 3:
+        raise AssertionError("C++ executable and Python sweep matrix disagree")
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "smoke.csv"
+        subprocess.run([executable, "--lights", "4", "--shadows", "off",
+                        "--visibility", "direct", "--width", "64", "--height", "64",
+                        "--warmup", "0", "--frames", "1", "--validation", "on",
+                        "--commit", "smoke", "--driver", "smoke-driver",
+                        "--csv", output], capture_output=True, text=True, check=True)
+        with output.open(newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            columns, rows = reader.fieldnames or [], list(reader)
+        if set(REQUIRED_COLUMNS) - set(columns) or len(rows) != 1:
+            raise AssertionError("Real benchmark CSV lacks a complete single-frame row")
+        row = rows[0]
+        if (row["effective_visibility"] != "direct" or row["lighting_path"] != "forward" or
+                row["submitted_local_lights"] != "4" or row["validation_errors"] != "0" or
+                float(row["gpu_main_raster_ms"]) <= 0):
+            raise AssertionError("Real benchmark did not report the measured lighting path")
+
 
 if __name__ == "__main__":
-    unittest.main()
+    if len(sys.argv) == 3 and sys.argv[1] == "--real-executable":
+        real_executable_smoke(Path(sys.argv[2]).resolve())
+    else:
+        unittest.main()

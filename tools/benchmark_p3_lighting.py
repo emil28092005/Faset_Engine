@@ -178,6 +178,8 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
           validation: str = "off", driver: str | None = None) -> dict:
     if not executable.is_file():
         raise ValueError(f"Benchmark executable does not exist: {executable}")
+    if driver is None or not driver.strip() or driver.strip().lower() == "unknown":
+        raise ValueError("A measured sweep requires an explicit --driver identity")
     if output.exists() and any(output.iterdir()):
         raise ValueError(f"Output directory must be new or empty: {output}")
     raw = output / "raw"
@@ -200,7 +202,7 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
         if driver is not None:
             command += ["--driver", driver]
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
-                                errors="replace")
+                                errors="replace", timeout=180)
         if result.returncode != 0:
             raise RuntimeError(f"Benchmark failed for {filename}: {result.stderr[-2000:]}")
         run_columns, samples = _read_run_csv(target, run, commit)
@@ -218,7 +220,8 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
     summary = {"format": "faset.p3-lighting-benchmark", "version": 1,
                "commit": commit, "warmup_frames_per_run": WARMUP_FRAMES,
                "measured_frames_per_run": MEASURED_FRAMES, "width": WIDTH, "height": HEIGHT,
-               "validation": validation, "runs_completed": len(runs), "rows": len(all_rows),
+               "validation": validation, "driver": driver,
+               "runs_completed": len(runs), "rows": len(all_rows),
                **summarize_rows(all_rows)}
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
                                           encoding="utf-8")
@@ -234,7 +237,7 @@ def main() -> int:
     parser.add_argument("--executable", type=Path, help="Built C++ benchmark executable")
     parser.add_argument("--output", type=Path, help="New or empty evidence directory")
     parser.add_argument("--commit", help="Source revision; defaults to this checkout's HEAD")
-    parser.add_argument("--driver", help="Explicit driver label to pass through to the benchmark")
+    parser.add_argument("--driver", help="Required driver identity for a measured sweep")
     parser.add_argument("--validation", choices=("on", "off"), default="off")
     args = parser.parse_args()
     if args.list_runs:
