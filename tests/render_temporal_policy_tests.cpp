@@ -171,6 +171,42 @@ void deterministic_jitter() {
     }
     require(rejected_zero_extent, "Zero viewport extent cannot produce finite clip jitter");
 }
+
+void render_scale_policy() {
+    const auto full = temporal_internal_extent(320, 240, TemporalMode::Off, 1.f);
+    require(full == std::array<std::uint32_t, 2>{320, 240},
+            "Off keeps scene and output at the same extent");
+    require(temporal_internal_extent(319, 241, TemporalMode::TAA, 1.f) ==
+                std::array<std::uint32_t, 2>{319, 241},
+            "TAA is a one-to-one reconstruction mode");
+    require(temporal_internal_extent(320, 240, TemporalMode::Upscale, .67f) ==
+                std::array<std::uint32_t, 2>{215, 161},
+            "Upscale uses deterministic ceil dimensions for odd pixel products");
+    require(temporal_internal_extent(1, 1, TemporalMode::Upscale, .5f) ==
+                std::array<std::uint32_t, 2>{1, 1},
+            "A supported output always has at least one internal pixel");
+    auto rejected = [](TemporalMode mode, float scale) {
+        try {
+            (void)temporal_internal_extent(320, 240, mode, scale);
+            return false;
+        } catch (const std::invalid_argument&) {
+            return true;
+        }
+    };
+    require(rejected(TemporalMode::TAA, .75f) && rejected(TemporalMode::Upscale, 1.f) &&
+                rejected(TemporalMode::Upscale, .49f) &&
+                rejected(TemporalMode::Upscale, std::numeric_limits<float>::quiet_NaN()) &&
+                rejected(TemporalMode::Off, .67f) &&
+                rejected(static_cast<TemporalMode>(42), 1.f),
+            "Invalid mode/scale combinations must fail before target allocation");
+    bool zero_rejected = false;
+    try {
+        (void)temporal_internal_extent(0, 240, TemporalMode::TAA, 1.f);
+    } catch (const std::invalid_argument&) {
+        zero_rejected = true;
+    }
+    require(zero_rejected, "Zero output width is not a valid temporal target");
+}
 } // namespace
 
 int main() {
@@ -179,4 +215,5 @@ int main() {
     rendered_history_and_camera_motion();
     incompatible_view_state();
     deterministic_jitter();
+    render_scale_policy();
 }

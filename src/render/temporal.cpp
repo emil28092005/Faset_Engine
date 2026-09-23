@@ -1,4 +1,5 @@
 #include <faset/render/temporal.hpp>
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -21,6 +22,25 @@ TemporalMode select_effective_temporal_mode(TemporalMode requested,
                                             TemporalCapabilities available) noexcept {
     return temporal_fallback_reason(requested, available) == TemporalFallbackReason::None
                ? requested : TemporalMode::Off;
+}
+
+std::array<std::uint32_t, 2> temporal_internal_extent(std::uint32_t output_width,
+                                                       std::uint32_t output_height,
+                                                       TemporalMode mode, float render_scale) {
+    if ((mode != TemporalMode::Off && mode != TemporalMode::TAA &&
+         mode != TemporalMode::Upscale) ||
+        !output_width || !output_height || !std::isfinite(render_scale) ||
+        (mode == TemporalMode::Upscale
+             ? render_scale < 0.5f || render_scale >= 1.f
+             : render_scale != 1.f))
+        throw std::invalid_argument("Invalid temporal mode, scale or output extent");
+    if (mode != TemporalMode::Upscale)
+        return {output_width, output_height};
+    const auto scaled = [&](std::uint32_t extent) {
+        return static_cast<std::uint32_t>(
+            std::max(1.0, std::ceil(static_cast<double>(extent) * render_scale)));
+    };
+    return {scaled(output_width), scaled(output_height)};
 }
 
 namespace {

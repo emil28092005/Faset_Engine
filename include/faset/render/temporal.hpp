@@ -26,6 +26,13 @@ TemporalFallbackReason temporal_fallback_reason(TemporalMode requested,
 TemporalMode select_effective_temporal_mode(TemporalMode requested,
                                             TemporalCapabilities available) noexcept;
 
+// Validate the requested mode and scale before allocating scene targets.
+// Off/TAA are 1:1; Upscale accepts [0.5, 1). Ceil rounding is deterministic
+// for odd output extents and never produces a zero-sized internal target.
+std::array<std::uint32_t, 2> temporal_internal_extent(std::uint32_t output_width,
+                                                       std::uint32_t output_height,
+                                                       TemporalMode mode, float render_scale);
+
 enum class TemporalResetReason {
     None,
     FirstFrame,
