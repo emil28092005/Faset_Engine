@@ -1,0 +1,29 @@
+# P2 GPU visibility and mesh LOD design
+
+This design implements [PLAN P2](../../../PLAN.md#p2-gpu-driven-visibility-и-lod) for the desktop Vulkan 1.3 renderer. The direct renderer remains a selectable reference for image and full-frame performance comparisons. The feature is limited to opaque triangle meshes. Ordered sprites, UI, and shadow casters keep their independent paths; camera visibility must never remove an offscreen shadow caster.
+
+## Data and ownership
+
+`DrawItem` receives an optional stable instance key and an optional ordered list of prepared coarser meshes. Scene extraction derives a key from persistent object/asset-primitive identity; ad-hoc draws without a key render correctly but do not use previous-frame occlusion or LOD history. The renderer assigns a slot and generation to each live key, invalidating previous transforms when the mesh identity changes or a slot is reused. An immutable frame snapshot contains current and previous world bounds, transforms, material values, selected mesh LOD, and a bin ID. A conservative world AABB is formed from all eight transformed corners of each mesh's local bounds. The bound used for culling covers the selected geometry; source content must not claim a narrower bound than its vertices.
+
+Prepared LODs are optional. The renderer chooses one by projected size, applies hysteresis around every threshold, and falls back to the nearest available level. A level switch retains the stable instance key but invalidates occlusion history for that instance. LOD selection never changes source asset IDs or authoring scene data.
+
+## GPU path
+
+The renderer groups opaque candidates by compatible mesh and texture into fixed bins. It uploads local mesh vertices once per unique mesh in the frame and uploads one transform/material/bounds record per instance. A compute pass tests current frustum and writes visible instance IDs into a pre-reserved range per bin, atomically updating the bin's indirect `instanceCount`. Each bin has a CPU-authored fixed draw template and one `vkCmdDrawIndirect` call; zero instances submit no geometry. The vertex shader resolves `SV_InstanceID` through the visible-ID buffer and transforms the local vertex on the GPU. The command uses `firstInstance = 0` and a pushed bin base, so it does not require optional `drawIndirectFirstInstance` or `multiDrawIndirect` features. Overflow is prevented by reserving exactly the number of bin candidates; buffer growth is checked before recording commands.
+
+The direct path continues to use existing CPU-transformed vertices, CPU frustum culling, and direct draws. Scene shading and texture descriptors are shared where possible. GPU and direct modes must produce equivalent final opaque images within stated raster tolerance. Scene culling does not affect the shadow pass.
+
+## HZB and two-pass occlusion
+
+Faset uses normal forward Z: depth clear is 1 and the comparison is `LESS_OR_EQUAL`. Its furthest-depth HZB therefore stores the **maximum** child depth, padding odd dimensions with 1. A candidate is marked occluded only when its conservative nearest depth is strictly beyond the maximum over its complete screen rectangle plus precision bias. Near-plane intersections, nonfinite projections, unknown previous transforms, a camera cut, a resized view, a different view identity, and an invalid history all fail open as visible.
+
+The pass order is: initialize fixed arguments/counters; MainCull against the current frustum and previous HZB; MainRaster into cleared color/depth; build current HZB from stored depth with per-mip barriers; PostCull deferred candidates against current HZB; PostRaster loading Main color/depth; then ordered sprites/UI and capture/presentation. Current HZB after Main is intentionally incomplete: a false previous occlusion is repaired by Post in the same frame, while absent occluders only reduce culling efficiency. Current HZB and its view metadata survive to the next rendered frame. History is per renderer/view and is invalidated by explicit cut, view/extent/projection changes, or incompatible instance generation. No GPU visibility decision requires synchronous CPU readback.
+
+RenderGraph names and validates pass order; Vulkan image and buffer barriers remain explicit in the backend. Compute writes become visible separately to indirect-command reads and vertex shader storage reads. Depth attachment writes become visible to HZB compute sampling only after ending the Main rendering instance. HZB mip writes become visible to the next mip's reads. The single-queue, one-frame-in-flight lifetime model is retained until measured work warrants a wider pipeline.
+
+## Diagnostics and acceptance
+
+The editor exposes GPU/direct and HZB-enabled modes and a current-HZB/debug visualization. Frame statistics distinguish submitted bins, main/deferred/post counts, frustum rejects, selected LODs, pass timings, and GPU allocation sizes. Debug counters may be read after the existing frame fence; normal culling decisions never use them. Full-frame profiles record both closed and open scenes with the same snapshot, camera path, resolution, driver, and build. Existing synchronous frame capture is accounted for or disabled in the comparison profile; no blanket speedup claim is made.
+
+Acceptance includes shader/reflection validation and package/export contents; CPU policy tests; GPU image comparison to direct mode; empty and capacity-boundary cases; wall/door reveal in the same final frame; camera cut/teleport, near-plane and camera-inside cases; odd viewport dimensions and resize; repeated spawn/despawn/mesh replacement; LOD threshold jitter; offscreen shadow caster; and zero Vulkan validation errors on the Linux reference GPU. Windows compile and available native GPU checks are reported separately without claiming hardware coverage that was not run.
