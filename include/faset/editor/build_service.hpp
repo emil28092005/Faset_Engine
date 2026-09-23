@@ -22,6 +22,7 @@ struct JobStatus {
     std::string id, kind, state{"queued"}, stage{"queued"};
     double progress{};
     std::string log, error;
+    Json diagnostics = Json::array();
     Json result = Json::object();
     bool finished() const {
         return state == "succeeded" || state == "failed" || state == "cancelled";

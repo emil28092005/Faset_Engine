@@ -1,10 +1,14 @@
 add_library(faset_build_service STATIC
   ${PROJECT_SOURCE_DIR}/src/editor/build_service.cpp
-  ${PROJECT_SOURCE_DIR}/src/editor/build_cache.cpp)
+  ${PROJECT_SOURCE_DIR}/src/editor/build_cache.cpp
+  ${PROJECT_SOURCE_DIR}/src/editor/build_diagnostics.cpp)
 target_include_directories(faset_build_service PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_features(faset_build_service PUBLIC cxx_std_20)
 target_link_libraries(faset_build_service PUBLIC faset_core faset_scripting_project PRIVATE faset_assets faset_authoring Threads::Threads)
 if(BUILD_TESTING)
+  add_executable(faset_build_diagnostics_tests ${PROJECT_SOURCE_DIR}/tests/build_diagnostics_tests.cpp)
+  target_link_libraries(faset_build_diagnostics_tests PRIVATE faset_build_service)
+  add_test(NAME build_diagnostics COMMAND faset_build_diagnostics_tests)
   add_executable(faset_build_cache_tests ${PROJECT_SOURCE_DIR}/tests/build_cache_tests.cpp)
   target_link_libraries(faset_build_cache_tests PRIVATE faset_build_service)
   target_compile_definitions(faset_build_cache_tests PRIVATE FASET_ENGINE_SOURCE="${PROJECT_SOURCE_DIR}")

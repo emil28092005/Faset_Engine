@@ -10,6 +10,7 @@
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
 #include <faset/editor/build_cache.hpp>
+#include <faset/editor/build_diagnostics.hpp>
 #include <faset/editor/build_service.hpp>
 #include <faset/scripting/project.hpp>
 #include <fstream>
@@ -94,7 +95,7 @@ fs::path build_executable(const fs::path& build, const std::string& configuratio
 Json JobStatus::json() const {
     return {{"id", id},       {"kind", kind},         {"state", state},
             {"stage", stage}, {"progress", progress}, {"log", log},
-            {"error", error}, {"result", result}};
+            {"error", error}, {"diagnostics", diagnostics}, {"result", result}};
 }
 void write_cooked_scene(const fs::path& path, const Json& scene) {
     validate_scene(scene);
@@ -199,6 +200,13 @@ struct BuildService::Impl {
     std::string run(Job& job, std::vector<std::string> arguments, const fs::path& cwd) {
         if (job.cancelled)
             throw Cancelled{};
+        std::string phase;
+        std::size_t diagnostics_before;
+        {
+            std::lock_guard lock(job.mutex);
+            phase = job.status.stage;
+            diagnostics_before = job.status.diagnostics.size();
+        }
         std::string description = "$";
         for (const auto& argument : arguments)
             description += " " + Json(argument).dump();
@@ -206,6 +214,35 @@ struct BuildService::Impl {
         log(job, description);
         Process process({std::move(arguments), cwd, {}});
         std::string output;
+        std::string pending;
+        const auto collect_diagnostics = [&](std::string_view chunk, bool final) {
+            pending.append(chunk);
+            std::size_t newline;
+            while ((newline = pending.find('\n')) != std::string::npos) {
+                const auto line = pending.substr(0, newline + 1);
+                pending.erase(0, newline + 1);
+                const auto found = parse_build_diagnostics(line, phase, config.project_root);
+                if (found.empty())
+                    continue;
+                std::lock_guard lock(job.mutex);
+                for (const auto& row : found) {
+                    if (job.status.diagnostics.size() >= 200)
+                        break;
+                    job.status.diagnostics.push_back(row);
+                }
+            }
+            if (final && !pending.empty()) {
+                const auto found = parse_build_diagnostics(pending, phase, config.project_root);
+                std::lock_guard lock(job.mutex);
+                for (const auto& row : found) {
+                    if (job.status.diagnostics.size() >= 200)
+                        break;
+                    job.status.diagnostics.push_back(row);
+                }
+                pending.clear();
+            } else if (pending.size() > 8192)
+                pending.erase(0, pending.size() - 8192);
+        };
         while (true) {
             if (job.cancelled) {
                 process.cancel();
@@ -215,14 +252,29 @@ struct BuildService::Impl {
             }
             auto poll = process.poll();
             log(job, poll.output);
+            collect_diagnostics(poll.output, !poll.running);
             output += poll.output;
             if (output.size() > max_log_bytes)
                 output.erase(0, output.size() - max_log_bytes);
             if (!poll.running) {
-                if (poll.exit_code.value_or(1) != 0)
+                if (poll.exit_code.value_or(1) != 0) {
+                    std::lock_guard lock(job.mutex);
+                    bool has_error = false;
+                    for (std::size_t index = diagnostics_before;
+                         index < job.status.diagnostics.size(); ++index)
+                        if (job.status.diagnostics[index].value("severity", "") == "error")
+                            has_error = true;
+                    if (!has_error && job.status.diagnostics.size() < 200)
+                        job.status.diagnostics.push_back(
+                            {{"severity", "error"},
+                             {"phase", phase},
+                             {"message", "Process exited with code " +
+                                             std::to_string(poll.exit_code.value_or(1)) +
+                                             "; see job log"}});
                     throw std::runtime_error("Process exited with code " +
                                              std::to_string(poll.exit_code.value_or(1)) +
                                              "; see job log");
+                }
                 return output;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(15));

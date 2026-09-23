@@ -182,6 +182,25 @@ int test_main(int argc, char** argv) {
         const auto previous_player = sha256_file(player);
         const auto previous_schema = read_text(schema);
         const auto previous_manifest = read_text(directory / "manifest.json");
+        atomic_write(config.project_root / "emit-clang-error-and-fail-build", "fixture\n");
+        const auto compile_failed = builds.wait(builds.start_build());
+        check(compile_failed.state == "failed" &&
+                  read_text(last_build) == previous_pointer &&
+                  compile_failed.json().at("diagnostics").size() == 1 &&
+                  compile_failed.json().at("diagnostics")[0].at("file") ==
+                      "Scripts/Gameplay.cpp" &&
+                  compile_failed.log.find("fixture compile failure") != std::string::npos,
+              "Failed compiler output retains raw log and structured source location");
+        fs::remove(config.project_root / "emit-clang-error-and-fail-build");
+        atomic_write(config.project_root / "fail-unparseable-build", "fixture\n");
+        const auto generic_failed = builds.wait(builds.start_build());
+        check(generic_failed.state == "failed" &&
+                  generic_failed.json().at("diagnostics").size() == 1 &&
+                  generic_failed.json().at("diagnostics")[0].at("severity") == "error" &&
+                  !generic_failed.json().at("diagnostics")[0].contains("file") &&
+                  read_text(last_build) == previous_pointer,
+              "Unparseable process failure has a non-navigable diagnostic");
+        fs::remove(config.project_root / "fail-unparseable-build");
         atomic_write(config.project_root / "Scripts/Extensions/BuildOnly.hpp",
                      "#define BUILD_ONLY 3\n");
         atomic_write(config.project_root / "mutate-cpp-header-during-build", "fixture\n");

@@ -39,8 +39,18 @@ int tool_main(int argc, char** argv) {
             std::cout << "Native packaging fixture validated\n";
             return 0;
         }
-        if (argc > 2 && std::string_view(argv[1]) == "--build")
+        if (argc > 2 && std::string_view(argv[1]) == "--build") {
+            if (fs::exists("emit-clang-error-and-fail-build")) {
+                std::cerr << path_to_utf8(fs::current_path() / "Scripts/Gameplay.cpp")
+                          << ":7:3: error: fixture compile failure\n";
+                return 1;
+            }
+            if (fs::exists("fail-unparseable-build")) {
+                std::cerr << "Synthetic native build failed without a source location\n";
+                return 1;
+            }
             return 0;
+        }
         fs::path build;
         for (int i = 1; i + 1 < argc; ++i)
             if (std::string_view(argv[i]) == "-B")
