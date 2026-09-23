@@ -160,9 +160,10 @@ int main() {
             session.authoring().query(original_document).at("revision"),
             Json::array({{{"op", "scene.rename"}, {"name", "Conflicting autosave"}}}));
         ui.frame({});
-        auto disk_scene = read_json(root / "Scenes/Главная.scene.json");
+        const auto disk_path = root / path_from_utf8("Scenes/Главная.scene.json");
+        auto disk_scene = read_json(disk_path);
         disk_scene["name"] = "External scene edit";
-        atomic_write_json(root / "Scenes/Главная.scene.json", disk_scene);
+        atomic_write_json(disk_path, disk_scene);
         std::this_thread::sleep_for(std::chrono::milliseconds(2100));
         ui.frame({});
         check(ui.widgets().find("autosave-status")->text == "Save conflict" &&
