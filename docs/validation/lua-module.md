@@ -40,7 +40,7 @@ check. For sanitizers, configure with `-DFASET_SANITIZERS=ON`, build the
 `faset_lua_tests`, `faset_lua_safety_tests`, and `faset_schema_exporter` targets, then
 run `ctest --test-dir <build> --output-on-failure -R '^lua_'`.
 
-## Not verified here
+## Not verified in the September 18 run
 
 - Windows compilation or execution of the new module.
 - Graphical/window interaction and real-time Lua reload in a running rendered game.
@@ -53,3 +53,20 @@ run `ctest --test-dir <build> --output-on-failure -R '^lua_'`.
 The renderer-linked CPU checks used the existing Vulkan loader, repo-pinned Vulkan
 headers and cached Slang, with SDL X11/Wayland disabled. No system graphics packages
 were installed. This proves linkage and CPU validation, not graphics compatibility.
+
+## September 24 Release follow-up
+
+The [Release execution record](lua-release-2026-09-24/README.md) closes the
+Linux offscreen export gap above. At source commit `846f1f4`, a Release Editor
+exported the checked-in Lua-only sample into a disposable Unicode-path project.
+The package was relocated, the source project path was hidden, and its Player
+validated and rendered 120 frames on an NVIDIA GeForce RTX 2080 Ti with driver
+595.84 and Khronos validation enabled; zero validation errors were reported.
+The package manifest has `lua_enabled: true`, declared Lua source and its license,
+and no project C++ gameplay source. The five focused Release Lua/schema tests
+passed. This verifies an offscreen run on Linux; a separate physical Windows GPU
+and manual window interaction have not been tested by this record. Windows
+SwiftShader execution is configured in CI and needs a passing run before it is
+claimed as covered.
+
+![Relocated Lua sample after 120 frames](lua-release-2026-09-24/lua.png)

@@ -1,0 +1,130 @@
+{
+  "format": "faset.playable-export-verification",
+  "version": 1,
+  "started_utc": "2026-09-23T23:20:41.969369+00:00",
+  "platform": "linux",
+  "engine": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-lua-export",
+  "editor": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-lua-export/build/linux-release/faset_editor",
+  "standalone_root": "/tmp/faset-playable-exports-yz70irb6",
+  "engine_revision": "846f1f459d61ee0f878ab9ad116ac0e75d74d588",
+  "editor_sha256": "03ac75942f5f1d29e9d6fedb21ecffc6c74f4299401dbe84f01ab1b4e9c176a0",
+  "project_workspace": "/tmp/faset-playable-projects-6xvbjr4b",
+  "vulkaninfo_available": true,
+  "driver_override": null,
+  "frames_per_game": 120,
+  "status": "passed",
+  "projects": [
+    {
+      "name": "lua",
+      "dimension": 2,
+      "language": "lua",
+      "source_inputs": [
+        {
+          "path": "README.md",
+          "sha256": "8392da3c18916400ea628daed094c77c390c553cbdcf822da227bdcd3d86380c"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "f1ab54150a58b289c47bcc34566ad7ee3025ad931db81e7f5dce70d9fbcac8ab"
+        },
+        {
+          "path": "Scripts/beacon.lua",
+          "sha256": "44d932ebedf66cadb9620f2d926177be2f8d43d71d56aa83611de686af026231"
+        },
+        {
+          "path": "Scripts/player.lua",
+          "sha256": "1c51810574a3413c46a7cbd0ea2e84a9b802da1206a2b72bb78f6cc951367a11"
+        },
+        {
+          "path": "Scripts/util/motion.lua",
+          "sha256": "bad3dcdc1081fd1dec589c12dad8dc175b739d77ea52b957ead9ecb4b7cb88a3"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "7e4c0781c1837208b4499a9991ffb702143edf1f933ae9c7e3d2543fd2577747"
+        }
+      ],
+      "generation": "38d65abf-1c6d-4e6e-850a-5a4916e36b16",
+      "configuration": "Release",
+      "standalone_directory": "/tmp/faset-playable-exports-yz70irb6/Faset Café 世界/lua",
+      "executable": "faset_player",
+      "package_file_count": 32,
+      "asset_generations": {},
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "validation_enabled": true,
+      "driver": {
+        "apiVersion": "1.4.329",
+        "driverVersion": "595.84.0.0",
+        "deviceName": "NVIDIA GeForce RTX 2080 Ti",
+        "driverID": "DRIVER_ID_NVIDIA_PROPRIETARY",
+        "driverName": "NVIDIA",
+        "driverInfo": "595.84"
+      },
+      "validation_errors": 0,
+      "completed_frames": 120,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.585024,
+          "min": 0.558816,
+          "p50": 0.560416,
+          "p95": 0.577312,
+          "samples": 120
+        },
+        "render_call": {
+          "max": 4.487375,
+          "min": 1.483498,
+          "p50": 1.856402,
+          "p95": 2.145527,
+          "samples": 120
+        },
+        "renderer_cpu": {
+          "max": 4.483287,
+          "min": 1.480312,
+          "p50": 1.851913,
+          "p95": 2.141489,
+          "samples": 120
+        },
+        "renderer_readback_cpu": {
+          "max": 2.631884,
+          "min": 0.383573,
+          "p50": 0.508409,
+          "p95": 0.57264,
+          "samples": 120
+        },
+        "simulation": {
+          "max": 0.21704,
+          "min": 0.084289,
+          "p50": 0.122371,
+          "p95": 0.17531,
+          "samples": 120
+        },
+        "snapshot": {
+          "max": 0.113824,
+          "min": 0.046728,
+          "p50": 0.067627,
+          "p95": 0.102965,
+          "samples": 120
+        },
+        "wall": {
+          "max": 4.747145,
+          "min": 1.658538,
+          "p50": 2.05683,
+          "p95": 2.394717,
+          "samples": 120
+        }
+      },
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 4,
+        "sha256": "e2f4c3b84de75dadd2e31d388d0ba51abc1861f1ec76eb7ba51a4a2dcac720a7"
+      },
+      "source_project_paths_unavailable": true,
+      "status": "passed"
+    }
+  ],
+  "requested_projects": [
+    "lua"
+  ],
+  "finished_utc": "2026-09-23T23:22:48.305164+00:00"
+}
