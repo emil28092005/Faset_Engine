@@ -3,6 +3,7 @@
 #include <faset/editor/build_service.hpp>
 #include <faset/scripting/project.hpp>
 #include <filesystem>
+#include <optional>
 #include <string>
 
 namespace faset::editor {
@@ -19,10 +20,20 @@ struct BuildInputs {
 std::string gameplay_source_hash(const std::filesystem::path& project_root,
                                  const scripting::LuaProject& lua);
 BuildInputs capture_build_inputs(const BuildConfig& config, const scripting::LuaProject& lua);
+std::optional<std::string> configured_cmake_value(const BuildConfig& config,
+                                                   std::string_view key);
+
+// Copy a content-addressed, immutable Scripts tree for the native compiler.
+// Returning the same path for equal source bytes preserves Ninja incrementality.
+std::filesystem::path stage_gameplay_sources(const BuildConfig& config,
+                                              const BuildInputs& inputs,
+                                              const scripting::LuaProject& lua,
+                                              std::string_view job_id);
 
 // A compiler replaced at the same path may be invisible to Ninja. Invalidate
 // only this generated native tree; published build generations stay intact.
-void ensure_native_toolchain_stamp(const std::filesystem::path& native_directory,
+void ensure_native_toolchain_stamp(const BuildConfig& config,
+                                   const std::filesystem::path& native_directory,
                                    const BuildInputs& inputs);
 
 // Native build completes before package reuse is considered. Hash the actual

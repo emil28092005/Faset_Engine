@@ -15,18 +15,36 @@ namespace {
 std::string normalized_hash(const Json& value) {
     return sha256(value.dump());
 }
+std::pair<std::string, std::string> parse_define(const std::string& argument) {
+    if (!argument.starts_with("-D"))
+        throw std::invalid_argument("Gameplay configure arguments must be -DNAME=value options");
+    const auto equal = argument.find('=', 2);
+    if (equal == std::string::npos || equal == 2)
+        throw std::invalid_argument("Invalid gameplay configure definition");
+    const auto colon = argument.find(':', 2);
+    const auto key = argument.substr(2, colon < equal ? colon - 2 : equal - 2);
+    if (key.empty())
+        throw std::invalid_argument("Invalid gameplay configure definition");
+    return {key, argument.substr(equal + 1)};
+}
+void validate_configure_arguments(const BuildConfig& config) {
+    static const std::set<std::string> controlled = {
+        "FASET_GAMEPLAY_SOURCE_DIR", "FASET_ENABLE_LUA", "CMAKE_BUILD_TYPE", "BUILD_TESTING",
+        "FASET_BUILD_EDITOR", "FASET_BUILD_RENDERER", "FASET_BUILD_RUNTIME", "FASET_BUILD_ASSETS"};
+    for (const auto& argument : config.configure_arguments)
+        if (controlled.contains(parse_define(argument).first))
+            throw std::invalid_argument("Cannot override an engine-controlled CMake definition");
+}
 std::string configured_tool(const BuildConfig& config, std::string_view key,
                             std::string fallback) {
-    const auto prefix = "-D" + std::string(key) + "=";
-    for (const auto& argument : config.configure_arguments)
-        if (argument.starts_with(prefix))
-            fallback = argument.substr(prefix.size());
+    if (auto value = configured_cmake_value(config, key))
+        return *value;
     return fallback;
 }
-fs::path resolve_tool(const std::string& name) {
+fs::path resolve_tool(const std::string& name, const fs::path& working_directory) {
     const auto supplied = path_from_utf8(name);
     if (supplied.has_parent_path())
-        return fs::absolute(supplied).lexically_normal();
+        return (supplied.is_absolute() ? supplied : working_directory / supplied).lexically_normal();
     try {
         return find_executable(name);
     } catch (const std::exception&) {
@@ -35,8 +53,8 @@ fs::path resolve_tool(const std::string& name) {
         return supplied;
     }
 }
-Json tool_identity(const std::string& name) {
-    const auto resolved = resolve_tool(name);
+Json tool_identity(const std::string& name, const fs::path& working_directory) {
+    const auto resolved = resolve_tool(name, working_directory);
     Json result = {{"path", path_to_utf8(resolved)}};
     if (fs::is_regular_file(resolved))
         result["sha256"] = sha256_file(resolved);
@@ -81,7 +99,37 @@ Json recipe_files(const fs::path& engine_root) {
                     sha256_file(entry.path());
     return files;
 }
+bool within(const fs::path& path, const fs::path& directory) {
+    const auto relative = path.lexically_relative(directory);
+    if (relative.empty() || relative.is_absolute())
+        return false;
+    for (const auto& component : relative)
+        if (component == "..")
+            return false;
+    return true;
+}
+void refuse_symlink_ancestors(const fs::path& path) {
+    fs::path prefix;
+    for (const auto& component : path) {
+        prefix /= component;
+        std::error_code error;
+        if (fs::is_symlink(fs::symlink_status(prefix, error)))
+            throw std::runtime_error("Native build path contains a symlink: " +
+                                     path_to_utf8(prefix));
+    }
+}
 } // namespace
+
+std::optional<std::string> configured_cmake_value(const BuildConfig& config,
+                                                   std::string_view key) {
+    std::optional<std::string> result;
+    for (const auto& argument : config.configure_arguments) {
+        const auto [name, value] = parse_define(argument);
+        if (name == key)
+            result = value;
+    }
+    return result;
+}
 
 std::string BuildInputs::fingerprint() const {
     return normalized_hash({{"format", "faset.build-inputs.v1"},
@@ -110,6 +158,7 @@ std::string gameplay_source_hash(const fs::path& project_root, const scripting::
 }
 
 BuildInputs capture_build_inputs(const BuildConfig& config, const scripting::LuaProject& lua) {
+    validate_configure_arguments(config);
     BuildInputs result;
     result.source_hash = gameplay_source_hash(config.project_root, lua);
     result.recipe_hash = normalized_hash({{"format", "faset.build-recipe.v1"},
@@ -125,33 +174,112 @@ BuildInputs capture_build_inputs(const BuildConfig& config, const scripting::Lua
 #endif
     result.toolchain_hash = normalized_hash(
         {{"format", "faset.native-toolchain.v1"},
-         {"cmake", tool_identity(config.cmake)},
-         {"c", tool_identity(configured_tool(config, "CMAKE_C_COMPILER", default_c))},
-         {"cxx", tool_identity(configured_tool(config, "CMAKE_CXX_COMPILER", default_cxx))},
-         {"slang", tool_identity(slang_name(config))}});
+         {"cmake", tool_identity(config.cmake, config.project_root)},
+         {"c", tool_identity(configured_tool(config, "CMAKE_C_COMPILER", default_c),
+                             config.project_root)},
+         {"cxx", tool_identity(configured_tool(config, "CMAKE_CXX_COMPILER", default_cxx),
+                               config.project_root)},
+         {"slang", tool_identity(slang_name(config), config.project_root)},
+         {"toolchain_file", tool_identity(configured_tool(config, "CMAKE_TOOLCHAIN_FILE", ""),
+                                          config.project_root)}});
     return result;
 }
 
-void ensure_native_toolchain_stamp(const fs::path& native_directory,
+fs::path stage_gameplay_sources(const BuildConfig& config, const BuildInputs& inputs,
+                                const scripting::LuaProject& lua, std::string_view job_id) {
+    const auto cache = config.cache_root.empty() ? config.project_root / ".faset" / "cache"
+                                                  : config.cache_root;
+    const auto snapshots = cache / "source-snapshots";
+    const auto destination = snapshots / inputs.source_hash;
+    const auto verified = [&](const fs::path& root) {
+        return fs::is_directory(root / "Scripts") && !fs::is_symlink(root) &&
+               gameplay_source_hash(root, lua) == inputs.source_hash;
+    };
+    if (fs::exists(destination)) {
+        if (!verified(destination))
+            throw std::runtime_error("Cached gameplay source snapshot is corrupt");
+        return destination / "Scripts";
+    }
+    const auto source = config.project_root / "Scripts";
+    if (!fs::is_directory(source) || fs::is_symlink(source))
+        throw std::runtime_error("Gameplay Scripts directory is missing or a symlink");
+    const auto staging = snapshots / (".staging-" + std::string(job_id));
+    if (fs::exists(staging))
+        throw std::runtime_error("Gameplay source staging directory already exists");
+    fs::create_directories(staging / "Scripts");
+    try {
+        for (const auto& entry : fs::recursive_directory_iterator(source)) {
+            if (entry.is_symlink())
+                throw std::runtime_error("Gameplay source snapshot contains a symlink");
+            const auto target = staging / "Scripts" / entry.path().lexically_relative(source);
+            if (entry.is_directory())
+                fs::create_directories(target);
+            else if (entry.is_regular_file()) {
+                fs::create_directories(target.parent_path());
+                fs::copy_file(entry.path(), target);
+            }
+        }
+        if (!verified(staging))
+            throw std::runtime_error("Gameplay sources changed while creating the build snapshot");
+        fs::rename(staging, destination);
+        return destination / "Scripts";
+    } catch (...) {
+        std::error_code ignored;
+        fs::remove_all(staging, ignored);
+        if (fs::exists(destination) && verified(destination))
+            return destination / "Scripts";
+        throw;
+    }
+}
+
+void ensure_native_toolchain_stamp(const BuildConfig& config, const fs::path& native_directory,
                                    const BuildInputs& inputs) {
+    const auto project = fs::absolute(config.project_root).lexically_normal();
+    const auto base = fs::absolute(config.build_directory).lexically_normal();
+    const auto native = fs::absolute(native_directory).lexically_normal();
+    const auto cache = fs::absolute(config.cache_root.empty()
+                                        ? project / ".faset" / "cache"
+                                        : config.cache_root).lexically_normal();
+    const auto engine = fs::absolute(config.engine_root).lexically_normal();
+    if (native.parent_path() != base ||
+        (native.filename() != "Debug" && native.filename() != "Release" &&
+         native.filename() != "RelWithDebInfo"))
+        throw std::runtime_error("Native build path is outside its configured managed root");
+    const auto default_base = project / ".faset" / "build";
+    if ((within(base, project) && base != default_base) || within(project, base) ||
+        within(base, cache) || within(cache, base) || within(base, engine) ||
+        within(engine, base))
+        throw std::runtime_error("Native build root overlaps project, cache or engine files");
+    refuse_symlink_ancestors(native);
     const auto stamp = native_directory / ".faset-toolchain.json";
-    bool matching = false;
-    if (fs::is_regular_file(stamp))
+    bool matching = false, owned = false;
+    if (fs::is_regular_file(stamp) && !fs::is_symlink(stamp))
         try {
             const auto existing = read_json(stamp);
-            matching = existing.value("format", std::string()) == "faset.toolchain-stamp" &&
-                       existing.value("version", 0) == 1 &&
+            const auto format = existing.value("format", std::string()) ==
+                                "faset.toolchain-stamp";
+            const auto version = existing.value("version", 0);
+            owned = format &&
+                    ((version == 2 &&
+                      existing.value("project_root", std::string()) == path_to_utf8(project) &&
+                      existing.value("native_directory", std::string()) == path_to_utf8(native)) ||
+                     (version == 1 && base == default_base));
+            matching = owned &&
                        existing.value("toolchain_hash", std::string()) == inputs.toolchain_hash;
         } catch (const std::exception&) {
-            matching = false;
+            owned = false;
         }
+    if (fs::exists(native_directory) && !owned)
+        throw std::runtime_error("Refusing to clear an unowned native build directory: " +
+                                 path_to_utf8(native));
     if (!matching && fs::exists(native_directory))
         fs::remove_all(native_directory);
     fs::create_directories(native_directory);
-    if (!matching)
-        atomic_write_json(stamp, {{"format", "faset.toolchain-stamp"},
-                                  {"version", 1},
-                                  {"toolchain_hash", inputs.toolchain_hash}});
+    atomic_write_json(stamp, {{"format", "faset.toolchain-stamp"},
+                              {"version", 2},
+                              {"project_root", path_to_utf8(project)},
+                              {"native_directory", path_to_utf8(native)},
+                              {"toolchain_hash", inputs.toolchain_hash}});
 }
 
 std::string build_package_key(const BuildInputs& inputs, const fs::path& native_directory,

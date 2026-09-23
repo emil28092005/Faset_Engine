@@ -302,13 +302,14 @@ struct BuildService::Impl {
         checkpoint(job, "Configuring gameplay", .05);
         job.lua = scripting::loadLuaProject(config.project_root);
         const auto inputs = capture_build_inputs(config, job.lua);
-        const auto cpp = config.project_root / "Scripts" / "Gameplay.cpp";
-        const auto hpp = config.project_root / "Scripts" / "Gameplay.hpp";
+        const auto staged_scripts = stage_gameplay_sources(config, inputs, job.lua, job.status.id);
+        const auto cpp = staged_scripts / "Gameplay.cpp";
+        const auto hpp = staged_scripts / "Gameplay.hpp";
         const bool has_cpp = fs::is_regular_file(cpp), has_hpp = fs::is_regular_file(hpp);
         if (has_cpp != has_hpp || (!has_cpp && !job.lua.enabled()))
             throw std::runtime_error("Project requires Scripts/Gameplay.cpp and Gameplay.hpp, "
                                      "or Lua entry scripts declared in project.faset.json");
-        ensure_native_toolchain_stamp(native_directory, inputs);
+        ensure_native_toolchain_stamp(config, native_directory, inputs);
         std::vector<std::string> arguments = {config.cmake,
                                               "-S",
                                               path_to_utf8(config.engine_root),
@@ -323,23 +324,38 @@ struct BuildService::Impl {
                                               "-DFASET_BUILD_RUNTIME=ON",
                                               "-DFASET_BUILD_ASSETS=ON",
                                               "-DFASET_GAMEPLAY_SOURCE_DIR=" +
-                                                  path_to_utf8(config.project_root / "Scripts")};
-        bool compiler_overridden = false;
-        for (const auto& arg : config.configure_arguments)
-            if (arg.starts_with("-DCMAKE_CXX_COMPILER="))
-                compiler_overridden = true;
-        if (!compiler_overridden) {
+                                                  path_to_utf8(staged_scripts)};
+        if (!configured_cmake_value(config, "CMAKE_C_COMPILER")) {
 #ifdef _WIN32
             auto compiler = find_executable("clang-cl");
             arguments.push_back("-DCMAKE_C_COMPILER=" + path_to_utf8(compiler));
-            arguments.push_back("-DCMAKE_CXX_COMPILER=" + path_to_utf8(compiler));
 #else
             arguments.push_back("-DCMAKE_C_COMPILER=" + path_to_utf8(find_executable("clang")));
+#endif
+        }
+        if (!configured_cmake_value(config, "CMAKE_CXX_COMPILER")) {
+#ifdef _WIN32
+            arguments.push_back("-DCMAKE_CXX_COMPILER=" +
+                                path_to_utf8(find_executable("clang-cl")));
+#else
             arguments.push_back("-DCMAKE_CXX_COMPILER=" + path_to_utf8(find_executable("clang++")));
 #endif
         }
-        arguments.insert(arguments.end(), config.configure_arguments.begin(),
-                         config.configure_arguments.end());
+        for (const auto& argument : config.configure_arguments) {
+            const auto equal = argument.find('=');
+            const auto colon = argument.find(':', 2);
+            const auto key = argument.substr(2, colon < equal ? colon - 2 : equal - 2);
+            if (key == "CMAKE_C_COMPILER" || key == "CMAKE_CXX_COMPILER" ||
+                key == "SLANGC_EXECUTABLE" || key == "CMAKE_TOOLCHAIN_FILE") {
+                const auto value = path_from_utf8(argument.substr(equal + 1));
+                if (value.has_parent_path() && value.is_relative()) {
+                    arguments.push_back(argument.substr(0, equal + 1) +
+                                        path_to_utf8((config.project_root / value).lexically_normal()));
+                    continue;
+                }
+            }
+            arguments.push_back(argument);
+        }
         arguments.push_back("-DCMAKE_BUILD_TYPE=" + configuration);
         // Project declarations, not a stale cache or a user-supplied override, determine
         // whether the packaged game has a Lua VM linked into it.

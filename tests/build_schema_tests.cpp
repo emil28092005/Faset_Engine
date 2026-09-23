@@ -147,8 +147,48 @@ int test_main(int argc, char** argv) {
         authoring::AuthoringService authoring(config.project_root, authoring::builtin_schemas());
         const auto valid = manifest();
         atomic_write_json(config.project_root / "schema-fixture.json", valid);
+        {
+            auto compiler_config = config;
+            compiler_config.project_root = root / "c-only-compiler-project";
+            compiler_config.configure_arguments = {
+                "-DCMAKE_C_COMPILER:FILEPATH=fixture-c-only"};
+            editor::BuildService compiler_build(compiler_config);
+            compiler_build.scaffold("Compiler argument fixture", 2);
+            atomic_write_json(compiler_config.project_root / "schema-fixture.json", valid);
+            const auto compiler_result = compiler_build.wait(compiler_build.start_build());
+            check(compiler_result.state == "succeeded",
+                  "C-only compiler override fixture builds: " + compiler_result.error);
+            const auto compiler_args =
+                read_json(compiler_config.project_root / "configure-fixture.json");
+            std::size_t c_overrides{};
+            bool cxx_default{};
+            for (const auto& arg : compiler_args) {
+                const auto text = arg.get<std::string>();
+                if (text.starts_with("-DCMAKE_C_COMPILER")) {
+                    ++c_overrides;
+                    check(text == "-DCMAKE_C_COMPILER:FILEPATH=fixture-c-only",
+                          "Typed C override is not replaced by a default compiler");
+                }
+                if (text.starts_with("-DCMAKE_CXX_COMPILER="))
+                    cxx_default = true;
+            }
+            check(c_overrides == 1 && cxx_default,
+                  "C and C++ compiler defaults are selected independently");
+        }
         auto first = builds.wait(builds.start_build());
         check(first.state == "succeeded", "Valid custom schema v2 publishes: " + first.error);
+        fs::path compiled_scripts;
+        for (const auto& arg : read_json(config.project_root / "configure-fixture.json")) {
+            const auto text = arg.get<std::string>();
+            constexpr std::string_view prefix = "-DFASET_GAMEPLAY_SOURCE_DIR=";
+            if (text.starts_with(prefix))
+                compiled_scripts = path_from_utf8(text.substr(prefix.size()));
+        }
+        check(!compiled_scripts.empty() &&
+                  compiled_scripts != config.project_root / "Scripts" &&
+                  read_text(compiled_scripts / "Extensions/BuildOnly.hpp") ==
+                      "#define BUILD_ONLY 1\n",
+              "Native C++ build receives the immutable source snapshot");
         const auto repeated = builds.wait(builds.start_build());
         check(repeated.state == "succeeded" &&
                   repeated.result.at("generation") == first.result.at("generation") &&
