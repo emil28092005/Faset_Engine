@@ -142,6 +142,8 @@ int test_main(int argc, char** argv) {
         config.configure_arguments = {"-DCMAKE_CXX_COMPILER=fixture-does-not-compile"};
         editor::BuildService builds(config);
         builds.scaffold("Schema publication", 2);
+        atomic_write(config.project_root / "Scripts/Extensions/BuildOnly.hpp",
+                     "#define BUILD_ONLY 1\n");
         authoring::AuthoringService authoring(config.project_root, authoring::builtin_schemas());
         const auto valid = manifest();
         atomic_write_json(config.project_root / "schema-fixture.json", valid);
@@ -161,6 +163,13 @@ int test_main(int argc, char** argv) {
         const auto previous_player = sha256_file(player);
         const auto previous_schema = read_text(schema);
         const auto previous_manifest = read_text(directory / "manifest.json");
+        atomic_write(config.project_root / "mutate-cpp-header-during-build", "fixture\n");
+        const auto raced_header = builds.wait(builds.start_build());
+        check(raced_header.state == "failed" && read_text(last_build) == previous_pointer,
+              "Header changed during schema export cannot publish a mixed build");
+        fs::remove(config.project_root / "mutate-cpp-header-during-build");
+        atomic_write(config.project_root / "Scripts/Extensions/BuildOnly.hpp",
+                     "#define BUILD_ONLY 1\n");
         check(!first.result.at("lua_enabled").get<bool>() &&
                   !fs::exists(directory / "project.faset.json"),
               "C++-only build publishes no Lua sources or project manifest");

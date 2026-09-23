@@ -21,6 +21,8 @@ int tool_main(int argc, char** argv) {
                 if (fs::exists("mutate-lua-snapshot"))
                     atomic_write(snapshot / "Scripts/main.lua", "-- corrupt snapshot\n");
             }
+            if (fs::exists("mutate-cpp-header-during-build"))
+                atomic_write("Scripts/Extensions/BuildOnly.hpp", "#define BUILD_ONLY 2\n");
             atomic_write_json(path_from_utf8(argv[2]), read_json("schema-fixture.json"));
             return 0;
         }

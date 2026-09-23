@@ -9,6 +9,7 @@
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
 #include <faset/core/process.hpp>
+#include <faset/editor/build_cache.hpp>
 #include <faset/editor/build_service.hpp>
 #include <faset/scripting/project.hpp>
 #include <fstream>
@@ -244,6 +245,7 @@ struct BuildService::Impl {
         const auto native_directory = config.build_directory / configuration;
         checkpoint(job, "Configuring gameplay", .05);
         job.lua = scripting::loadLuaProject(config.project_root);
+        const auto inputs = capture_build_inputs(config, job.lua);
         const auto cpp = config.project_root / "Scripts" / "Gameplay.cpp";
         const auto hpp = config.project_root / "Scripts" / "Gameplay.hpp";
         const bool has_cpp = fs::is_regular_file(cpp), has_hpp = fs::is_regular_file(hpp);
@@ -252,7 +254,7 @@ struct BuildService::Impl {
                                      "or Lua entry scripts declared in project.faset.json");
         const auto cpp_source = has_cpp ? read_text(cpp) : std::string{};
         const auto hpp_source = has_hpp ? read_text(hpp) : std::string{};
-        fs::create_directories(native_directory);
+        ensure_native_toolchain_stamp(native_directory, inputs);
         std::vector<std::string> arguments = {config.cmake,
                                               "-S",
                                               path_to_utf8(config.engine_root),
@@ -355,9 +357,9 @@ struct BuildService::Impl {
             if (job.lua.enabled() &&
                 scripting::loadLuaProject(staging).fingerprint != job.lua.fingerprint)
                 throw std::runtime_error("Lua build snapshot changed during schema export");
-            if (scripting::loadLuaProject(config.project_root).fingerprint != job.lua.fingerprint ||
-                has_cpp != fs::is_regular_file(cpp) || has_hpp != fs::is_regular_file(hpp) ||
-                (has_cpp && (read_text(cpp) != cpp_source || read_text(hpp) != hpp_source)))
+            if (gameplay_source_hash(config.project_root,
+                                     scripting::loadLuaProject(config.project_root)) !=
+                inputs.source_hash)
                 throw std::runtime_error("Gameplay sources changed during the build; build again");
             fs::rename(staging, generation);
             atomic_write_json(config.cache_root / "last_build.json",

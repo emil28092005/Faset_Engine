@@ -2,6 +2,7 @@
 #include <chrono>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
+#include <faset/editor/build_cache.hpp>
 #include <faset/editor/session.hpp>
 #include <faset/scripting/project.hpp>
 
@@ -132,20 +133,7 @@ Json Session::assets_list() const {
 }
 std::string Session::source_signature() const {
     const auto lua = scripting::loadLuaProject(config_.project_root);
-    const auto directory = config_.project_root / "Scripts";
-    std::vector<std::filesystem::path> files;
-    if (std::filesystem::exists(directory))
-        for (const auto& file : std::filesystem::recursive_directory_iterator(directory))
-            if (file.is_regular_file() && (!lua.enabled() || file.path().extension() != ".lua"))
-                files.push_back(file.path());
-    std::sort(files.begin(), files.end());
-    std::string contents;
-    for (const auto& file : files)
-        contents += generic_path_to_utf8(file.lexically_relative(directory)) + ":" +
-                    sha256_file(file) + "\n";
-    if (lua.enabled())
-        contents += "lua:" + lua.fingerprint + "\n";
-    return sha256(contents);
+    return gameplay_source_hash(config_.project_root, lua);
 }
 Json Session::schema_status() const {
     try {
