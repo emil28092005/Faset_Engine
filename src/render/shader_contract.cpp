@@ -85,7 +85,72 @@ void validate_layout(const Json& layout, std::string_view entry) {
             locations(layout.at("outputs"), {}, "shadow outputs");
     }
 }
-void validate_spirv(const std::vector<std::uint32_t>& words, bool fragment) {
+void validate_gpu_layout(const Json& layout, std::string_view entry) {
+    const bool graphics = entry == "gpuVertexMain" || entry == "gpuShadowMain";
+    const bool hzb = entry == "gpuHzbMain";
+    const bool compute = !graphics;
+    require(layout.at("stage") == (compute ? "compute" : "vertex"), "GPU shader stage changed");
+    const auto& descriptors = layout.at("descriptors");
+    const std::size_t expected_count = graphics ? 3 : hzb ? 2 : 10;
+    require(descriptors.is_array() && descriptors.size() == expected_count,
+            "GPU descriptor count changed");
+    const std::array<int, 10> compute_strides{224, 16, 16, 4, 16, 4, 4, 0, 0, 208};
+    const std::array<int, 3> graphics_strides{224, 4, 208};
+    for (std::size_t i = 0; i < expected_count; ++i) {
+        const auto& binding = descriptors[i];
+        require(binding.at("set") == (graphics ? 1 : 0) && binding.at("binding") == i &&
+                    binding.at("count") == 1,
+                "GPU descriptor set, binding or count changed");
+        const int stride = graphics ? graphics_strides[i] : hzb ? 0 : compute_strides[i];
+        const char* type = hzb ? (i == 0 ? "sampled_image_2d" : "storage_image_2d")
+                           : stride > 0 ? "storage_buffer" : "sampled_image_2d";
+        require(binding.at("type") == type, "GPU descriptor type changed");
+        if (stride > 0)
+            require(binding.at("element_stride") == stride, "GPU storage record stride changed");
+    }
+    const auto& constants = layout.at("push_constants");
+    require(constants.is_array() && constants.size() == 1 &&
+                constants[0].at("offset") == 0 &&
+                constants[0].at("size") == (graphics ? 112 : 16),
+            "GPU push-constant block changed");
+    const auto& members = constants[0].at("members");
+    require(members.is_array() && members.size() == 4, "GPU push-constant fields changed");
+    const int graphics_offsets[] = {0, 64, 80, 96};
+    const int graphics_sizes[] = {64, 16, 16, 16};
+    const char* graphics_types[] = {"float32x4x4", "float32x4", "float32x4", "uint32x4"};
+    for (std::size_t i = 0; i < 4; ++i) {
+        require(members[i].at("offset") == (graphics ? graphics_offsets[i] : int(i) * 4) &&
+                    members[i].at("size") == (graphics ? graphics_sizes[i] : 4) &&
+                    members[i].at("type") == (graphics ? graphics_types[i] : "uint32"),
+                "GPU push-constant layout changed");
+    }
+    const auto& blocks = layout.at("spirv_push_constants");
+    require(blocks.is_array() && blocks.size() == 1, "GPU SPIR-V push block changed");
+    const auto& actual = blocks[0].at("members");
+    require(actual.is_array() && actual.size() == 4, "GPU SPIR-V push members changed");
+    for (std::size_t i = 0; i < 4; ++i)
+        require(actual[i].at("member") == i &&
+                    actual[i].at("offset") == (graphics ? graphics_offsets[i] : int(i) * 4),
+                "GPU SPIR-V push offsets changed");
+    if (graphics) {
+        require(actual[0].at("matrix_layout") == "row-major" &&
+                    actual[0].at("matrix_stride") == 16,
+                "GPU SPIR-V matrix storage convention changed");
+        locations(layout.at("inputs"),
+                  {"float32x3", "float32x3", "float32x4", "float32x2"},
+                  "GPU vertex inputs");
+        if (entry == "gpuVertexMain")
+            locations(layout.at("outputs"),
+                      {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
+                      "GPU vertex outputs");
+        else
+            locations(layout.at("outputs"), {}, "GPU shadow outputs");
+    } else {
+        locations(layout.at("inputs"), {}, "GPU compute inputs");
+        locations(layout.at("outputs"), {}, "GPU compute outputs");
+    }
+}
+void validate_spirv(const std::vector<std::uint32_t>& words, std::uint32_t execution_model) {
     require(words.size() >= 5 && words[0] == 0x07230203 && words[1] >= 0x00010000 &&
                 words[1] <= 0x00010600 && words[3] > 0 && words[3] < (1u << 20) && words[4] == 0,
             "invalid SPIR-V header");
@@ -101,7 +166,7 @@ void validate_spirv(const std::vector<std::uint32_t>& words, bool fragment) {
             const auto* terminator = static_cast<const char*>(std::memchr(name, 0, available));
             require(terminator != nullptr, "unterminated SPIR-V entry name");
             if (std::string_view(name, terminator - name) == "main") {
-                require(words[offset + 1] == (fragment ? 4u : 0u), "SPIR-V entry stage changed");
+                require(words[offset + 1] == execution_model, "SPIR-V entry stage changed");
                 entry_found = true;
             }
         }
@@ -109,7 +174,8 @@ void validate_spirv(const std::vector<std::uint32_t>& words, bool fragment) {
     }
     require(entry_found, "SPIR-V main entry point missing");
 }
-detail::ShaderCode load(const std::filesystem::path& directory, const char* entry) {
+detail::ShaderCode load(const std::filesystem::path& directory, const char* entry,
+                        bool gpu = false) {
     const auto bytes = read_bounded(directory / (std::string(entry) + ".spv"), 16 * 1024 * 1024);
     require(bytes.size() >= 20 && bytes.size() % 4 == 0, "invalid SPIR-V byte length");
     const auto metadata = Json::parse(
@@ -122,12 +188,17 @@ detail::ShaderCode load(const std::filesystem::path& directory, const char* entr
     const auto& layout = metadata.at("layout");
     const auto fingerprint = faset::sha256(layout.dump());
     require(metadata.at("layout_fingerprint") == fingerprint, "layout fingerprint mismatch");
-    validate_layout(layout, entry);
+    if (gpu)
+        validate_gpu_layout(layout, entry);
+    else
+        validate_layout(layout, entry);
     detail::ShaderCode result;
     result.layout_fingerprint = fingerprint;
     result.words.resize(bytes.size() / 4);
     std::memcpy(result.words.data(), bytes.data(), bytes.size());
-    validate_spirv(result.words, std::string_view(entry) == "fragmentMain");
+    validate_spirv(result.words, gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
+                                           std::string_view(entry) == "gpuShadowMain") ? 0u : 5u)
+                                     : (std::string_view(entry) == "fragmentMain" ? 4u : 0u));
     return result;
 }
 } // namespace
@@ -135,6 +206,12 @@ std::array<detail::ShaderCode, 3>
 detail::load_shader_bundle(const std::filesystem::path& directory) {
     return {load(directory, "vertexMain"), load(directory, "fragmentMain"),
             load(directory, "shadowMain")};
+}
+std::array<detail::ShaderCode, 5>
+detail::load_gpu_shader_bundle(const std::filesystem::path& directory) {
+    return {load(directory, "gpuVertexMain", true), load(directory, "gpuShadowMain", true),
+            load(directory, "gpuCullMain", true), load(directory, "gpuHzbMain", true),
+            load(directory, "gpuPostCullMain", true)};
 }
 void validate_shader_bundle(const std::filesystem::path& directory) {
     (void)detail::load_shader_bundle(directory);

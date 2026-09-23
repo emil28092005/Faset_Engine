@@ -109,13 +109,22 @@ def normalize(raw: dict, bytecode: bytes, entry_name: str) -> dict:
             if ty["kind"] == "array":
                 count = ty["elementCount"]
                 ty = ty["elementType"]
+            element_stride = None
             if ty["kind"] == "samplerState":
                 descriptor_type = "sampler"
             elif ty["kind"] == "resource" and ty.get("baseShape") == "texture2D":
-                descriptor_type = "sampled_image_2d"
+                descriptor_type = "storage_image_2d" if ty.get("access") == "readWrite" else "sampled_image_2d"
+            elif ty["kind"] == "resource" and ty.get("baseShape") == "structuredBuffer":
+                descriptor_type = "storage_buffer"
+                element_stride = next((item["value"] for item in ty["resultType"].get("sizes", []) if item["kind"] == "uniform"), None)
+                if not isinstance(element_stride, int) or element_stride <= 0:
+                    raise ValueError(f"Structured buffer lacks a valid element stride: {parameter['name']}")
             else:
                 raise ValueError(f"Unsupported descriptor kind: {ty}")
-            descriptors.append({"name": parameter["name"], "set": binding.get("space", 0), "binding": binding["index"], "type": descriptor_type, "count": count, "used": used.get(parameter["name"], True)})
+            descriptor = {"name": parameter["name"], "set": binding.get("space", 0), "binding": binding["index"], "type": descriptor_type, "count": count, "used": used.get(parameter["name"], True)}
+            if element_stride is not None:
+                descriptor["element_stride"] = element_stride
+            descriptors.append(descriptor)
         else:
             raise ValueError(f"Unsupported global shader binding: {binding['kind']}")
     inputs, input_builtins = interface(entry.get("parameters", []), "varyingInput")
@@ -130,13 +139,19 @@ def main() -> int:
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--entry", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--define", action="append", default=[],
+                        help="Slang preprocessor definition, NAME or NAME=VALUE")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".shader-", dir=args.output) as temporary:
         directory = Path(temporary)
         spirv = directory / f"{args.entry}.spv"
         raw = directory / f"{args.entry}.slang-reflection.json"
-        process = subprocess.run([args.compiler, str(args.source), "-entry", args.entry, "-target", "spirv", "-profile", "spirv_1_6", "-matrix-layout-column-major", "-o", str(spirv), "-reflection-json", str(raw)])
+        command = [args.compiler, str(args.source), "-entry", args.entry, "-target", "spirv",
+                   "-profile", "spirv_1_6", "-matrix-layout-column-major"]
+        command += [f"-D{definition}" for definition in args.define]
+        command += ["-o", str(spirv), "-reflection-json", str(raw)]
+        process = subprocess.run(command)
         if process.returncode:
             return process.returncode
         normalized = normalize(json.loads(raw.read_text(encoding="utf-8")), spirv.read_bytes(), args.entry)

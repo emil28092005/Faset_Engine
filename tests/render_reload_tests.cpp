@@ -46,7 +46,9 @@ int main() {
     try {
         const auto bundle = temporary / "shaders";
         fs::create_directories(bundle);
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+                                  "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
+                                  "gpuHzbMain", "gpuPostCullMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 fs::copy_file(path_from_utf8(FASET_TEST_SHADER_DIRECTORY) / name, bundle / name);
@@ -76,7 +78,9 @@ int main() {
         require(deep_bundle.native().size() > 300,
                 "Shader file fixture must exceed the legacy Windows path limit");
         fs::create_directories(native_io_path(deep_bundle));
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+                                  "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
+                                  "gpuHzbMain", "gpuPostCullMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 atomic_write(deep_bundle / name, read_text(bundle / name));

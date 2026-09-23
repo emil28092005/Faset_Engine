@@ -11,4 +11,6 @@ struct ShaderCode {
     std::string layout_fingerprint;
 };
 std::array<ShaderCode, 3> load_shader_bundle(const std::filesystem::path& directory);
+// Order: opaque vertex, optional instanced shadow vertex, main cull, HZB, post cull.
+std::array<ShaderCode, 5> load_gpu_shader_bundle(const std::filesystem::path& directory);
 } // namespace faset::render::detail

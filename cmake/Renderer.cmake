@@ -17,6 +17,23 @@ foreach(FASET_ENTRY vertexMain fragmentMain shadowMain)
     DEPENDS "${PROJECT_SOURCE_DIR}/shaders/baseline.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
   list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
 endforeach()
+foreach(FASET_ENTRY gpuVertexMain gpuShadowMain gpuCullMain gpuHzbMain gpuPostCullMain)
+  if(FASET_ENTRY STREQUAL "gpuVertexMain" OR FASET_ENTRY STREQUAL "gpuShadowMain")
+    set(FASET_GPU_DEFINE FASET_GPU_GRAPHICS=1)
+  elseif(FASET_ENTRY STREQUAL "gpuHzbMain")
+    set(FASET_GPU_DEFINE FASET_GPU_HZB=1)
+  else()
+    set(FASET_GPU_DEFINE FASET_GPU_CULL=1)
+  endif()
+  set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.spv")
+  add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json"
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+            --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang"
+            --entry "${FASET_ENTRY}" --define "${FASET_GPU_DEFINE}" --output "${FASET_SHADER_DIRECTORY}"
+    BYPRODUCTS "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.slang-reflection.json"
+    DEPENDS "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+  list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
+endforeach()
 add_custom_command(OUTPUT "${FASET_SHADER_DIRECTORY}/compatibility.spv"
   COMMAND "${SLANGC_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/shaders/compatibility.hlsl"
           -entry compatibilityMain -stage compute -target spirv -profile spirv_1_6
@@ -49,6 +66,14 @@ if(BUILD_TESTING)
     FASET_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}")
   add_test(NAME render_shader_reload COMMAND faset_render_reload_tests)
   set_tests_properties(render_shader_reload PROPERTIES LABELS "gpu")
+  add_executable(faset_render_gpu_shader_contract_tests "${PROJECT_SOURCE_DIR}/tests/render_gpu_shader_contract_tests.cpp")
+  target_include_directories(faset_render_gpu_shader_contract_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/render")
+  target_link_libraries(faset_render_gpu_shader_contract_tests PRIVATE faset_render faset_core)
+  target_compile_definitions(faset_render_gpu_shader_contract_tests PRIVATE FASET_TEST_SHADER_DIRECTORY="${FASET_SHADER_DIRECTORY}")
+  add_test(NAME render_gpu_shader_contract COMMAND faset_render_gpu_shader_contract_tests)
+  add_test(NAME render_shader_reflection COMMAND "${CMAKE_COMMAND}" -E env
+    "FASET_TEST_SLANGC=${SLANGC_EXECUTABLE}"
+    "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_shader_reflection.py")
   add_executable(faset_render_window_tests "${PROJECT_SOURCE_DIR}/tests/render_window_tests.cpp")
   target_link_libraries(faset_render_window_tests PRIVATE faset_render SDL3::SDL3)
   add_test(NAME render_window_lifecycle COMMAND faset_render_window_tests "${CMAKE_BINARY_DIR}/window-test")

@@ -148,6 +148,12 @@ int test_main(int argc, char** argv) {
         const auto first = builds.wait(builds.start_build());
         check(first.state == "succeeded", "Valid custom schema v2 publishes: " + first.error);
         const auto directory = path_from_utf8(first.result.at("directory").get<std::string>());
+        for (const auto* entry : {"gpuVertexMain", "gpuShadowMain", "gpuCullMain",
+                                  "gpuHzbMain", "gpuPostCullMain"})
+            for (const auto* extension : {".spv", ".reflection.json"})
+                check(fs::is_regular_file(directory / "shaders" /
+                                          (std::string(entry) + extension)),
+                      "Published Player contains every checked P2 shader artifact");
         const auto player = path_from_utf8(first.result.at("player").get<std::string>());
         const auto schema = path_from_utf8(first.result.at("schema").get<std::string>());
         const auto last_build = builds.config().cache_root / "last_build.json";
