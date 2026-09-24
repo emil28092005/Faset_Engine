@@ -586,7 +586,7 @@ void profile_720p(const std::filesystem::path& output) {
     csv << "mode,frame,width,height,internal_width,internal_height,device,"
            "cpu_ms,gpu_ms,readback_cpu_ms,gpu_main_raster_ms,"
            "gpu_temporal_resolve_ms,gpu_temporal_composite_ms,gpu_ui_ms,"
-           "gpu_allocated_bytes,validation_errors\n";
+           "gpu_allocated_bytes,validation_enabled,validation_errors\n";
     constexpr std::uint32_t width = 1280, height = 720;
     constexpr std::array mode_names{"off", "taa", "upscale"};
     std::array<std::unique_ptr<Renderer>, 3> renderers;
@@ -609,8 +609,8 @@ void profile_720p(const std::filesystem::path& output) {
             const std::size_t i = (sequence + phase) % renderers.size();
             renderers[i]->render(frame);
             const auto& stats = renderers[i]->stats();
-            require(stats.validation_errors == 0,
-                    "720p temporal profile reported Vulkan validation errors");
+            require(stats.validation_enabled && stats.validation_errors == 0,
+                    "720p temporal profile requires active, error-free Vulkan validation");
             if (phase < 10)
                 continue;
             csv << mode_names[i] << ',' << (phase - 10) << ','
@@ -625,6 +625,7 @@ void profile_720p(const std::filesystem::path& output) {
                 << stats.gpu_temporal_composite_ms << ','
                 << stats.gpu_ui_ms << ','
                 << stats.gpu_allocated_bytes << ','
+                << int(stats.validation_enabled) << ','
                 << stats.validation_errors << '\n';
         }
 }
