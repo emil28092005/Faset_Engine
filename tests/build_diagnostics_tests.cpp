@@ -50,6 +50,25 @@ void contracts() {
         "compile", project);
     check(rows.size() == 2 && !rows[0].contains("file") && !rows[1].contains("file"),
           "External and traversing sources are never navigable");
+    const auto snapshot = fs::path("/cache/source-snapshots/verified/Scripts");
+    rows = editor::parse_build_diagnostics(
+        "/cache/source-snapshots/verified/Scripts/Nested/Game.cpp:21:3: error: broken\n"
+        "/cache/source-snapshots/verified/Scripts-other/Game.cpp:4:2: error: outside\n",
+        "compile", project, snapshot);
+    check(rows.size() == 2 && rows[0].at("file") == "Scripts/Nested/Game.cpp" &&
+              !rows[1].contains("file"),
+          "Only the verified staged Scripts subtree maps back to project source");
+    const auto nested_snapshot = project / ".faset/cache/source-snapshots/verified/Scripts";
+    rows = editor::parse_build_diagnostics(
+        "/project/.faset/cache/source-snapshots/verified/Scripts/Game.cpp:8:2: error: broken\n",
+        "compile", project, nested_snapshot);
+    check(rows.size() == 1 && rows[0].at("file") == "Scripts/Game.cpp",
+          "Project-contained build snapshot does not mask its verified Scripts mapping");
+    rows = editor::parse_build_diagnostics(
+        R"(C:\cache\snapshots\verified\Scripts\Game.cpp(17,4): error C2143: syntax error)" "\n",
+        "compile", windows, path_from_utf8(R"(C:\cache\snapshots\verified\Scripts)"));
+    check(rows.size() == 1 && rows[0].at("file") == "Scripts/Game.cpp",
+          "Windows staged source paths keep drive and Unicode navigation support");
     rows = editor::parse_build_diagnostics(
         "Scripts/../Scripts/Game.cpp:4:2: error: disguised traversal\n"
         "Scripts/Game.cpp:4:0: error: invalid column\n",

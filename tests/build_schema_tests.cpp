@@ -232,6 +232,16 @@ int test_main(int argc, char** argv) {
                   compile_failed.log.find("fixture compile failure") != std::string::npos,
               "Failed compiler output retains raw log and structured source location");
         fs::remove(config.project_root / "emit-clang-error-and-fail-build");
+        atomic_write(config.project_root / "flood-warnings-and-fail-build", "fixture\n");
+        const auto flooded = builds.wait(builds.start_build());
+        bool retained_error = false;
+        for (const auto& diagnostic : flooded.diagnostics)
+            retained_error |= diagnostic.value("severity", "") == "error" &&
+                              diagnostic.value("file", "") == "Scripts/Gameplay.cpp";
+        check(flooded.state == "failed" && flooded.diagnostics.size() <= 200 &&
+                  retained_error && read_text(last_build) == previous_pointer,
+              "Compiler errors survive bounded third-party warning floods");
+        fs::remove(config.project_root / "flood-warnings-and-fail-build");
         atomic_write(config.project_root / "fail-unparseable-build", "fixture\n");
         const auto generic_failed = builds.wait(builds.start_build());
         check(generic_failed.state == "failed" &&

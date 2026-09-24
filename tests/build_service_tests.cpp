@@ -345,6 +345,13 @@ int integration(const fs::path& root) {
                  source + "\n#error intentional_build_failure\n");
     auto failed = service.wait(service.start_build());
     require(failed.state == "failed", "Invalid user C++ must fail build");
+    bool navigable_cpp_error = false;
+    for (const auto& diagnostic : failed.diagnostics)
+        navigable_cpp_error |= diagnostic.value("severity", "") == "error" &&
+                               diagnostic.value("file", "") == "Scripts/Gameplay.cpp" &&
+                               diagnostic.value("line", 0) > 0;
+    require(navigable_cpp_error,
+            "Real staged C++ compile failure maps to a navigable project source");
     require(read_text(config.cache_root / "last_build.json") == last,
             "Failed compile preserved last good build");
     atomic_write(config.project_root / "Scripts" / "Gameplay.cpp", source);

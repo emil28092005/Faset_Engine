@@ -40,6 +40,14 @@ int tool_main(int argc, char** argv) {
             return 0;
         }
         if (argc > 2 && std::string_view(argv[1]) == "--build") {
+            if (fs::exists("flood-warnings-and-fail-build")) {
+                for (int index = 0; index < 250; ++index)
+                    std::cerr << "/external/library.cpp:1:1: warning: dependency warning "
+                              << index << '\n';
+                std::cerr << path_to_utf8(fs::current_path() / "Scripts/Gameplay.cpp")
+                          << ":7:3: error: gameplay error after warnings\n";
+                return 1;
+            }
             if (fs::exists("emit-clang-error-and-fail-build")) {
                 std::cerr << path_to_utf8(fs::current_path() / "Scripts/Gameplay.cpp")
                           << ":7:3: error: fixture compile failure\n";
