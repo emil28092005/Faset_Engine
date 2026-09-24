@@ -224,7 +224,8 @@ raster на плотной контрольной сцене оказался м
 forward, явный tiled доступен для локализованных источников и выиграл в
 отдельном сценарии. [Исследование](docs/studies/23-p3-forward-plus-2026-09-24.md)
 и [протокол проверки](docs/validation/p3-lighting-2026-09-24/README.md)
-отделяют этот Linux checkpoint от финальной Windows/temporal приёмки.
+фиксируют Linux и Windows SwiftShader checkpoint; совмещённая с temporal
+ревизия требует отдельной приёмки.
 
 Затем: previous transforms, motion vectors, jitter, history rejection и TAA; temporal upscaling — после устойчивого TAA. Проверять тонкую геометрию, движение, disocclusion, camera cut и смену разрешения, сравнивать с режимом без temporal. У cache/pass видны затраты и причины обновления.
 

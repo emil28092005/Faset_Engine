@@ -543,5 +543,9 @@ slower; all 8160 tiles overflowed at 128. A separate localized-range scene
 was 0.103/0.214/0.440 ms faster at those counts, with no overflows. There is
 no robust scene/device runtime predictor yet, so `Auto` remains forward and
 `Tiled` is explicit. Linux Debug passed 62 CTests with one window skip;
-pinned Linux SwiftShader passed all six P3 cases. Windows CI on this new
-revision and P3 temporal reconstruction are separate acceptance work.
+pinned Linux SwiftShader passed all six P3 cases. At `a0a4e29`,
+[native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35939232585)
+and [Windows graphics/SwiftShader CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35939232615)
+passed. The Windows job completed all 64 CTests and ran two relocated Release
+games for 120 frames each. P3 temporal reconstruction and the final combined
+revision still require their own acceptance.

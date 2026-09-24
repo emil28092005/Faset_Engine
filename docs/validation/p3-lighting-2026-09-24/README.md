@@ -4,8 +4,9 @@ This record tracks P3 lighting separately from temporal reconstruction. The
 implementation and measured Forward+ checkpoint is source revision
 `a0a4e29d480ed3344f19bd3565d48668ca913fed` on `feat/p3-lighting`.
 The earlier shadow/benchmark integration checkpoint was `b191ae0`. The
-lighting slice has Linux functional and reference-GPU evidence; Windows CI for
-the new tiled revision is pending. Temporal reconstruction has its own acceptance.
+lighting slice has Linux functional and reference-GPU evidence plus Windows
+SwiftShader CI at the tiled revision. Temporal reconstruction and the final
+combined revision have their own acceptance.
 
 ## Implemented at the checkpoint
 
@@ -51,7 +52,7 @@ the new tiled revision is pending. Temporal reconstruction has its own acceptanc
 | Driver, profile, real 64×64 benchmark smoke | `render_lighting_benchmark_schema`, `render_lighting_benchmark_smoke`, `player_shutdown_diagnostics` | Full Linux Debug green at `a0a4e29` |
 | 1920×1080 0/4/16/32/64/128 Release sweep, three repeats, both shadow states | `tools/benchmark_p3_lighting.py --sweep` | Forward baseline measured; its separate raw study is being integrated |
 | 1920×1080 paired paths, 32/64/128 dense and localized lights | `faset_p3_lighting_benchmark --lighting forward|tiled` | Raw 1080 frames and six diagnostic samples retained in study 23; dense slower, localized faster by build+raster |
-| Windows native build, pinned SwiftShader GPU tests, relocated Release 2D/3D Players | `windows-graphics.yml`, `ci.yml` | New P3 revision has not yet completed Windows CI |
+| Windows native build, pinned SwiftShader GPU tests, relocated Release 2D/3D Players | `windows-graphics.yml`, `ci.yml` | Native/manual and Windows graphics passed at `a0a4e29`; 64/64 Windows CTests and two relocated 120-frame Release games; combined revision pending |
 
 The supported-atlas GPU tests create a renderer with validation requested and
 assert zero reported Vulkan errors; a test result is a validation-layer pass only
@@ -93,8 +94,13 @@ the apparent win in one paired run.
 
 At the earlier `b191ae0` checkpoint, [GitHub native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35935899512)
 and [Windows graphics/SwiftShader CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35935899505)
-passed. These jobs did **not** include the new tile shader; Windows CI for
-`a0a4e29` is still required.
+passed. Those jobs did **not** include the new tile shader. At `a0a4e29`,
+[native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35939232585)
+and [Windows graphics/SwiftShader CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35939232615)
+also passed. The Windows graphics job ran all 64 CTests, including the tiled
+image case, and exported and relocated both checked-in Release games for 120
+frames. This is software Vulkan on Windows; physical Windows GPU performance
+and the later combined P1+P3 revision remain unverified here.
 
 ```sh
 cmake --build --preset linux-debug --parallel 2
