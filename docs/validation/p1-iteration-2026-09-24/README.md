@@ -4,7 +4,7 @@ The [unaltered version 2 workflow report](report.json) was produced by a clean
 `6c2e8fa80036315a695f67f3c53524165fb4b10a` checkout on 2026-09-24.
 It used disposable copies of the checked-in `collect-3d` and `examples/lua`
 projects. Every sample, process log and Player profile is retained under `raw/`;
-[the run log](workflow.log) shows the order and completion. The report identifies
+the report records the order and completion. The report identifies
 each input revision by SHA-256, and records all command arguments, phase labels,
 configuration and dirty-tree state. Its SHA-256 is
 `fd463c0cd12eed0a22143aa68bd732386804b0df4ecb2a3d9caa26f59dcfe6e2`.
@@ -97,6 +97,12 @@ scenes. The 2D sample casts no sun shadows and neither sample uses local shadow
 faces. This is a measured tracking-budget miss, not a failed export or a reason
 to redefine the counter silently. The linked dossier retains exact values,
 atlas breakdown, raw profiles and source/toolchain provenance.
+
+The [final integrated acceptance](../p1-p3-final-2026-09-24/README.md) reruns
+all three relocated Release packages at clean `ed523c6` after the queued-edit
+source-signature fix. A deterministic test first reproduced the false stale
+schema state, then verified that Build and Export publish the worker's actual
+source hash. This does not revise the older 240-frame timing or memory baseline.
 
 The [Lua-only Linux Release dossier](../lua-release-2026-09-24/README.md) separately
 records a relocated package that validated and rendered 120 frames after hiding

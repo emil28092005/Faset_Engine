@@ -1,6 +1,6 @@
 # План разработки Faset Engine
 
-Версия 1.3 · 23 сентября 2026 года.
+Версия 1.4 · 24 сентября 2026 года.
 
 **Статус:** C++ MVP реализован и принят; первый tag — **v0.1.0-mvp**. Его исходники проверены на `4cb82556de31268d2bde73948dd1ff1b6c02f162`; [досье M0–M9](docs/validation/mvp-acceptance.md) связывает этапы с проверками и revisions. После MVP реализованы Lua-модуль и P2 GPU visibility/mesh LOD. Для P2 сохранён direct-эталон; [досье Linux-проверок](docs/validation/p2-gpu-visibility-2026-09-23/README.md), [проверка Windows SwiftShader](docs/validation/p2-swiftshader-2026-09-23/README.md), [протокол приёмки](docs/studies/19-p2-gpu-visibility-acceptance.md), [первое измерение](docs/studies/20-p2-gpu-visibility-benchmark-2026-09-23.md) и [повтор после оптимизации](docs/studies/21-p2-gpu-visibility-optimization-2026-09-23.md) фиксируют функциональную и измерительную область. Первый Debug-профиль обнаружил дорогой MainCull; перенос GPU-выходов в device-local память и bounded atomic append устранили эту стоимость в повторном синтетическом тесте. Это не доказывает ускорение любой игры. Windows P2 функционально проверен в native CI через SwiftShader; физический Windows GPU и другие семейства драйверов остаются без проверки. Для MVP Linux проверен на RTX 2080 Ti, Windows — в native CI через SwiftShader; это не сертификация всех GPU/драйверов. Системный IME и физические переходы между мониторами не проверены, native Wayland restore имеет явный skip; XWayland и Windows lifecycle прошли. Контракты находятся в [ARCHITECTURE.md](docs/ARCHITECTURE.md), история — в [журнале реализации](docs/IMPLEMENTATION.md).
 
@@ -201,8 +201,12 @@ snapshot 0,197/0,288 мс; startup 295/248 мс. Эти показатели у�
 в соответствующие tracking budgets. Явные Vulkan allocations 43,02/43,12 MiB
 **превысили** исходный ориентир 20 MiB из-за двух постоянно созданных 2048²
 D32 shadow-атласов по 16 MiB; даже 2D-сцена с нулём shadow raster держит оба.
-Память требует оптимизации/нового baseline, без подмены бюджета. Физический
-Windows GPU остаётся отдельным покрытием. Dynamic gameplay loading рассматривать при
+Память требует оптимизации/нового baseline, без подмены бюджета. При
+асинхронных Build и Export статус схемы теперь получает хеш фактического
+снимка worker, поэтому изменение C++ в очереди не создаёт ложный статус
+устаревания. [Финальная совмещённая проверка](docs/validation/p1-p3-final-2026-09-24/README.md)
+повторяет перенос трёх Release-игр на чистом `ed523c6`. Физический Windows GPU
+остаётся отдельным покрытием. Dynamic gameplay loading рассматривать при
 подтверждённой проблеме линковки, без обещания C++ hot reload в P1.
 
 ### P2. GPU-driven visibility и LOD
@@ -221,22 +225,38 @@ GPU instance record содержит стабильные slot/generation; пл�
 
 ### P3. Освещение, тени и temporal reconstruction
 
-**Освещение, тени и измеренный выбор пути реализованы; приёмка всего P3 ещё
-открыта.** Есть authored directional/point/spot lights, общий shader ABI для
-Direct и P2, четыре каскада солнца, отдельный 16-face atlas для point/spot,
-видимость каскадеров из shadow views и общий бюджет 4096 caster draws.
+**P3 реализован и принят в зафиксированном Linux reference GPU и Windows
+SwiftShader профиле; общие claims о качестве/ускорении не делаются.** Authored
+directional/point/spot lights используют общий shader ABI для Direct и P2.
+Четыре sun cascades, отдельный 16-face atlas point/spot, видимость каскадеров
+из shadow views и общий бюджет 4096 caster draws имеют проверяемые счётчики.
 Ранжирование 128 local lights, атомарный отказ от шести point faces и
-unshadowed fallback доступны с диагностикой. На Linux reference GPU Release
-1920×1080 измеренный рост стоимости main raster превысил порог для проверки
-Forward+. Depth-free tiled путь 16×16 прошёл image parity, но полный build +
-raster на плотной контрольной сцене оказался медленнее; `Auto` оставлен на
-forward, явный tiled доступен для локализованных источников и выиграл в
-отдельном сценарии. [Исследование](docs/studies/23-p3-forward-plus-2026-09-24.md)
-и [протокол проверки](docs/validation/p3-lighting-2026-09-24/README.md)
-фиксируют Linux и Windows SwiftShader checkpoint; совмещённая с temporal
-ревизия требует отдельной приёмки.
+unshadowed fallback оставляют избыток явно видимым. На Linux RTX 2080 Ti
+Release 1920×1080 Forward+ gate сработал при 32 источниках; depth-free
+16×16 tiled путь прошёл image parity. Совмещённый повтор на 7 560 кадрах
+показал, что полная цена tile build+raster выше на 11–13% в плотной сцене,
+но ниже на 43–54% для локализованного света. Поэтому `Auto` оставлен на
+forward, а `Tiled` выбирается явно после профилирования. См.
+[benchmark](docs/studies/24-p3-integrated-forward-plus-2026-09-24.md) и
+[протокол lighting](docs/validation/p3-lighting-2026-09-24/README.md).
 
-Затем: previous transforms, motion vectors, jitter, history rejection и TAA; temporal upscaling — после устойчивого TAA. Проверять тонкую геометрию, движение, disocclusion, camera cut и смену разрешения, сравнивать с режимом без temporal. У cache/pass видны затраты и причины обновления.
+Previous transforms, motion vectors, jitter, depth-aware history rejection,
+1:1 TAA и 0.67 temporal Upscale теперь доступны для Direct и P2; Off остаётся
+default. Scene history независима от HZB, UI выводится после resolve в
+полном разрешении, Player получает полную shader/reflection упаковку. Editor
+показывает effective mode, reset/fallback, jitter и опциональные GPU-счётчики
+принятых/отклонённых пикселей; resize с включённой диагностикой проверен
+отдельным физическим GPU регрессионным тестом. При отказе shader bundle во
+время смены Direct → GPU старые TAA pipelines и history сохраняются;
+повторная попытка после восстановления пакета проходит. Финальная
+[матрица качества](docs/validation/p3-temporal-2026-09-24/matrix/integrated-ed523c6/README.md)
+содержит 1 386 кадров на трёх путях видимости, включённую Vulkan validation,
+восемь кадров после disocclusion, reset-сценарии и сравнение с 2× spatial
+reference. В тонкой контрольной геометрии эталон 2× точнее, а разреженная
+720p сцена не ускоряется от Upscale; TAA/Upscale оставлены opt-in. Память P1
+превышает старый 20 MiB ориентир из-за shadow atlases. Более широкие сцены,
+физический Windows GPU и сравнение с коммерческими temporal алгоритмами не
+подтверждены этими проверками; GI/virtualization относятся к P4.
 
 ### P4. Непрямой свет и продвинутая геометрия
 

@@ -13,6 +13,13 @@ recorded frame reported zero
 validation errors. These observations do not establish physical Windows GPU
 behavior or high-end reconstruction quality.
 
+The [final integrated matrix](matrix/integrated-ed523c6/README.md) separately
+repeats all 1,386 frames at clean `ed523c6`, after the optional diagnostics
+shader, resize fix, and visibility-switch rollback. Actual Vulkan validation
+was active with zero errors;
+all captured PNGs are byte-identical to the earlier branch matrix. Its
+independent 720p profile is recorded with exact binary and shader hashes.
+
 ## Raw artifacts and method
 
 - [Lossless PNG example](captures/wire-static-taa-15.png) and

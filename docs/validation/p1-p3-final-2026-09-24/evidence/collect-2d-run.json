@@ -1,0 +1,18 @@
+{
+  "arguments": [
+    "/tmp/faset-p1-p3-ed523c6-games/Faset Café 世界/collect-2d/faset_player",
+    "--headless",
+    "--frames",
+    "120",
+    "--capture",
+    "/tmp/faset-p1-p3-ed523c6-games/Faset Café 世界/collect-2d/verification.ppm",
+    "--profile",
+    "/tmp/faset-p1-p3-ed523c6-games/Faset Café 世界/collect-2d/profile.json"
+  ],
+  "cwd": "/tmp/faset-p1-p3-ed523c6-games/empty-working-directory",
+  "seconds": 0.7100785550137516,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "New round: collect the three gold cubes, then reach the green exit. E resets.\n{\"device\":\"NVIDIA GeForce RTX 2080 Ti\",\"dimension\":2,\"effective_temporal_mode\":\"off\",\"effective_visibility_mode\":\"direct\",\"frames\":120,\"gpu_visibility_active\":false,\"temporal_mode\":\"off\",\"ticks\":120,\"validation_errors\":0,\"visibility_mode\":\"direct\"}\n",
+  "stderr": ""
+}

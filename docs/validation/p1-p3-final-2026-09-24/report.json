@@ -1,0 +1,577 @@
+{
+  "format": "faset.playable-export-verification",
+  "version": 1,
+  "started_utc": "2026-09-24T03:16:06.383543+00:00",
+  "platform": "linux",
+  "engine": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3-integration",
+  "editor": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3-integration/build/linux-release/faset_editor",
+  "standalone_root": "/tmp/faset-p1-p3-ed523c6-games",
+  "engine_revision": "ed523c61c106b8e19614e4d56f0b5d39b8392478",
+  "engine_dirty": false,
+  "engine_git_status": [],
+  "engine_diff_sha256": null,
+  "editor_sha256": "142405fc82ea3c7fbf9866179651e75867e954149303ef2b182e122fd0f32524",
+  "project_workspace": "/tmp/faset-p1-p3-ed523c6-export",
+  "vulkaninfo_available": true,
+  "driver_override": null,
+  "frames_per_game": 120,
+  "status": "passed",
+  "projects": [
+    {
+      "name": "collect-2d",
+      "dimension": 2,
+      "language": "cpp",
+      "source_inputs": [
+        {
+          "path": ".gitignore",
+          "sha256": "53aa4d7124d4c8d93b8d7c4cb470b6c82b844e019a660d6243ffeadc50602de1"
+        },
+        {
+          "path": "README.md",
+          "sha256": "8cf5a2d6de849eb090b9ea6d5e27841f551bd06947e5054f0d2f59639a90edd0"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "be48a6d21385e717b6c8ebf9a3b4322eebbeff6bb067428e089ab5214be79854"
+        },
+        {
+          "path": "Scripts/Gameplay.cpp",
+          "sha256": "6b581b24da613e1915819de0a0f0ea820dd3333efa62c4b479a9ea7ffdbc6bcc"
+        },
+        {
+          "path": "Scripts/Gameplay.hpp",
+          "sha256": "4121587182ed4f74901b1c0757c53daadbf309af1d6bb5dd87fef142130ccbbe"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "36e2acd32210f5489372a2331346a3294ead2395f0713e3e5fd2da4e83263689"
+        }
+      ],
+      "generation": "69bfdd90-4539-4fd5-852e-f43012482808",
+      "configuration": "Release",
+      "standalone_directory": "/tmp/faset-p1-p3-ed523c6-games/Faset Café 世界/collect-2d",
+      "executable": "faset_player",
+      "package_file_count": 41,
+      "asset_generations": {},
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "device_class": "physical",
+      "driver": {
+        "apiVersion": "1.4.329",
+        "driverVersion": "595.84.0.0",
+        "deviceName": "NVIDIA GeForce RTX 2080 Ti",
+        "driverID": "DRIVER_ID_NVIDIA_PROPRIETARY",
+        "driverName": "NVIDIA",
+        "driverInfo": "595.84"
+      },
+      "validation_enabled": true,
+      "validation_errors": 0,
+      "completed_frames": 120,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.58032,
+          "min": 0.554496,
+          "p50": 0.559104,
+          "p95": 0.575584,
+          "samples": 120
+        },
+        "render_call": {
+          "max": 5.697768,
+          "min": 1.5953,
+          "p50": 1.930722,
+          "p95": 2.358479,
+          "samples": 120
+        },
+        "renderer_cpu": {
+          "max": 5.692117,
+          "min": 1.59053,
+          "p50": 1.921184,
+          "p95": 2.345554,
+          "samples": 120
+        },
+        "renderer_readback_cpu": {
+          "max": 2.598762,
+          "min": 0.376931,
+          "p50": 0.463665,
+          "p95": 0.606183,
+          "samples": 120
+        },
+        "simulation": {
+          "max": 0.294355,
+          "min": 0.134755,
+          "p50": 0.168708,
+          "p95": 0.272694,
+          "samples": 120
+        },
+        "snapshot": {
+          "max": 0.248098,
+          "min": 0.128342,
+          "p50": 0.144372,
+          "p95": 0.23347,
+          "samples": 120
+        },
+        "wall": {
+          "max": 6.124743,
+          "min": 1.900084,
+          "p50": 2.29008,
+          "p95": 2.699522,
+          "samples": 120
+        }
+      },
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 7,
+        "sha256": "f9d74067d87c1ebf30c6db372a26d93b7285791c8cb0307a24af5adb23bf201a"
+      },
+      "source_project_paths_unavailable": true,
+      "status": "passed"
+    },
+    {
+      "name": "collect-3d",
+      "dimension": 3,
+      "language": "cpp",
+      "source_inputs": [
+        {
+          "path": ".gitignore",
+          "sha256": "53aa4d7124d4c8d93b8d7c4cb470b6c82b844e019a660d6243ffeadc50602de1"
+        },
+        {
+          "path": "Assets/exit-arch/create.py",
+          "sha256": "9c7291124fb1498a3f992ef74afc39cd98f9cc3e2ff4687c633bece85d580905"
+        },
+        {
+          "path": "Assets/exit-arch/manifest.json",
+          "sha256": "7a13347adc89761fb02ebeab3c58ba87f319cd62f53ec87a3bb61bcd066ffa55"
+        },
+        {
+          "path": "Assets/exit-arch/manifest.json.faset-import.json",
+          "sha256": "ef4eef28a18a0cc40a40df75db34c97faa5d783b891265f862633f3aec514afc"
+        },
+        {
+          "path": "Assets/exit-arch/payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb",
+          "sha256": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3"
+        },
+        {
+          "path": "Assets/exit-arch/source.blend",
+          "sha256": "ff2676bec97ab778e531e87a185ad716049ea3b05b4a4f0027a6345737735035"
+        },
+        {
+          "path": "README.md",
+          "sha256": "2df5ca4df47ab5d3d05d41508201296d4ad5ec876245f19f061767ade6a30e8f"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "61b65baf79e52f07ac386a7f98acf985a1b09e88770cdde37ef461dc94b9dcd7"
+        },
+        {
+          "path": "Scripts/Extensions/Beacon.hpp",
+          "sha256": "c60d56161eead16f541835053ad32ac3333383d83015709c060b7d45e0af5a97"
+        },
+        {
+          "path": "Scripts/Gameplay.cpp",
+          "sha256": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a"
+        },
+        {
+          "path": "Scripts/Gameplay.hpp",
+          "sha256": "4121587182ed4f74901b1c0757c53daadbf309af1d6bb5dd87fef142130ccbbe"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "43d273b1054ec9069369073f54cc1fc7efb3d6b699dcd342c552a2dc2ef852ef"
+        }
+      ],
+      "import": {
+        "asset_id": "5832763b-3ed0-44d6-9088-0b524f196a91",
+        "cache_hit": false,
+        "diagnostics": [],
+        "generation": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2",
+        "manifest": {
+          "asset_id": "5832763b-3ed0-44d6-9088-0b524f196a91",
+          "files": [
+            {
+              "path": "meshes/mesh-fc069a07a87e0f831fd92efdbc4efa1f-0.fmesh",
+              "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+              "size": 928
+            },
+            {
+              "path": "meshes/mesh-0961e2a3f92977836a3aa80cab09277e-0.fmesh",
+              "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+              "size": 928
+            },
+            {
+              "path": "meshes/mesh-93b5b3e52cb6bb120fefb80e2d8e222b-0.fmesh",
+              "sha256": "3875c16ea628d4126373ebfe07816621fbad3961596a2fcd112f1eec0e378071",
+              "size": 928
+            }
+          ],
+          "generation": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2",
+          "importer": "faset-gltf-1/cgltf-1.15",
+          "input_key": {
+            "bundle_sha256": "7a13347adc89761fb02ebeab3c58ba87f319cd62f53ec87a3bb61bcd066ffa55",
+            "dependencies": {},
+            "importer": "faset-gltf-1/cgltf-1.15",
+            "settings": {},
+            "source": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+            "target_profile": "desktop-static-pbr-v1",
+            "toolchain": {
+              "cgltf": "360db1a95480fe102ae9c69b27c5d101167ff5ba",
+              "stb": "2c980bb59875b0d32144a71867fbdebb2f77cd20"
+            }
+          },
+          "kind": "scene",
+          "materials": [
+            {
+              "alpha_cutoff": 0.5,
+              "alpha_mode": "OPAQUE",
+              "base_color": [
+                0.2199999988079071,
+                0.28999999165534973,
+                0.3400000035762787,
+                1.0
+              ],
+              "base_color_texture": -1,
+              "double_sided": true,
+              "emissive": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "emissive_texture": -1,
+              "format": "faset.material",
+              "id": "material-bb63b094febbf90bb7049c9bcf7587bc",
+              "metallic": 0.07999999821186066,
+              "metallic_roughness_texture": -1,
+              "name": "Weathered stone",
+              "normal_texture": -1,
+              "occlusion_texture": -1,
+              "roughness": 0.800000011920929,
+              "unlit": false,
+              "version": 1
+            }
+          ],
+          "meshes": [
+            {
+              "id": "mesh-fc069a07a87e0f831fd92efdbc4efa1f",
+              "name": "Cube.001",
+              "primitives": [
+                {
+                  "material": 0,
+                  "path": "meshes/mesh-fc069a07a87e0f831fd92efdbc4efa1f-0.fmesh"
+                }
+              ]
+            },
+            {
+              "id": "mesh-0961e2a3f92977836a3aa80cab09277e",
+              "name": "Cube.002",
+              "primitives": [
+                {
+                  "material": 0,
+                  "path": "meshes/mesh-0961e2a3f92977836a3aa80cab09277e-0.fmesh"
+                }
+              ]
+            },
+            {
+              "id": "mesh-93b5b3e52cb6bb120fefb80e2d8e222b",
+              "name": "Cube.003",
+              "primitives": [
+                {
+                  "material": 0,
+                  "path": "meshes/mesh-93b5b3e52cb6bb120fefb80e2d8e222b-0.fmesh"
+                }
+              ]
+            }
+          ],
+          "nodes": [
+            {
+              "id": "node-cec6e8cea80cf5a98ba3263a0156bee4",
+              "local_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                1.4500000476837158,
+                1.2999999523162842,
+                1.0
+              ],
+              "mesh": 0,
+              "name": "Left post",
+              "parent_id": "",
+              "stable_source_id": true
+            },
+            {
+              "id": "node-5f8a90a6c4d27020d20bd4fa81d1d958",
+              "local_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                1.4500000476837158,
+                -1.2999999523162842,
+                1.0
+              ],
+              "mesh": 1,
+              "name": "Right post",
+              "parent_id": "",
+              "stable_source_id": true
+            },
+            {
+              "id": "node-482463e486a8d1fd741340c653cd128f",
+              "local_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                3.0,
+                0.0,
+                1.0
+              ],
+              "mesh": 2,
+              "name": "Lintel",
+              "parent_id": "",
+              "stable_source_id": true
+            }
+          ],
+          "outputs": [
+            "node-cec6e8cea80cf5a98ba3263a0156bee4",
+            "node-5f8a90a6c4d27020d20bd4fa81d1d958",
+            "node-482463e486a8d1fd741340c653cd128f",
+            "mesh-fc069a07a87e0f831fd92efdbc4efa1f",
+            "mesh-0961e2a3f92977836a3aa80cab09277e",
+            "mesh-93b5b3e52cb6bb120fefb80e2d8e222b",
+            "material-bb63b094febbf90bb7049c9bcf7587bc"
+          ],
+          "payload_source": "/tmp/faset-p1-p3-ed523c6-export/Faset Café 世界/collect-3d/Assets/exit-arch/payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb",
+          "schema_version": 1,
+          "settings": {},
+          "source": "/tmp/faset-p1-p3-ed523c6-export/Faset Café 世界/collect-3d/Assets/exit-arch/manifest.json",
+          "source_sha256": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+          "textures": []
+        },
+        "previous_generation": "",
+        "removed_output_ids": []
+      },
+      "generation": "6c1dbd3a-7254-4b80-9dd5-ea433c42692c",
+      "configuration": "Release",
+      "standalone_directory": "/tmp/faset-p1-p3-ed523c6-games/Faset Café 世界/collect-3d",
+      "executable": "faset_player",
+      "package_file_count": 46,
+      "asset_generations": {
+        "5832763b-3ed0-44d6-9088-0b524f196a91": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2"
+      },
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "device_class": "physical",
+      "driver": {
+        "apiVersion": "1.4.329",
+        "driverVersion": "595.84.0.0",
+        "deviceName": "NVIDIA GeForce RTX 2080 Ti",
+        "driverID": "DRIVER_ID_NVIDIA_PROPRIETARY",
+        "driverName": "NVIDIA",
+        "driverInfo": "595.84"
+      },
+      "validation_enabled": true,
+      "validation_errors": 0,
+      "completed_frames": 120,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.626976,
+          "min": 0.591392,
+          "p50": 0.593024,
+          "p95": 0.609792,
+          "samples": 120
+        },
+        "render_call": {
+          "max": 6.146895,
+          "min": 1.808681,
+          "p50": 2.18943,
+          "p95": 2.625573,
+          "samples": 120
+        },
+        "renderer_cpu": {
+          "max": 6.132347,
+          "min": 1.80252,
+          "p50": 2.179871,
+          "p95": 2.614251,
+          "samples": 120
+        },
+        "renderer_readback_cpu": {
+          "max": 2.79918,
+          "min": 0.363165,
+          "p50": 0.462913,
+          "p95": 0.60977,
+          "samples": 120
+        },
+        "simulation": {
+          "max": 0.56743,
+          "min": 0.171815,
+          "p50": 0.195588,
+          "p95": 0.312489,
+          "samples": 120
+        },
+        "snapshot": {
+          "max": 1.089595,
+          "min": 0.166834,
+          "p50": 0.188876,
+          "p95": 0.30222,
+          "samples": 120
+        },
+        "wall": {
+          "max": 7.696708,
+          "min": 2.167007,
+          "p50": 2.61865,
+          "p95": 3.165631,
+          "samples": 120
+        }
+      },
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 65,
+        "sha256": "2905891c9766b2f1f65d5b4284056cb3839f1faae195f9fea39a56e3ebf44363"
+      },
+      "source_project_paths_unavailable": true,
+      "status": "passed"
+    },
+    {
+      "name": "lua",
+      "dimension": 2,
+      "language": "lua",
+      "source_inputs": [
+        {
+          "path": "README.md",
+          "sha256": "8392da3c18916400ea628daed094c77c390c553cbdcf822da227bdcd3d86380c"
+        },
+        {
+          "path": "Scenes/main.scene.json",
+          "sha256": "f1ab54150a58b289c47bcc34566ad7ee3025ad931db81e7f5dce70d9fbcac8ab"
+        },
+        {
+          "path": "Scripts/beacon.lua",
+          "sha256": "44d932ebedf66cadb9620f2d926177be2f8d43d71d56aa83611de686af026231"
+        },
+        {
+          "path": "Scripts/player.lua",
+          "sha256": "1c51810574a3413c46a7cbd0ea2e84a9b802da1206a2b72bb78f6cc951367a11"
+        },
+        {
+          "path": "Scripts/util/motion.lua",
+          "sha256": "bad3dcdc1081fd1dec589c12dad8dc175b739d77ea52b957ead9ecb4b7cb88a3"
+        },
+        {
+          "path": "project.faset.json",
+          "sha256": "7e4c0781c1837208b4499a9991ffb702143edf1f933ae9c7e3d2543fd2577747"
+        }
+      ],
+      "generation": "e6cea245-85ab-4203-9a79-747cd19c5139",
+      "configuration": "Release",
+      "standalone_directory": "/tmp/faset-p1-p3-ed523c6-games/Faset Café 世界/lua",
+      "executable": "faset_player",
+      "package_file_count": 46,
+      "asset_generations": {},
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "device_class": "physical",
+      "driver": {
+        "apiVersion": "1.4.329",
+        "driverVersion": "595.84.0.0",
+        "deviceName": "NVIDIA GeForce RTX 2080 Ti",
+        "driverID": "DRIVER_ID_NVIDIA_PROPRIETARY",
+        "driverName": "NVIDIA",
+        "driverInfo": "595.84"
+      },
+      "validation_enabled": true,
+      "validation_errors": 0,
+      "completed_frames": 120,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.572544,
+          "min": 0.551552,
+          "p50": 0.552288,
+          "p95": 0.567232,
+          "samples": 120
+        },
+        "render_call": {
+          "max": 5.602829,
+          "min": 1.551566,
+          "p50": 1.886379,
+          "p95": 2.296171,
+          "samples": 120
+        },
+        "renderer_cpu": {
+          "max": 5.596396,
+          "min": 1.544143,
+          "p50": 1.877962,
+          "p95": 2.288677,
+          "samples": 120
+        },
+        "renderer_readback_cpu": {
+          "max": 2.93176,
+          "min": 0.380919,
+          "p50": 0.480496,
+          "p95": 0.599982,
+          "samples": 120
+        },
+        "simulation": {
+          "max": 0.171945,
+          "min": 0.082806,
+          "p50": 0.116279,
+          "p95": 0.158329,
+          "samples": 120
+        },
+        "snapshot": {
+          "max": 0.096432,
+          "min": 0.046618,
+          "p50": 0.056105,
+          "p95": 0.082215,
+          "samples": 120
+        },
+        "wall": {
+          "max": 5.867127,
+          "min": 1.702691,
+          "p50": 2.074804,
+          "p95": 2.451364,
+          "samples": 120
+        }
+      },
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "sampled_colors": 4,
+        "sha256": "e2f4c3b84de75dadd2e31d388d0ba51abc1861f1ec76eb7ba51a4a2dcac720a7"
+      },
+      "source_project_paths_unavailable": true,
+      "status": "passed"
+    }
+  ],
+  "requested_projects": [
+    "collect-2d",
+    "collect-3d",
+    "lua"
+  ],
+  "finished_utc": "2026-09-24T03:22:20.623059+00:00"
+}

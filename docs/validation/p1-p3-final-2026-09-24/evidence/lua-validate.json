@@ -1,0 +1,12 @@
+{
+  "arguments": [
+    "/tmp/faset-p1-p3-ed523c6-games/Faset Café 世界/lua/faset_player",
+    "--validate"
+  ],
+  "cwd": "/tmp/faset-p1-p3-ed523c6-games/empty-working-directory",
+  "seconds": 0.007388445985270664,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"dimension\":2,\"validated\":true}\n",
+  "stderr": ""
+}

@@ -629,3 +629,31 @@ TAA and 0.67 Upscale raw image sequences and bounded 720p cost on the physical
 Linux GPU, with its own exact shader-source revision. TAA/Upscale remain opt-in
 because scene quality and whole-frame
 timing require game-specific comparison.
+
+At clean source `ed523c6`, the final integrated temporal matrix repeated all
+1,386 lossless frames across Direct, GPU frustum and GPU occlusion after adding
+optional accepted/rejected-history pixel diagnostics and fixing the resize path
+with diagnostic readback enabled. The failed Direct-to-GPU mode switch now
+restores active TAA pipelines and history for a safe retry; a real Vulkan RED
+test reproduced the old null-pipeline failure. Every frame used active Vulkan
+validation and
+reported zero errors; the 1,388 generated PNGs, including two contact sheets,
+were byte-identical to the earlier branch matrix. The
+[final matrix dossier](validation/p3-temporal-2026-09-24/matrix/integrated-ed523c6/README.md)
+records the exact binary and shader hashes, eight post-open disocclusion frames,
+reset comparisons, the 2× spatial reference and a separate 90-frame 720p
+Off/TAA/Upscale profile. This bounded fixture shows reduced static-wire frame
+variation, but its spatial reference has lower error and 0.67 Upscale does not
+improve whole-frame GPU time. Both temporal modes remain opt-in; the diagnostic
+GPU counter remains off during performance measurements.
+
+At the same clean revision, Build and Export results carry the worker's
+validated gameplay-source hash. A controlled queued-edit test first reproduced
+the false stale-schema state, then passed after the fix. The complete Linux
+Debug suite passed 76 of 77 CTests with one compositor-dependent window skip;
+24 focused Linux Release tests passed. The real Release Editor exported the C++
+2D, C++ 3D with Blender asset, and Lua-only games; each relocated package ran
+120 offscreen frames on the physical RTX 2080 Ti with active Vulkan validation
+and zero errors while the source project paths were hidden. The
+[final combined dossier](validation/p1-p3-final-2026-09-24/README.md) holds the
+clean-source verifier report and package manifests.

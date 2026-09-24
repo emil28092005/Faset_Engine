@@ -168,7 +168,11 @@ otherwise they are `null`. `gpu_allocated_bytes` includes live temporal targets
 and histories, subject to the allocation limits described above. Compare full
 frame GPU and renderer wall time too: scene raster savings can be offset by
 resolve, memory and synchronous readback. A valid frame-level history flag says
-the previous frame may be sampled, not that every pixel accepted it. For image
+the previous frame may be sampled, not that every pixel accepted it. Normal
+Player profiles set `temporal_counters_valid: false` and leave
+`temporal_accepted_pixels`/`temporal_rejected_pixels` null. The Editor's optional
+**Count temporal pixels (GPU readback)** toggle measures them for diagnostic
+frames but adds GPU work, so keep it off for performance runs. For image
 quality, inspect a still thin edge, a slow pan and a newly uncovered surface, and
 compare the same frame against Off. See [Temporal rendering](temporal.md) for
 mode controls and native C++ configuration.

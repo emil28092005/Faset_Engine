@@ -37,9 +37,12 @@ Use the **Visibility** selector to compare **Direct**, **GPU frustum**, and **GP
 
 Use the **Temporal** selector for **Off**, **TAA**, or **Upscale**. Upscale shows a
 50–99% render-scale slider; output UI remains sharp. The requested/effective
-mode, fallback reason, internal extent, history reset reason and temporal GPU
-pass times are shown separately from visibility and HZB history. This selector
-only changes the live Editor viewport. See [Temporal rendering](temporal.md).
+mode, fallback reason, internal extent, clip/internal-pixel jitter, history
+reset reason and temporal GPU pass times are shown separately from visibility
+and HZB history. **Count temporal pixels (GPU readback)** optionally shows
+accepted and rejected history samples for output-scene pixels; it adds GPU
+work and is off by default. This selector only changes the live Editor
+viewport. See [Temporal rendering](temporal.md).
 
 The panel reports the previous completed frame: renderer wall time, GPU timestamp time where available, synchronous readback time, draw calls, packed vertices, culled meshes, textures, explicit Vulkan allocation sizes, actual validation availability/errors, and GPU pass-label count. It also shows whether GPU visibility ran, submitted indirect bins, visible instances, frustum rejects, deferred and post-pass visible instances, HZB history validity, counts per prepared LOD level, and GPU pass timings where available. GPU counts are explicitly marked unavailable until the first frame rendered with diagnostics open; only a displayed zero is a measured zero. **Previous HZB history: invalid** is expected after a camera cut or resize until compatible depth history is available. A current HZB preview can still exist after that first frame because it was built from the current depth. Renderer wall time includes waiting for GPU work; it is not thread CPU usage. Memory excludes driver-internal allocations. The overlay itself adds drawing work, so hide it for a baseline performance measurement.
 

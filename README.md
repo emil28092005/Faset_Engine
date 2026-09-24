@@ -8,6 +8,7 @@ Faset is an independent engine project for desktop **2D and 3D games on Linux an
 
 - [User manual](docs/manual/index.md) — learn C++ gameplay and follow working examples; maintained alongside implementation.
 - [Development plan](PLAN.md) — milestones through MVP, acceptance criteria, and development beyond MVP.
+- [P1/P3 integrated acceptance](docs/validation/p1-p3-final-2026-09-24/README.md) — final code revision, release exports, GPU evidence and limits.
 - [Architecture](docs/ARCHITECTURE.md) — accepted decisions and subsystem boundaries.
 - [Documentation](docs/README.md) — navigation and maintenance rules.
 - [Source studies](docs/studies/README.md) — Unreal Engine, Godot, Unity, Blender, ECS, graphics, asset import, and builds.

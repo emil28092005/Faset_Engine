@@ -17,6 +17,15 @@ view, resize, scale switch or compatible shader reload is expected. A valid hist
 does not imply every pixel reused it: newly visible surfaces can still reject
 their individual history samples.
 
+The panel also shows the jitter in clip coordinates and the equivalent internal
+pixel offset. Turn on **Count temporal pixels (GPU readback)** only when you need
+to inspect how many output-scene pixels actually blended previous color versus
+rejected it. The counts are unavailable until a frame completes with the toggle
+on; a displayed zero is a measured zero. This optional GPU buffer clear, atomic
+count and readback add diagnostic work. Leave it off for timing comparisons.
+The toggle affects only the Editor viewport. Counting pauses while the panel is
+closed and resumes when it reopens with the checkbox still selected.
+
 For a Player or exported game, select the mode at launch:
 
 ```sh
@@ -62,4 +71,7 @@ faster. Compare Off, TAA and Upscale at the target output resolution with both
 still and moving cameras, and inspect thin objects and opening doors before
 choosing a mode for a game. The [P3 temporal validation record](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/p3-temporal-2026-09-24/README.md)
 contains source captures, paired image measurements and a bounded 720p cost
-profile.
+profile. The [integrated three-path matrix](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/p3-temporal-2026-09-24/matrix/integrated-ed523c6/README.md)
+also compares Direct, GPU frustum and GPU occlusion, eight open-door frames,
+and a 2× spatial reference. In that fixed thin-wire scene the 2× reference
+remains closer to the target than TAA or Upscale.

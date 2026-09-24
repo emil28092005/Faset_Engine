@@ -1,12 +1,20 @@
-# P3 temporal image-quality matrix: branch checkpoint
+# P3 temporal image-quality matrix: branch and integrated captures
+
+The [final integrated capture](integrated-ed523c6/README.md) repeated this
+entire 1,386-frame matrix on clean source `ed523c6` after the optional
+pixel-diagnostics shader, resize fix, and visibility-switch rollback. Validation
+was active with zero errors,
+all 1,388 resulting PNG files are byte-identical to the branch artifacts
+below, and a separate final-shader 720p profile is retained. The branch record
+remains here as the original quality study and provenance baseline.
 
 This is a functional and image-quality capture from
 `fe3a589174f8fe8e35ee231fe74fe938f4dd3cbd` on
 `feat/p3-temporal-integration`, before the later pixel-diagnostics shader was
 merged into the combined P1+P3 branch. It is separate from the earlier Direct
 capture at `1a1f69f` and from the combined lighting performance sweep at
-`4a3453e`. Repeating this matrix on the final combined source is necessary
-before claiming its exact images as integrated release evidence.
+`4a3453e`. The integrated rerun linked above now checks the exact images on
+the combined shader.
 
 The run used Linux Debug, NVIDIA GeForce RTX 2080 Ti, proprietary driver
 595.84, 160×120 output except the 319×241 resize scene and 320×240 spatial

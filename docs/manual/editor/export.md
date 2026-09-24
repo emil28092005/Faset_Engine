@@ -21,6 +21,11 @@ Play captures the authoring document when requested. Editing the document while 
 build runs does not silently change that snapshot. Runtime movement, spawned objects,
 and gameplay progress do not write back into authoring or its Undo history.
 
+Build and Export capture gameplay sources when their worker begins. If you edit C++
+while a job waits in the queue, it builds the newer snapshot and the Inspector's
+schema status uses that snapshot's hash. An edit during the active build causes
+the job to reject changed sources; run Build again after the edit.
+
 The Player supports pause and single-step. Editor controls use a private session
 control file; they do not expose runtime entity queries through MCP. Closing the
 Player is observed by the Editor, which keeps its logs and authoring state.

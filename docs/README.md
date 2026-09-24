@@ -1,6 +1,6 @@
 # Документация Faset Engine
 
-Актуализировано 24.09.2026. C++ MVP реализован и принят в зафиксированных профилях Linux и Windows; после него добавлены P1–P3. Результаты и пределы проверок находятся в [досье MVP](validation/mvp-acceptance.md), [P1 Release reference](validation/p1-iteration-2026-09-24/final-release/README.md), [P3 lighting](validation/p3-lighting-2026-09-24/README.md) и [P3 temporal](validation/p3-temporal-2026-09-24/README.md). Manual описывает текущие функции, PLAN отделяет их от следующих этапов.
+Актуализировано 24.09.2026. C++ MVP реализован и принят в зафиксированных профилях Linux и Windows; после него добавлены P1–P3. Результаты и пределы проверок находятся в [досье MVP](validation/mvp-acceptance.md), [финальной совмещённой проверке P1/P3](validation/p1-p3-final-2026-09-24/README.md), [P1 Release reference](validation/p1-iteration-2026-09-24/final-release/README.md), [P3 lighting](validation/p3-lighting-2026-09-24/README.md) и [P3 temporal](validation/p3-temporal-2026-09-24/README.md). Manual описывает текущие функции, PLAN отделяет их от следующих этапов.
 
 ## Канонические документы
 
@@ -21,7 +21,7 @@
 
 ## Что уже выбрано
 
-C++ с последующим Lua; EnTT; Vulkan 1.3, Render Graph и Slang; SDL3; Box2D/Box3D; собственный retained UI редактора с тёмной темой; ImGui для отладки; CMake/Ninja/Clang; JSON authoring и cooked binary; отдельный Player; статический gameplay и DLL/SO-плагины редактора под согласованный SDK; вложенные сцены и overrides; fixed tick и Update/FixedUpdate/LateUpdate.
+C++ gameplay и подключаемый Lua-модуль; EnTT; Vulkan 1.3, Render Graph и Slang; SDL3; Box2D/Box3D; собственный retained UI редактора с тёмной темой; ImGui для отладки; CMake/Ninja/Clang; JSON authoring и cooked binary; отдельный Player; статический gameplay и DLL/SO-плагины редактора под согласованный SDK; вложенные сцены и overrides; fixed tick и Update/FixedUpdate/LateUpdate.
 
 **MCP принадлежит только редактору и его сервисам.** Обычный Blender остаётся внешним инструментом; дополнительный плагин не является модификацией Blender. Сборка первой версии под каждую ОС проверяется на этой ОС.
 

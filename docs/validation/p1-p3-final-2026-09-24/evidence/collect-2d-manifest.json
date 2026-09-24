@@ -1,0 +1,269 @@
+{
+  "asset_generations": {},
+  "build_fingerprint": "4e24b57bd9e1c76da8e01d84369654fcb075b5c01560223eb659d73fea9d009a",
+  "configuration": "Release",
+  "executable": "faset_player",
+  "files": [
+    {
+      "path": "README.txt",
+      "sha256": "82bf72bc542643f6c4090e0a5de69b0014ca3fa17c6f9dfb12cc41e44c8b8db6",
+      "size": 262
+    },
+    {
+      "path": "Notices/Faset-NOTICE.txt",
+      "sha256": "30c2e7e80f5153b31ab57675e07246aef9165965d64e36022b426a26449ece3f",
+      "size": 204
+    },
+    {
+      "path": "Notices/dependencies.json",
+      "sha256": "a54639ad2d9ad13c2e5f1ec90d6775f5dfc493656789b78c7e44debe2a378fdc",
+      "size": 2206
+    },
+    {
+      "path": "Notices/stb/LICENSE",
+      "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63",
+      "size": 2510
+    },
+    {
+      "path": "Notices/json/LICENSE.MIT",
+      "sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+      "size": 1076
+    },
+    {
+      "path": "Notices/box3d/LICENSE",
+      "sha256": "da5e31a26bf3cfd5ba5c96d6823e480128c81e76c107ef9d3ee5d94789184b90",
+      "size": 1067
+    },
+    {
+      "path": "Notices/box2d/LICENSE",
+      "sha256": "68a3e676d7e94093b102d5cba0d4e04af812040d6f230c3db67a6664574e43d2",
+      "size": 1067
+    },
+    {
+      "path": "Notices/entt/LICENSE",
+      "sha256": "0785027ce472d7c61f05fba664a1d3ba6639c1593ced351ad9e4bed868765d99",
+      "size": 1097
+    },
+    {
+      "path": "Notices/sdl3/LICENSE.txt",
+      "sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+      "size": 884
+    },
+    {
+      "path": "shaders/gpuTemporalVertexMain.reflection.json",
+      "sha256": "7a8efe2645e7ce465ca44d19f8cfb2eb6c767abd1c3ce12ed69a149a50be8a8c",
+      "size": 3308
+    },
+    {
+      "path": "shaders/gpuTemporalVertexMain.spv",
+      "sha256": "dfe7309aafbd41974668b295e179354965db440e4156b9f12d6a67db16b357f9",
+      "size": 5996
+    },
+    {
+      "path": "shaders/temporalFragmentMain.reflection.json",
+      "sha256": "e36452227788f3703d7342b6d9a7a0efef74ce4da3aa96bb176a26e169ec3628",
+      "size": 3874
+    },
+    {
+      "path": "shaders/temporalFragmentMain.spv",
+      "sha256": "03adc6673276979b3ea46becf3a36940d3061af77cb8c965c7471feff8dbf89a",
+      "size": 30976
+    },
+    {
+      "path": "shaders/temporalVertexMain.reflection.json",
+      "sha256": "6f7812ce88b14bca62a6d2ad82a8657e2ee48c252558f34677c6a2bd980a7edb",
+      "size": 3935
+    },
+    {
+      "path": "shaders/temporalVertexMain.spv",
+      "sha256": "6cc3535c952a33ee46fd417fbec7fcad8f24357508b2119256b3077be3d60955",
+      "size": 1784
+    },
+    {
+      "path": "shaders/temporalCompositeFragmentMain.reflection.json",
+      "sha256": "44765a41fc362c9a97b1a19834f285e2e7facb24d8715e3d8559b8e9633a7a0e",
+      "size": 959
+    },
+    {
+      "path": "shaders/temporalCompositeFragmentMain.spv",
+      "sha256": "9e21c8534c0e70a58ae018fb2d143bf9cfb70112e71b67585f525eef0aecad1b",
+      "size": 768
+    },
+    {
+      "path": "shaders/temporalCompositeVertexMain.reflection.json",
+      "sha256": "a3a2ea858bd038423896043b0703704f707addceb5bd56721cd897f6bd092065",
+      "size": 956
+    },
+    {
+      "path": "shaders/temporalCompositeVertexMain.spv",
+      "sha256": "6b19f65b64f40d0a249660fdfba9dd5d95831ffab7314a307bf1f5cf39c6a248",
+      "size": 340
+    },
+    {
+      "path": "shaders/temporalResolveMain.reflection.json",
+      "sha256": "07177e347d62c243264d5b70a6d0c24611fddeb30fcce6b448dd1488af8371e3",
+      "size": 3381
+    },
+    {
+      "path": "shaders/temporalResolveMain.spv",
+      "sha256": "5f579dfe762d201db5ba33483b14bd0e0d37051735874919a3913ee00157bad7",
+      "size": 23236
+    },
+    {
+      "path": "shaders/gpuPostCullMain.reflection.json",
+      "sha256": "19ce128388c7f88e0c517fb58a25e46f1382e35ae5f376b10eebe155a2811c4c",
+      "size": 3591
+    },
+    {
+      "path": "shaders/gpuHzbMain.reflection.json",
+      "sha256": "589818f670881c64f3aba726ee3bc82fe4b9d835a347f99134e0e157dc4a112e",
+      "size": 2050
+    },
+    {
+      "path": "shaders/gpuCullMain.reflection.json",
+      "sha256": "8986a45a8d29743d16f0caece9181b18c85d6490d93b4a56cdb4f53052890f3f",
+      "size": 3587
+    },
+    {
+      "path": "shaders/gpuShadowMain.reflection.json",
+      "sha256": "96b3620b163dadf214933cfba6600b1b6a835c4d98b75b1f83e6ccd3dedb2425",
+      "size": 2755
+    },
+    {
+      "path": "shaders/gpuVertexMain.reflection.json",
+      "sha256": "01a6cc1bbf3c11c558560d6f8557fd4582d392906ed20a8c729673d0ebf640ed",
+      "size": 3098
+    },
+    {
+      "path": "shaders/gpuPostCullMain.spv",
+      "sha256": "1f8edd3be1f99f9433494a6f7be68f1317d6e7099e19354a7b8130d5d932224d",
+      "size": 12548
+    },
+    {
+      "path": "shaders/gpuHzbMain.spv",
+      "sha256": "08682362ee2120ed19d260e613285071747c3e436bb09bb6238e46f9cedc2308",
+      "size": 4140
+    },
+    {
+      "path": "shaders/gpuCullMain.spv",
+      "sha256": "e5ea6589ddb3613b59f8e58420be95a534cf4149816bc65bae26b1395c638955",
+      "size": 16288
+    },
+    {
+      "path": "shaders/gpuShadowMain.spv",
+      "sha256": "f56e0ae3e9b31cb1e3f24e379c81e11c853f8a7102648aaaebc92a17c7e8e53c",
+      "size": 2492
+    },
+    {
+      "path": "shaders/gpuVertexMain.spv",
+      "sha256": "32421d4a91f3a88d5210fee7af34b48bcad83072f14e2ccb9ef2ff983e45f78f",
+      "size": 5016
+    },
+    {
+      "path": "shaders/shadowMain.reflection.json",
+      "sha256": "d39e2f83c797589296eac9dce139b9ad836a895d6685bc40f79dd2609d687fee",
+      "size": 3597
+    },
+    {
+      "path": "shaders/fragmentMain.reflection.json",
+      "sha256": "2b07af2aae7578bdb6c2aa22658538821608b1dd5aeddd7b06e42b2e78cedf12",
+      "size": 3596
+    },
+    {
+      "path": "shaders/vertexMain.reflection.json",
+      "sha256": "b3bdff863d53a0b385e06a36701a83a6ecafe9a93e97281a732cce8ff862c0db",
+      "size": 3591
+    },
+    {
+      "path": "shaders/lightTileMain.reflection.json",
+      "sha256": "bf6a9256aaa6d6edacfa1e1c265d7c8ce2c1e4ea4036e0bea078c22fd4b536ca",
+      "size": 1978
+    },
+    {
+      "path": "shaders/lightTileMain.spv",
+      "sha256": "92850edcc5ee5b586a90ce84ee69a98075a6fff3c13db4a57528d9431afe8b68",
+      "size": 6800
+    },
+    {
+      "path": "shaders/shadowMain.spv",
+      "sha256": "7643b4d688492b5ee923b9606f0b0e70343ca05fa67673838206119a6f86d8d8",
+      "size": 784
+    },
+    {
+      "path": "shaders/fragmentMain.spv",
+      "sha256": "fea4dd48664a510bad12b5e8582f2db798d4dbea62ce0de35dc2acfe32372733",
+      "size": 28960
+    },
+    {
+      "path": "shaders/vertexMain.spv",
+      "sha256": "1ad2631c35d654f48166321ae43d4165043e1b919b14f1dc61caf97b1ada0898",
+      "size": 1224
+    },
+    {
+      "path": "faset_player",
+      "sha256": "0ad5fa3dd08090b4fcfccf91714b86c6454dac43b37fbdbfeb2f3e5abb18dd51",
+      "size": 6163032
+    },
+    {
+      "path": "scene.fscene",
+      "sha256": "0d7b221abc1cae5e9f1d04357c684ac6993f5878d634b4b950eec66dd8e55b2a",
+      "size": 6214
+    }
+  ],
+  "format": "faset.export",
+  "generation": "69bfdd90-4539-4fd5-852e-f43012482808",
+  "lua_enabled": false,
+  "lua_fingerprint": "",
+  "platform": "linux",
+  "prerequisites": [
+    "Linux x86_64",
+    "Vulkan 1.3 driver",
+    "Compatible glibc and libstdc++ runtime"
+  ],
+  "renderer_profile": {
+    "api": "Vulkan 1.3",
+    "materials": [
+      "base-color factor and texture",
+      "metallic and roughness factors"
+    ],
+    "required_features": [
+      "dynamicRendering",
+      "synchronization2"
+    ],
+    "shadow_atlases": {
+      "caster_draw_limit": 4096,
+      "fallback_resolution": 1024,
+      "local_face_limit": 16,
+      "preferred_resolution": 2048,
+      "sampled_d32_required": true,
+      "sun_cascade_limit": 4
+    },
+    "texture_sampling": "linear clamp, one mip level",
+    "unsupported_material_features": [
+      "normal maps",
+      "metallic-roughness maps",
+      "emissive and occlusion maps",
+      "alpha mode selection",
+      "unlit mode",
+      "per-material face culling"
+    ]
+  },
+  "scene_hash": "fdfa1c49cf78a1cf52cd41b201c35bb0b5f852c90b7626b2a7f17da3e2e3e24c",
+  "simulation": {
+    "fixed_delta": 0.016666666666666666,
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ],
+    "max_catch_up_ticks": 4,
+    "physics_substeps": 4
+  },
+  "units": {
+    "angle": "radian",
+    "coordinates": "right-handed Y-up",
+    "distance": "metre"
+  },
+  "validation_log": "{\"dimension\":2,\"validated\":true}\n",
+  "version": 1
+}

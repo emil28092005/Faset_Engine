@@ -9,6 +9,9 @@ SwiftShader CI at the tiled revision. The combined P1+P3 renderer checkpoint
 `4a3453e` was tested separately, including the temporal renderer. Its lighting
 A/B raw data are in [study 24](../../studies/24-p3-integrated-forward-plus-2026-09-24.md),
 and temporal image/cost evidence has a [separate record](../p3-temporal-2026-09-24/README.md).
+The later [final P1/P3 acceptance](../p1-p3-final-2026-09-24/README.md) at
+`ed523c6` reruns the lighting/temporal tests and relocated Release games; the
+7,560-frame lighting A/B sweep remains the measured `4a3453e` workload.
 
 ## Implemented at the checkpoint
 
