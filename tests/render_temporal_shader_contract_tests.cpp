@@ -49,14 +49,24 @@ int main() {
     auto reflection = temporary / "temporalResolveMain.reflection.json";
     auto metadata = faset::read_json(reflection);
     require(metadata["layout"]["stage"] == "compute" &&
-                metadata["layout"]["descriptors"].size() == 7 &&
+                metadata["layout"]["descriptors"].size() == 8 &&
+                metadata["layout"]["descriptors"][7]["type"] == "storage_buffer" &&
+                metadata["layout"]["descriptors"][7]["element_stride"] == 4 &&
                 metadata["layout"]["push_constants"][0]["size"] == 80,
-            "Temporal resolve ABI contains seven images and an 80-byte push block");
+            "Temporal resolve ABI contains seven images, counters and an 80-byte push block");
     metadata["layout"]["descriptors"][5]["binding"] = 8;
     metadata["layout_fingerprint"] = faset::sha256(metadata["layout"].dump());
     faset::atomic_write_json(reflection, metadata);
     must_reject([&] { (void)faset::render::detail::load_temporal_shader_bundle(temporary); },
                 "A rehashed temporal image binding change must be rejected");
+    faset::atomic_write_json(
+        reflection, faset::read_json(original / "temporalResolveMain.reflection.json"));
+    metadata = faset::read_json(reflection);
+    metadata["layout"]["descriptors"][7]["element_stride"] = 8;
+    metadata["layout_fingerprint"] = faset::sha256(metadata["layout"].dump());
+    faset::atomic_write_json(reflection, metadata);
+    must_reject([&] { (void)faset::render::detail::load_temporal_shader_bundle(temporary); },
+                "A rehashed temporal counter stride change must be rejected");
     faset::atomic_write_json(
         reflection, faset::read_json(original / "temporalResolveMain.reflection.json"));
 

@@ -213,6 +213,7 @@ struct SceneResources {
 };
 struct TemporalResources {
     Image scene_color, velocity, history_color[2], history_depth[2];
+    Buffer pixel_counts, pixel_counts_stage;
     VkDescriptorSetLayout resolve_layout{}, composite_layout{};
     VkDescriptorPool descriptor_pool{};
     VkDescriptorSet resolve_sets[2]{}, composite_sets[2]{};
@@ -429,6 +430,8 @@ struct Renderer::Impl {
             destroy(image);
         for (auto& image : temporal.history_depth)
             destroy(image);
+        destroy(temporal.pixel_counts);
+        destroy(temporal.pixel_counts_stage);
         destroy(vertices);
         destroy(readback);
         destroy(lighting_header);
@@ -963,6 +966,8 @@ struct Renderer::Impl {
             destroy(image);
         for (auto& image : temporal.history_depth)
             destroy(image);
+        destroy(temporal.pixel_counts);
+        destroy(temporal.pixel_counts_stage);
         temporal.has_completed_image = false;
         scene.hzb_history_valid = false;
         temporal.capabilities.extent = width <= max_image_dimension &&
@@ -998,6 +1003,10 @@ struct Renderer::Impl {
                 image = make_image(width, height, VK_FORMAT_R32_SFLOAT,
                     VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
                     VK_IMAGE_ASPECT_COLOR_BIT);
+            temporal.pixel_counts = make_buffer(2 * sizeof(std::uint32_t),
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
             temporal.completed_index = 0;
         }
         const auto padded_width = std::bit_ceil(internal[0]);
@@ -1036,9 +1045,10 @@ struct Renderer::Impl {
         if (temporal.descriptor_pool)
             vkDestroyDescriptorPool(device, temporal.descriptor_pool, nullptr);
         temporal.descriptor_pool = {};
-        const std::array<VkDescriptorPoolSize, 2> sizes{{
+        const std::array<VkDescriptorPoolSize, 3> sizes{{
             {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 12},
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4}}};
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2}}};
         VkDescriptorPoolCreateInfo pool_info{};
         pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         pool_info.maxSets = 4;
@@ -1072,7 +1082,7 @@ struct Renderer::Impl {
                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                 {VK_NULL_HANDLE, temporal.history_color[next].view, VK_IMAGE_LAYOUT_GENERAL},
                 {VK_NULL_HANDLE, temporal.history_depth[next].view, VK_IMAGE_LAYOUT_GENERAL}}};
-            std::array<VkWriteDescriptorSet, 8> writes{};
+            std::array<VkWriteDescriptorSet, 9> writes{};
             for (std::uint32_t binding = 0; binding < 7; ++binding) {
                 writes[binding].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[binding].dstSet = temporal.resolve_sets[next];
@@ -1082,15 +1092,23 @@ struct Renderer::Impl {
                     ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
                 writes[binding].pImageInfo = &images[binding];
             }
+            const VkDescriptorBufferInfo count_buffer{temporal.pixel_counts.handle, 0,
+                                                       2 * sizeof(std::uint32_t)};
             writes[7].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[7].dstSet = temporal.composite_sets[next];
-            writes[7].dstBinding = 0;
+            writes[7].dstSet = temporal.resolve_sets[next];
+            writes[7].dstBinding = 7;
             writes[7].descriptorCount = 1;
-            writes[7].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            writes[7].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[7].pBufferInfo = &count_buffer;
+            writes[8].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[8].dstSet = temporal.composite_sets[next];
+            writes[8].dstBinding = 0;
+            writes[8].descriptorCount = 1;
+            writes[8].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             const VkDescriptorImageInfo composite_image{
                 VK_NULL_HANDLE, temporal.history_color[next].view,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-            writes[7].pImageInfo = &composite_image;
+            writes[8].pImageInfo = &composite_image;
             vkUpdateDescriptorSets(device, static_cast<std::uint32_t>(writes.size()),
                                    writes.data(), 0, nullptr);
         }
@@ -1802,10 +1820,11 @@ struct Renderer::Impl {
         if (!temporal.capabilities.compute || !temporal.capabilities.formats)
             return;
         if (!temporal.resolve_layout) {
-            std::array<VkDescriptorSetLayoutBinding, 7> bindings{};
+            std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
             for (std::uint32_t i = 0; i < bindings.size(); ++i)
                 bindings[i] = {i, i < 5 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-                                        : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                        : i < 7 ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+                                                : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
             VkDescriptorSetLayoutCreateInfo descriptor_info{};
             descriptor_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -2328,6 +2347,8 @@ struct Renderer::Impl {
         statistics.temporal_internal_width = temporal.internal_width;
         statistics.temporal_internal_height = temporal.internal_height;
         statistics.temporal_jitter = {};
+        statistics.temporal_counters_valid = false;
+        statistics.temporal_accepted_pixels = statistics.temporal_rejected_pixels = 0;
         statistics.gpu_temporal_resolve_ms = statistics.gpu_temporal_composite_ms =
             statistics.gpu_ui_ms = 0;
         statistics.graph_passes.clear();
@@ -2342,6 +2363,17 @@ struct Renderer::Impl {
         const bool occlusion = statistics.effective_visibility_mode ==
             VisibilityMode::GpuOcclusion;
         const bool temporal_active = statistics.effective_temporal_mode != TemporalMode::Off;
+        bool collect_temporal_counts = temporal_active && config.temporal_diagnostics;
+        if (collect_temporal_counts && !temporal.pixel_counts_stage.handle) {
+            try {
+                temporal.pixel_counts_stage = make_buffer(2 * sizeof(std::uint32_t),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+            } catch (const std::exception&) {
+                collect_temporal_counts = false;
+            }
+        }
         statistics.gpu_visibility_active = gpu_active;
         statistics.hzb_valid = false;
         bool can_present = surface != VK_NULL_HANDLE;
@@ -3627,6 +3659,15 @@ struct Renderer::Impl {
             add_pass("TemporalResolve",
                      {"scene_color", "depth", "scene_velocity", "history_previous"},
                      {"resolved_color", "resolved_depth"}, [&] {
+                if (collect_temporal_counts) {
+                    vkCmdFillBuffer(command, temporal.pixel_counts.handle, 0,
+                                    2 * sizeof(std::uint32_t), 0);
+                    scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                                  VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                  VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                                      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+                }
                 transition(command, temporal.scene_color,
                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                            VK_IMAGE_ASPECT_COLOR_BIT);
@@ -3656,7 +3697,8 @@ struct Renderer::Impl {
                     temporal.previous_unjittered_vp == snapshot.view_projection;
                 ResolvePush parameters{{width, height, raster_width, raster_height},
                                        output_scene_viewport, scene_viewport,
-                                       {statistics.temporal_history_valid ? 1u : 0u, 0, 0, 0},
+                                       {statistics.temporal_history_valid ? 1u : 0u,
+                                        collect_temporal_counts ? 1u : 0u, 0, 0},
                                        {(statistics.temporal_jitter[0] -
                                          temporal.previous_jitter[0]) * .5f,
                                         (statistics.temporal_jitter[1] -
@@ -3772,6 +3814,19 @@ struct Renderer::Impl {
                 const VkBufferCopy tile_copy{0, 0, light_tile_bytes};
                 vkCmdCopyBuffer(command, light_tile_words.handle,
                                 light_tile_readback.handle, 1, &tile_copy);
+                scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_HOST_BIT,
+                              VK_ACCESS_2_HOST_READ_BIT);
+            }
+            if (collect_temporal_counts) {
+                scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_READ_BIT);
+                const VkBufferCopy count_copy{0, 0, 2 * sizeof(std::uint32_t)};
+                vkCmdCopyBuffer(command, temporal.pixel_counts.handle,
+                                temporal.pixel_counts_stage.handle, 1, &count_copy);
                 scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                               VK_ACCESS_2_TRANSFER_WRITE_BIT,
                               VK_PIPELINE_STAGE_2_HOST_BIT,
@@ -3913,6 +3968,17 @@ struct Renderer::Impl {
             vkUnmapMemory(device, light_tile_readback.memory);
             statistics.light_tile_counts_valid = true;
         }
+        if (collect_temporal_counts) {
+            void* mapped_counts{};
+            check(vkMapMemory(device, temporal.pixel_counts_stage.memory, 0,
+                              temporal.pixel_counts_stage.size, 0, &mapped_counts),
+                  "Read temporal pixel diagnostics");
+            const auto* words = static_cast<const std::uint32_t*>(mapped_counts);
+            statistics.temporal_accepted_pixels = words[0];
+            statistics.temporal_rejected_pixels = words[1];
+            vkUnmapMemory(device, temporal.pixel_counts_stage.memory);
+            statistics.temporal_counters_valid = true;
+        }
         instance_tracker.finish_frame();
         scene.previous_vp = raster_vp;
         scene.previous_projection = snapshot.projection;
@@ -3955,7 +4021,8 @@ struct Renderer::Impl {
                 statistics.gpu_allocated_bytes += image.allocation_size;
         }
         statistics.gpu_allocated_bytes += temporal.scene_color.allocation_size +
-            temporal.velocity.allocation_size;
+            temporal.velocity.allocation_size + temporal.pixel_counts.allocation_size +
+            temporal.pixel_counts_stage.allocation_size;
         for (const auto& image : temporal.history_color)
             statistics.gpu_allocated_bytes += image.allocation_size;
         for (const auto& image : temporal.history_depth)
@@ -4135,6 +4202,11 @@ float Renderer::render_scale() const {
 }
 void Renderer::set_visibility_diagnostics(bool enabled) {
     impl_->config.visibility_diagnostics = enabled;
+}
+void Renderer::set_temporal_diagnostics(bool enabled) {
+    impl_->config.temporal_diagnostics = enabled;
+    if (!enabled)
+        impl_->destroy(impl_->temporal.pixel_counts_stage);
 }
 std::optional<HzbDebugImage> Renderer::hzb_debug_image(std::uint32_t mip) {
     auto& renderer = *impl_;

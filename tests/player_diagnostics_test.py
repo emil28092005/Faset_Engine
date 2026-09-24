@@ -66,9 +66,14 @@ with tempfile.TemporaryDirectory(prefix="faset-player-diagnostics-") as temporar
                         "temporal_fallback_reason", "temporal_reset_reason",
                         "temporal_history_valid", "temporal_internal_width",
                         "temporal_internal_height", "temporal_jitter",
+                        "temporal_counters_valid", "temporal_accepted_pixels",
+                        "temporal_rejected_pixels",
                         "gpu_temporal_resolve_ms", "gpu_temporal_composite_ms", "gpu_ui_ms"]:
                 assert key in sample, (key, sample)
             assert sample["effective_temporal_mode"] == temporal_mode, sample
+            assert sample["temporal_counters_valid"] is False, sample
+            assert sample["temporal_accepted_pixels"] is None and \
+                   sample["temporal_rejected_pixels"] is None, sample
             if temporal_mode != "off":
                 assert sample["temporal_internal_width"] > 0, sample
                 assert sample["temporal_internal_height"] > 0, sample
