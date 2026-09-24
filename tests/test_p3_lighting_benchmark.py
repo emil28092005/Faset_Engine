@@ -96,8 +96,49 @@ with path.open("w", newline="", encoding="utf-8") as stream:
                              shadow_atlas_full_drops=max(0, 6 * a.lights - 12) if a.shadows == "on" else 0))
 '''
 
+FAKE_EXPLICIT_BENCHMARK = (FAKE_BENCHMARK
+    .replace('p.add_argument("--driver")',
+             'p.add_argument("--driver")\np.add_argument("--lighting", required=True)')
+    .replace('path = Path(a.csv)',
+             'tile_ms = .1 if a.lighting == "tiled" and a.lights else 0\npath = Path(a.csv)')
+    .replace('fieldnames = ["light_count"',
+             'fieldnames = ["requested_lighting", "gpu_light_tiles_ms", '
+             '"gpu_build_plus_raster_ms", "light_tile_count", "light_tile_counts_valid", '
+             '"light_tile_candidate_count", "light_tile_overflow_count", "light_count"')
+    .replace('lighting_path="forward",',
+             'lighting_path="tiled" if tile_ms else "forward", '
+             'requested_lighting=a.lighting, gpu_light_tiles_ms=tile_ms, '
+             'gpu_build_plus_raster_ms=.4 + .02 * a.lights + tile_ms, '
+             'light_tile_count=8160 if tile_ms else 0, light_tile_counts_valid=0, '
+             'light_tile_candidate_count=0, light_tile_overflow_count=0,'))
+
 
 class LightingBenchmarkTests(unittest.TestCase):
+    def test_explicit_sweep_preserves_zero_light_fallback_and_full_matrix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fake = root / "explicit.py"
+            fake.write_text(FAKE_EXPLICIT_BENCHMARK, encoding="utf-8")
+            source, revision = source_repository(root)
+            output = root / "tiled-output"
+            process = subprocess.run(
+                [sys.executable, SCRIPT, "--sweep", "--executable", fake,
+                 "--output", output, "--shadows", "off", "--commit", revision,
+                 "--source-root", source, "--driver", "Fake Driver",
+                 "--lighting", "tiled"], capture_output=True, text=True)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            report = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual((report["version"], report["requested_lighting"],
+                              report["lighting_path"]), (2, "tiled", "mixed"))
+            self.assertEqual((report["runs_completed"], report["rows"]), (54, 1620))
+            self.assertIsNone(report["forward_plus_gate"])
+            zero = next(row for row in report["configurations"]
+                        if row["visibility"] == "direct" and row["light_count"] == 0)
+            high = next(row for row in report["configurations"]
+                        if row["visibility"] == "direct" and row["light_count"] == 32)
+            self.assertAlmostEqual(zero["median_ms"]["gpu_light_tiles_ms"], 0)
+            self.assertAlmostEqual(high["median_ms"]["gpu_light_tiles_ms"], .1)
+
     def test_explicit_tiled_sweep_accepts_zero_light_fallback_and_accounts_for_build(self):
         from benchmark_p3_lighting import _read_run_csv, summarize_rows
 
