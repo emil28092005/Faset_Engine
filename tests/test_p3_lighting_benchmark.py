@@ -98,6 +98,93 @@ with path.open("w", newline="", encoding="utf-8") as stream:
 
 
 class LightingBenchmarkTests(unittest.TestCase):
+    def test_explicit_tiled_sweep_accepts_zero_light_fallback_and_accounts_for_build(self):
+        from benchmark_p3_lighting import _read_run_csv, summarize_rows
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "tiled.csv"
+            rows = [sample("off", "direct", 0, .4, 1.2, frame=frame)
+                    for frame in range(30)]
+            for row in rows:
+                row.update(requested_lighting="tiled", gpu_light_tiles_ms="0",
+                           gpu_build_plus_raster_ms=".4", light_tile_count="0",
+                           light_tile_counts_valid="0", light_tile_candidate_count="0",
+                           light_tile_overflow_count="0")
+            with path.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            run = {"shadows": "off", "visibility": "direct", "light_count": 0,
+                   "repeat": 1}
+            _, accepted = _read_run_csv(path, run, "abc123", "Fake Driver", "off", "tiled")
+            self.assertEqual(len(accepted), 30)
+            for row in rows:
+                row.update(light_count="32", lighting_path="tiled",
+                           submitted_local_lights="32", gpu_light_tiles_ms=".2",
+                           gpu_build_plus_raster_ms=".7", gpu_main_raster_ms=".5",
+                           light_tile_count="8160")
+            with path.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            run["light_count"] = 32
+            _, accepted = _read_run_csv(path, run, "abc123", "Fake Driver", "off", "tiled")
+            summary = summarize_rows(accepted, evaluate_forward_plus_gate=False)
+            self.assertIsNone(summary["forward_plus_gate"])
+            self.assertAlmostEqual(summary["configurations"][0]["median_ms"]
+                                   ["gpu_build_plus_raster_ms"], .7)
+
+    def test_explicit_tiled_sweep_rejects_fallback_and_wrong_build_time(self):
+        from benchmark_p3_lighting import _read_run_csv
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "invalid.csv"
+            row = sample("off", "direct", 32, .5, 1.2)
+            row.update(requested_lighting="tiled", gpu_light_tiles_ms=".2",
+                       gpu_build_plus_raster_ms=".7", light_tile_count="8160",
+                       light_tile_counts_valid="0", light_tile_candidate_count="0",
+                       light_tile_overflow_count="0")
+            def check(error):
+                with path.open("w", newline="", encoding="utf-8") as stream:
+                    writer = csv.DictWriter(stream, fieldnames=list(row))
+                    writer.writeheader()
+                    writer.writerows([{**row, "frame": str(frame)} for frame in range(30)])
+                run = {"shadows": "off", "visibility": "direct", "light_count": 32,
+                       "repeat": 1}
+                with self.assertRaisesRegex(ValueError, error):
+                    _read_run_csv(path, run, "abc123", "Fake Driver", "off", "tiled")
+            check("lighting_path")
+            row["lighting_path"] = "tiled"
+            row["gpu_build_plus_raster_ms"] = ".5"
+            check("gpu_build_plus_raster_ms")
+
+    def test_compare_requires_identical_release_binary_and_uses_build_plus_raster(self):
+        from benchmark_p3_lighting import compare_sweeps
+
+        identity = dict(source_revision="abc123", benchmark_sha256="same-binary",
+                        shader_bundle={"fragmentMain.spv": "same-shader"},
+                        device="Fake GPU", driver="Fake Driver", validation="off",
+                        width=1920, height=1080, warmup_frames_per_run=10,
+                        measured_frames_per_run=30, build_configuration="Release",
+                        runs_completed=1, rows=30)
+        def entry(build_times):
+            return dict(shadows="off", visibility="direct", light_count=32,
+                        runs=[dict(run_index=repeat, frames=30,
+                                   median_ms={"gpu_build_plus_raster_ms": value})
+                              for repeat, value in enumerate(build_times, 1)],
+                        median_ms={"gpu_build_plus_raster_ms": sorted(build_times)[1]})
+        forward = dict(identity, requested_lighting="forward", lighting_path="forward",
+                       configurations=[entry([1.0, 1.2, 1.1])])
+        tiled = dict(identity, requested_lighting="tiled", lighting_path="mixed",
+                     configurations=[entry([.8, .9, .7])])
+        result = compare_sweeps(forward, tiled)
+        self.assertAlmostEqual(result["comparisons"][0]["delta_tiled_minus_forward_ms"], -.3)
+        self.assertAlmostEqual(result["comparisons"][0]["median_forward_ms"], 1.1)
+        self.assertAlmostEqual(result["comparisons"][0]["median_tiled_ms"], .8)
+        modified = dict(tiled, shader_bundle={"fragmentMain.spv": "different"})
+        with self.assertRaisesRegex(ValueError, "shader_bundle"):
+            compare_sweeps(forward, modified)
+
     def test_native_shader_bundle_manifest_tracks_loaded_spirv_and_reflection(self):
         from benchmark_p3_lighting import _shader_bundle_manifest
 

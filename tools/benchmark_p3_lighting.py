@@ -39,7 +39,10 @@ REQUIRED_COLUMNS = (
 )
 TIMING_COLUMNS = ("gpu_main_raster_ms", "gpu_post_raster_ms", "gpu_ms",
                   "gpu_shadow_ms", "cpu_ms", "readback_cpu_ms")
-SUMMARY_TIMINGS = (*TIMING_COLUMNS, "forward_raster_ms")
+TILED_TIMING_COLUMNS = ("gpu_light_tiles_ms", "gpu_build_plus_raster_ms")
+TILED_COLUMNS = ("requested_lighting", *TILED_TIMING_COLUMNS, "light_tile_count",
+                 "light_tile_counts_valid", "light_tile_candidate_count",
+                 "light_tile_overflow_count")
 SHADOW_COLUMNS = ("requested_local_shadow_faces", "rendered_local_shadow_faces",
                   "shadow_tiles", "dropped_shadow_faces", "shadow_atlas_full_drops")
 
@@ -95,8 +98,15 @@ def _count(row: dict, name: str) -> int:
     return value
 
 
-def summarize_rows(rows: list[dict]) -> dict:
+def summarize_rows(rows: list[dict], evaluate_forward_plus_gate: bool = True) -> dict:
     """Use the median of each independent run's median, then compare like baselines."""
+    if not rows:
+        raise ValueError("Cannot summarize empty measurements")
+    tiled_metrics = all(all(name in row for name in TILED_TIMING_COLUMNS) for row in rows)
+    if any(any(name in row for name in TILED_TIMING_COLUMNS) for row in rows) and not tiled_metrics:
+        raise ValueError("Tiled timing columns are incomplete across benchmark rows")
+    timing_columns = (*TIMING_COLUMNS, *(TILED_TIMING_COLUMNS if tiled_metrics else ()))
+    summary_timings = (*timing_columns, "forward_raster_ms")
     grouped: dict[tuple[str, str, int], dict[int, list[dict]]] = {}
     for row in rows:
         try:
@@ -106,7 +116,7 @@ def summarize_rows(rows: list[dict]) -> dict:
             raise ValueError("Benchmark row lacks shadow/mode/light/repeat identity") from error
         if key[0] not in ("off", "on") or key[1] not in VISIBILITY_MODES or repeat < 1:
             raise ValueError(f"Invalid benchmark configuration: {key}, repeat {repeat}")
-        for name in TIMING_COLUMNS:
+        for name in timing_columns:
             _measurement(row, name)
         for name in SHADOW_COLUMNS:
             _count(row, name)
@@ -120,7 +130,7 @@ def summarize_rows(rows: list[dict]) -> dict:
             run_summaries.append({
                 "run_index": repeat, "frames": len(samples),
                 "median_ms": {name: median([_timing(row, name) for row in samples])
-                              for name in SUMMARY_TIMINGS},
+                              for name in summary_timings},
             })
         shadow_counts = {name: {_count(row, name) for samples in repeats.values()
                                 for row in samples} for name in SHADOW_COLUMNS}
@@ -131,12 +141,15 @@ def summarize_rows(rows: list[dict]) -> dict:
             "runs": run_summaries,
             "shadow_counts": {name: next(iter(values)) for name, values in shadow_counts.items()},
             "median_ms": {name: median([run["median_ms"][name] for run in run_summaries])
-                          for name in SUMMARY_TIMINGS},
+                          for name in summary_timings},
             "p95_ms": {name: p95([_timing(row, name) for samples in repeats.values()
-                                   for row in samples]) for name in SUMMARY_TIMINGS},
+                                   for row in samples]) for name in summary_timings},
         }
         configurations.append(entry)
         lookup[(shadows, visibility, lights)] = entry
+
+    if not evaluate_forward_plus_gate:
+        return {"configurations": configurations, "forward_plus_gate": None}
 
     candidates = []
     evaluated = []
@@ -174,11 +187,13 @@ def summarize_rows(rows: list[dict]) -> dict:
 
 
 def _read_run_csv(path: Path, run: dict, commit: str, driver: str,
-                  validation: str) -> tuple[list[str], list[dict]]:
+                  validation: str, lighting: str | None = None) -> tuple[list[str], list[dict]]:
     with path.open(newline="", encoding="utf-8") as stream:
         reader = csv.DictReader(stream)
         columns = reader.fieldnames or []
         missing = sorted(set(REQUIRED_COLUMNS) - set(columns))
+        if lighting is not None:
+            missing += sorted(set(TILED_COLUMNS) - set(columns))
         if missing:
             raise ValueError(f"{path}: missing CSV column(s): {', '.join(missing)}")
         rows = list(reader)
@@ -202,6 +217,32 @@ def _read_run_csv(path: Path, run: dict, commit: str, driver: str,
             raise ValueError(f"{path}: effective_visibility fell back from {run['visibility']}")
         if row["submitted_local_lights"] != str(run["light_count"]) or row["omitted_local_lights"] != "0":
             raise ValueError(f"{path}: submitted_local_lights or omitted_local_lights disagrees with the workload")
+        if lighting is not None:
+            if row["requested_lighting"] != lighting:
+                raise ValueError(f"{path}: requested_lighting disagrees with --lighting {lighting}")
+            expected_path = "forward" if lighting == "forward" or run["light_count"] == 0 else "tiled"
+            if lighting != "auto" and row["lighting_path"] != expected_path:
+                raise ValueError(f"{path}: lighting_path fell back from {lighting}")
+            if row["lighting_path"] not in ("forward", "tiled"):
+                raise ValueError(f"{path}: unknown lighting_path")
+            tile_time = _measurement(row, "gpu_light_tiles_ms")
+            build_plus_raster = _measurement(row, "gpu_build_plus_raster_ms")
+            raster = (_measurement(row, "gpu_main_raster_ms") +
+                      _measurement(row, "gpu_post_raster_ms"))
+            if abs(build_plus_raster - (raster + tile_time)) > 0.000005:
+                raise ValueError(f"{path}: gpu_build_plus_raster_ms disagrees with pass timings")
+            tile_count = _count(row, "light_tile_count")
+            counts_valid = _count(row, "light_tile_counts_valid")
+            candidates = _count(row, "light_tile_candidate_count")
+            overflows = _count(row, "light_tile_overflow_count")
+            if counts_valid not in (0, 1) or overflows > tile_count:
+                raise ValueError(f"{path}: invalid light tile counters")
+            if row["lighting_path"] == "tiled" and (tile_count == 0 or tile_time == 0):
+                raise ValueError(f"{path}: tiled path lacks tiles or GPU build timing")
+            if row["lighting_path"] == "forward" and (tile_count or tile_time or candidates or overflows):
+                raise ValueError(f"{path}: forward path unexpectedly built light tiles")
+            if not counts_valid and (candidates or overflows):
+                raise ValueError(f"{path}: light tile counts reported without diagnostic readback")
         try:
             frame = int(row["frame"])
             errors = int(row["validation_errors"])
@@ -268,11 +309,13 @@ def _clean_source_revision(root: Path, expected: str) -> str:
 
 def sweep(executable: Path, output: Path, shadows: str, commit: str,
           validation: str = "off", driver: str | None = None,
-          source_root: Path | None = None) -> dict:
+          source_root: Path | None = None, lighting: str | None = None) -> dict:
     if not executable.is_file():
         raise ValueError(f"Benchmark executable does not exist: {executable}")
     if driver is None or not driver.strip() or driver.strip().lower() == "unknown":
         raise ValueError("A measured sweep requires an explicit --driver identity")
+    if lighting not in (None, "auto", "forward", "tiled"):
+        raise ValueError(f"Unknown lighting mode: {lighting}")
     source = (source_root or Path(__file__).resolve().parents[1]).resolve()
     revision = _clean_source_revision(source, commit)
     binary_sha256 = _binary_sha256(executable)
@@ -284,6 +327,7 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
     all_rows = []
     columns = None
     identity = None
+    lighting_paths: set[str] = set()
     runs = build_runs(shadows)
     command_prefix = [sys.executable, str(executable)] if executable.suffix.lower() == ".py" else [str(executable)]
     run_order = []
@@ -300,25 +344,31 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
         ]
         if driver is not None:
             command += ["--driver", driver]
+        if lighting is not None:
+            command += ["--lighting", lighting]
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
                                 errors="replace", timeout=180)
         if result.returncode != 0:
             raise RuntimeError(f"Benchmark failed for {filename}: {result.stderr[-2000:]}")
-        run_columns, samples = _read_run_csv(target, run, commit, driver, validation)
+        run_columns, samples = _read_run_csv(target, run, commit, driver, validation,
+                                            lighting)
         if columns is None:
             columns = run_columns
         elif columns != run_columns:
             raise ValueError(f"{target}: CSV schema differs from other runs")
         for row in samples:
-            actual = (row["device"], row["driver"], row["lighting_path"],
+            actual = (row["device"], row["driver"],
                       row["validation_enabled"], row["build_configuration"])
             if identity is None:
                 identity = actual
             elif identity != actual:
                 changed = next(name for name, before, after in zip(
-                    ("device", "driver", "lighting_path", "validation_enabled",
+                    ("device", "driver", "validation_enabled",
                      "build_configuration"), identity, actual) if before != after)
                 raise ValueError(f"{target}: {changed} changed during the sweep")
+            lighting_paths.add(row["lighting_path"])
+            if lighting is None and len(lighting_paths) > 1:
+                raise ValueError(f"{target}: lighting_path changed during the sweep")
             all_rows.append({**row, "source_csv": filename,
                              "acquisition_index": acquisition_index})
         run_order.append(filename)
@@ -333,21 +383,87 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
             _shader_bundle_manifest(executable) != shader_manifest or
             _clean_source_revision(source, commit) != revision):
         raise ValueError("Benchmark binary, shader bundle or source changed during the sweep")
-    summary = {"format": "faset.p3-lighting-benchmark", "version": 1,
+    summary = {"format": "faset.p3-lighting-benchmark", "version": 2 if lighting else 1,
                "commit": commit, "warmup_frames_per_run": WARMUP_FRAMES,
                "measured_frames_per_run": MEASURED_FRAMES, "width": WIDTH, "height": HEIGHT,
                "validation": validation, "driver": driver,
                "source_revision": revision, "source_root": str(source), "source_dirty": False,
                "benchmark_sha256": binary_sha256,
                "shader_bundle": shader_manifest,
-               "device": identity[0], "lighting_path": identity[2],
-               "validation_enabled": identity[3] == "1", "build_configuration": identity[4],
+               "device": identity[0],
+               "lighting_path": next(iter(lighting_paths)) if len(lighting_paths) == 1 else "mixed",
+               "requested_lighting": lighting,
+               "validation_enabled": identity[2] == "1", "build_configuration": identity[3],
                "run_order": run_order,
                "runs_completed": len(runs), "rows": len(all_rows),
-               **summarize_rows(all_rows)}
+               **summarize_rows(all_rows, evaluate_forward_plus_gate=lighting != "tiled")}
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n",
                                           encoding="utf-8")
     return summary
+
+
+def compare_sweeps(forward: dict, tiled: dict) -> dict:
+    """Compare matched Release configurations from one binary and shader bundle."""
+    if forward.get("requested_lighting") != "forward" or tiled.get("requested_lighting") != "tiled":
+        raise ValueError("Comparison requires explicit forward and tiled sweeps")
+    identity_fields = ("source_revision", "benchmark_sha256", "shader_bundle",
+                       "device", "driver", "validation", "width", "height",
+                       "warmup_frames_per_run", "measured_frames_per_run",
+                       "build_configuration", "runs_completed", "rows")
+    for name in identity_fields:
+        if name not in forward or name not in tiled or forward[name] != tiled[name]:
+            raise ValueError(f"Forward/tiled comparison has different {name}")
+    if forward["build_configuration"] != "Release":
+        raise ValueError("Forward/tiled comparison requires Release")
+
+    def keyed(summary: dict) -> dict[tuple[str, str, int], dict]:
+        configurations = summary.get("configurations")
+        if not isinstance(configurations, list) or not configurations:
+            raise ValueError("Comparison has no measured configurations")
+        result = {}
+        for entry in configurations:
+            key = (entry["shadows"], entry["visibility"], int(entry["light_count"]))
+            if key in result:
+                raise ValueError(f"Comparison has duplicate configuration {key}")
+            result[key] = entry
+        return result
+
+    forward_configs, tiled_configs = keyed(forward), keyed(tiled)
+    if forward_configs.keys() != tiled_configs.keys():
+        raise ValueError("Forward/tiled comparison has unmatched configurations")
+    comparisons = []
+    for key in sorted(forward_configs):
+        f, t = forward_configs[key], tiled_configs[key]
+        f_runs = {int(run["run_index"]): run for run in f["runs"]}
+        t_runs = {int(run["run_index"]): run for run in t["runs"]}
+        if not f_runs or f_runs.keys() != t_runs.keys():
+            raise ValueError(f"Comparison has unmatched repeats for {key}")
+        differences = []
+        for repeat in sorted(f_runs):
+            f_run, t_run = f_runs[repeat], t_runs[repeat]
+            if f_run["frames"] != t_run["frames"] or f_run["frames"] != forward["measured_frames_per_run"]:
+                raise ValueError(f"Comparison has unmatched frame counts for {key}")
+            f_time = _measurement(f_run["median_ms"], "gpu_build_plus_raster_ms")
+            t_time = _measurement(t_run["median_ms"], "gpu_build_plus_raster_ms")
+            if f_time <= 0 or t_time <= 0:
+                raise ValueError(f"Comparison needs positive GPU timing for {key}")
+            differences.append(t_time - f_time)
+        f_median = median([_measurement(run["median_ms"], "gpu_build_plus_raster_ms")
+                           for run in f_runs.values()])
+        t_median = median([_measurement(run["median_ms"], "gpu_build_plus_raster_ms")
+                           for run in t_runs.values()])
+        delta = median(differences)
+        comparisons.append({"shadows": key[0], "visibility": key[1], "light_count": key[2],
+                            "median_forward_ms": f_median, "median_tiled_ms": t_median,
+                            "delta_tiled_minus_forward_ms": delta,
+                            "relative_change_percent": 100 * delta / f_median,
+                            "repeat_deltas_ms": differences})
+    return {"format": "faset.p3-lighting-comparison", "version": 1,
+            "source_revision": forward["source_revision"],
+            "benchmark_sha256": forward["benchmark_sha256"],
+            "shader_bundle": forward["shader_bundle"],
+            "device": forward["device"], "driver": forward["driver"],
+            "configurations": len(comparisons), "comparisons": comparisons}
 
 
 def main() -> int:
@@ -355,6 +471,7 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--list-runs", action="store_true", help="Print the deterministic sweep matrix as JSON")
     mode.add_argument("--sweep", action="store_true", help="Run every configuration and retain raw CSV")
+    mode.add_argument("--compare", action="store_true", help="Compare two measured sweep summaries")
     parser.add_argument("--shadows", choices=("off", "on", "both"), default="both")
     parser.add_argument("--executable", type=Path, help="Built C++ benchmark executable")
     parser.add_argument("--output", type=Path, help="New or empty evidence directory")
@@ -363,23 +480,44 @@ def main() -> int:
                         help="Clean source checkout used to build the benchmark; defaults to this repo")
     parser.add_argument("--driver", help="Required driver identity for a measured sweep")
     parser.add_argument("--validation", choices=("on", "off"), default="off")
+    parser.add_argument("--lighting", choices=("auto", "forward", "tiled"),
+                        help="Explicit rendering path for a post-Forward+ sweep")
+    parser.add_argument("--forward-summary", type=Path)
+    parser.add_argument("--tiled-summary", type=Path)
+    parser.add_argument("--comparison-output", type=Path)
     args = parser.parse_args()
     if args.list_runs:
         print(json.dumps({"format": "faset.p3-lighting-run-matrix", "version": 1,
                           "runs": build_runs(args.shadows)}, indent=2))
+        return 0
+    if args.compare:
+        if args.forward_summary is None or args.tiled_summary is None:
+            parser.error("--compare requires --forward-summary and --tiled-summary")
+        try:
+            forward = json.loads(args.forward_summary.read_text(encoding="utf-8"))
+            tiled = json.loads(args.tiled_summary.read_text(encoding="utf-8"))
+            result = compare_sweeps(forward, tiled)
+            rendered = json.dumps(result, indent=2) + "\n"
+            if args.comparison_output is not None:
+                args.comparison_output.write_text(rendered, encoding="utf-8")
+            else:
+                print(rendered, end="")
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f"P3 lighting comparison failed: {error}", file=sys.stderr)
+            return 1
         return 0
     if args.executable is None or args.output is None:
         parser.error("--sweep requires --executable and --output")
     try:
         summary = sweep(args.executable.resolve(), args.output.resolve(), args.shadows,
                         args.commit or _git_revision(), args.validation, args.driver,
-                        args.source_root)
+                        args.source_root, args.lighting)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"P3 lighting benchmark failed: {error}", file=sys.stderr)
         return 1
     print(json.dumps({"summary": str(args.output.resolve() / "summary.json"),
                       "runs_completed": summary["runs_completed"],
-                      "forward_plus_threshold_reached": summary["forward_plus_gate"]["triggered"]}))
+                      "forward_plus_threshold_reached": (summary["forward_plus_gate"] or {}).get("triggered")}))
     return 0
 
 
