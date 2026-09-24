@@ -28,7 +28,7 @@ Player is observed by the Editor, which keeps its logs and authoring state.
 An unchanged second build still asks CMake/Ninja to verify their dependency graph.
 When the native outputs, gameplay sources, toolchain, shaders and runtime inputs
 match the validated package, **Jobs** reports `schema_cache_hit` and
-`generation_reused` as true and returns the same immutable generation without a
+`generation_reused` as true and returns the same verified generation without a
 second SchemaExporter run or package copy. A changed `.cpp`, header, Lua declaration,
 build recipe or relevant tool invalidates that reuse. A damaged cached package is
 not treated as a hit. The job also exposes elapsed phases and a build fingerprint;
@@ -64,9 +64,10 @@ Development builds use **Debug**. Exports default to **Release** and use a separ
 CMake cache. The BuildService API also accepts `RelWithDebInfo` for exports. Exporting
 does not change the configuration of your development Player.
 
-Each successful export creates an immutable directory under
+Each successful export creates a versioned directory under
 `Exports/MyGame/generations/<generation>`. `current.json` points to the active
-generation. Distribute the **whole generation directory**, not just the executable.
+generation. The Editor leaves published generations untouched. Distribute the
+**whole generation directory**, not just the executable.
 If building, cooking or verification fails, the previous pointer and package remain
 available. Cancelling a job does not delete earlier exports.
 

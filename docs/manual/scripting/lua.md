@@ -36,7 +36,7 @@ Add explicit entry scripts to `project.faset.json`:
 
 This is a manifest fragment, not a complete project file. Each entry must return one
 `faset.behavior` table with a unique custom TypeId. All sources live beneath `Scripts`
-and are captured as an immutable build/export snapshot. Paths must be project-relative;
+and are copied into a content-verified build/export snapshot. Paths must be project-relative;
 symlinks and paths outside `Scripts` are rejected. Auxiliary modules do not need to
 appear in the entry list.
 

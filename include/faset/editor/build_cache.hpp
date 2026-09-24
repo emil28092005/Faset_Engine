@@ -23,8 +23,8 @@ BuildInputs capture_build_inputs(const BuildConfig& config, const scripting::Lua
 std::optional<std::string> configured_cmake_value(const BuildConfig& config,
                                                    std::string_view key);
 
-// Copy a content-addressed, immutable Scripts tree for the native compiler.
-// Returning the same path for equal source bytes preserves Ninja incrementality.
+// Copy a content-addressed Scripts tree for the native compiler. BuildService
+// rehashes it at phase boundaries; returning the same path preserves Ninja incrementality.
 std::filesystem::path stage_gameplay_sources(const BuildConfig& config,
                                               const BuildInputs& inputs,
                                               const scripting::LuaProject& lua,

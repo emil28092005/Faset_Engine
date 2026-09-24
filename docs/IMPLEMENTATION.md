@@ -469,18 +469,20 @@ GPU coverage remain untested.
 
 ## Post-MVP checkpoint — P1 gameplay iteration
 
-P1 adds a complete-input native build stamp and an immutable `Scripts` snapshot.
+P1 adds a complete-input native build stamp and a content-addressed `Scripts` copy.
 The package key binds configuration, recipe, source, Lua declaration, toolchain,
 shader and runtime artifacts. A second unchanged build reuses a verified schema
 and package generation without invoking SchemaExporter; CMake/Ninja still verify
 the native graph. Malformed/corrupt generations, modified headers/tools and
-source races cannot publish a false hit. Failed jobs preserve the previous
-successful pointer, while Inspector metadata becomes stale.
+detected source mismatches cannot publish a false hit. The live tree and staged
+copy are rehashed after native build and before reuse/publication; a same-user
+write-and-restore during compiler reads remains outside this check. Failed jobs
+preserve the previous successful pointer, while Inspector metadata becomes stale.
 
 Compiler and Lua output now produce bounded structured Console diagnostics with
 raw logs retained. Source opening accepts only project `Scripts` files and passes
 literal file/line/column arguments to the configured external editor. A real
-compile failure revealed that compiler paths pointed to the immutable snapshot;
+compile failure revealed that compiler paths pointed to the staged copy;
 `d7a7a7c` maps only the verified snapshot subtree back to project-relative
 source. The same correction retains a later actionable error after 250 unrelated
 warnings. Four runnable C++/Lua × 2D/3D starters are available in launcher and
