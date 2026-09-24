@@ -24,10 +24,12 @@ if(BUILD_TESTING)
   add_dependencies(faset_build_schema_tests faset_build_schema_tool)
   add_test(NAME build_schema_publication COMMAND faset_build_schema_tests $<TARGET_FILE:faset_build_schema_tool> ${PROJECT_SOURCE_DIR})
   # This fixture performs many full cache invalidations and process launches.
-  # Windows runner startup and antivirus overhead exceed 60 seconds even when
-  # individual native fixture commands finish normally.
+  # Windows runner startup and antivirus overhead vary across otherwise
+  # identical native jobs. The combined P1/P3 fixture completed in 218 s on
+  # one runner and hit the former 240 s limit on another; retain a bounded
+  # timeout with enough headroom for this integration-heavy check.
   if(WIN32)
-    set_tests_properties(build_schema_publication PROPERTIES TIMEOUT 240)
+    set_tests_properties(build_schema_publication PROPERTIES TIMEOUT 360)
   else()
     set_tests_properties(build_schema_publication PROPERTIES TIMEOUT 60)
   endif()
