@@ -4168,11 +4168,37 @@ void Renderer::set_visibility_mode(VisibilityMode mode) {
         return;
     if (mode != VisibilityMode::Direct && impl_->scene.available &&
         !impl_->scene.graphics_layout) {
+        check(vkDeviceWaitIdle(impl_->device), "Wait visibility switch");
         try {
             impl_->make_scene_descriptors_and_pipelines();
             if (impl_->temporal.resolve_layout) {
-                impl_->destroy_temporal_interfaces();
-                impl_->make_temporal_interfaces_and_pipelines();
+                auto& temporal = impl_->temporal;
+                // Retain the active pipelines and descriptor interfaces until the
+                // GPU variant is complete; a bad shader package must leave TAA usable.
+                const std::array<VkPipeline*, 5> pipelines{
+                    &temporal.resolve_pipeline, &temporal.composite_pipeline,
+                    &temporal.direct_pipeline, &temporal.transparent_pipeline,
+                    &temporal.gpu_pipeline};
+                std::array<VkPipeline, 5> previous{};
+                const auto previous_layouts = temporal.shader_layouts;
+                const auto previous_scene_layouts = temporal.scene_shader_layouts;
+                for (std::size_t i = 0; i < pipelines.size(); ++i)
+                    previous[i] = std::exchange(*pipelines[i], VkPipeline{});
+                try {
+                    impl_->make_temporal_interfaces_and_pipelines();
+                } catch (...) {
+                    for (std::size_t i = 0; i < pipelines.size(); ++i) {
+                        if (*pipelines[i])
+                            vkDestroyPipeline(impl_->device, *pipelines[i], nullptr);
+                        *pipelines[i] = previous[i];
+                    }
+                    temporal.shader_layouts = previous_layouts;
+                    temporal.scene_shader_layouts = previous_scene_layouts;
+                    throw;
+                }
+                for (auto pipeline : previous)
+                    if (pipeline)
+                        vkDestroyPipeline(impl_->device, pipeline, nullptr);
             }
         } catch (...) {
             impl_->destroy_scene_interfaces();

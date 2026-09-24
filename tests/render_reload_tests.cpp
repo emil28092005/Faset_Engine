@@ -130,6 +130,46 @@ int main() {
         opaque_cube.instance_key = "shader-reload-cube";
         opaque_cube.cast_shadow = false;
         opaque_scene.draws.push_back(opaque_cube);
+        {
+            // Starting in Direct+Off defers GPU scene pipelines. Enabling TAA later
+            // leaves an active temporal direct pipeline during the GPU-mode switch.
+            render::Renderer switching(configuration);
+            render::Renderer reference(configuration);
+            switching.set_temporal_mode(render::TemporalMode::TAA);
+            reference.set_temporal_mode(render::TemporalMode::TAA);
+            for (int frame = 0; frame < 2; ++frame) {
+                switching.render(opaque_scene);
+                reference.render(opaque_scene);
+            }
+            require(switching.stats().effective_temporal_mode == render::TemporalMode::TAA &&
+                        switching.stats().temporal_history_valid,
+                    "Visibility rollback fixture must have live TAA history");
+            const auto temporal_spirv = read_text(bundle / "temporalResolveMain.spv");
+            fs::remove(native_io_path(bundle / "temporalResolveMain.spv"));
+            bool rejected_temporal_switch = false;
+            try {
+                switching.set_visibility_mode(render::VisibilityMode::GpuFrustum);
+            } catch (const std::exception&) {
+                rejected_temporal_switch = true;
+            }
+            atomic_write(bundle / "temporalResolveMain.spv", temporal_spirv);
+            require(rejected_temporal_switch,
+                    "Incomplete temporal package must reject a GPU visibility switch");
+            switching.render(opaque_scene);
+            reference.render(opaque_scene);
+            require(switching.visibility_mode() == render::VisibilityMode::Direct &&
+                        switching.stats().effective_temporal_mode == render::TemporalMode::TAA &&
+                        switching.stats().validation_errors == 0 &&
+                        switching.pixels() == reference.pixels(),
+                    "Rejected GPU visibility switch must preserve active TAA rendering");
+            switching.set_visibility_mode(render::VisibilityMode::GpuFrustum);
+            switching.render(opaque_scene);
+            require(switching.stats().effective_visibility_mode ==
+                            render::VisibilityMode::GpuFrustum &&
+                        switching.stats().effective_temporal_mode == render::TemporalMode::TAA &&
+                        switching.stats().validation_errors == 0,
+                    "Restored temporal package must allow retrying GPU visibility with TAA");
+        }
         auto temporal_configuration = configuration;
         temporal_configuration.temporal_mode = render::TemporalMode::TAA;
         render::Renderer temporal_renderer(temporal_configuration);
