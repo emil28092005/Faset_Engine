@@ -52,3 +52,14 @@ World transparency and sprites use the scene depth/order and reject stale color 
 their reactive pixels. TAA and Upscale are optional image-quality paths; compare
 them against Off on the actual game scene, especially thin geometry, slow pans,
 newly revealed surfaces and moving transparent content.
+
+These are first-generation, opt-in reconstruction modes. They can reduce shimmer
+on a stationary edge while lowering the peak brightness of a subpixel line, and
+a newly revealed edge can differ by one pixel from its settled appearance. The
+amount depends on scene content, resolution and motion. Upscale also trades
+internal render resolution for resolve cost and extra images; it is not always
+faster. Compare Off, TAA and Upscale at the target output resolution with both
+still and moving cameras, and inspect thin objects and opening doors before
+choosing a mode for a game. The [P3 temporal validation record](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/p3-temporal-2026-09-24/README.md)
+contains source captures, paired image measurements and a bounded 720p cost
+profile.
