@@ -12,6 +12,7 @@
 #include <faset/render/render_graph.hpp>
 #include <faset/render/lighting.hpp>
 #include <faset/render/renderer.hpp>
+#include <faset/render/temporal.hpp>
 #include <faset/render/visibility.hpp>
 #include <fstream>
 #include <iostream>
@@ -32,6 +33,7 @@ void check(VkResult result, const char* action) {
 }
 struct GpuVertex {
     float clip[4], world[3], normal[3], color[4], material[2], uv[2];
+    float previous_clip[4], motion_valid{};
 };
 // The GPU path keeps local geometry separate from the instance table. All layouts
 // below are mirrored by gpu_scene.slang and checked by shader reflection tests.
@@ -46,8 +48,9 @@ struct SceneInstance {
     std::array<float, 4> center_extent, half_extent;
     std::array<float, 4> previous_center_extent, previous_half_extent;
     std::array<std::uint32_t, 4> metadata;
+    Mat4 previous_model;
 };
-static_assert(sizeof(SceneInstance) == 224);
+static_assert(sizeof(SceneInstance) == 288 && offsetof(SceneInstance, previous_model) == 224);
 struct SceneView {
     Mat4 current_vp, previous_vp;
     std::array<float, 4> viewport, previous_viewport;
@@ -201,7 +204,24 @@ struct SceneResources {
     std::array<float, 4> previous_viewport{};
     std::string previous_view_id;
 };
-constexpr std::uint32_t timestamp_capacity = 24;
+struct TemporalResources {
+    Image scene_color, velocity, history_color[2], history_depth[2];
+    VkDescriptorSetLayout resolve_layout{}, composite_layout{};
+    VkDescriptorPool descriptor_pool{};
+    VkDescriptorSet resolve_sets[2]{}, composite_sets[2]{};
+    VkPipelineLayout resolve_pipeline_layout{}, composite_pipeline_layout{};
+    VkPipeline resolve_pipeline{}, composite_pipeline{};
+    VkPipeline direct_pipeline{}, transparent_pipeline{}, sprite_pipeline{}, gpu_pipeline{};
+    std::array<std::string, 3> shader_layouts{};
+    std::array<std::string, 3> scene_shader_layouts{};
+    TemporalCapabilities capabilities{};
+    TemporalHistoryState history;
+    Mat4 previous_jittered_vp{identity};
+    std::uint64_t shader_generation{1};
+    std::uint32_t internal_width{}, internal_height{}, completed_index{};
+    bool has_completed_image{};
+};
+constexpr std::uint32_t timestamp_capacity = 40;
 } // namespace
 struct Renderer::Impl {
     RendererConfig config;
@@ -218,6 +238,7 @@ struct Renderer::Impl {
     std::uint32_t queue_family{};
     std::uint32_t max_compute_groups_x{}, max_storage_buffer_range{},
                   max_image_dimension{};
+    bool independent_blend_supported{};
     VkCommandPool pool{};
     VkCommandBuffer command{};
     VkFence fence{};
@@ -236,6 +257,7 @@ struct Renderer::Impl {
     Buffer vertices, readback;
     Buffer lighting_header, lighting_locals, lighting_views;
     SceneResources scene;
+    TemporalResources temporal;
     InstanceTracker instance_tracker;
     std::unordered_map<std::string, std::size_t> previous_lods;
     struct CachedBounds {
@@ -256,7 +278,8 @@ struct Renderer::Impl {
     VkDescriptorSet lighting_set{};
     VkSampler shadow_sampler{}, color_sampler{};
     VkPipelineLayout pipeline_layout{};
-    VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{}, sprite_pipeline{};
+    VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{}, sprite_pipeline{},
+               temporal_ui_pipeline{};
     PFN_vkCmdBeginDebugUtilsLabelEXT begin_gpu_label{};
     PFN_vkCmdEndDebugUtilsLabelEXT end_gpu_label{};
     struct GpuTexture {
@@ -335,6 +358,33 @@ struct Renderer::Impl {
             sets.clear();
         scene.shader_layouts = {};
     }
+    void destroy_temporal_interfaces() {
+        if (!device)
+            return;
+        for (auto* pipeline : {&temporal.resolve_pipeline, &temporal.composite_pipeline,
+                               &temporal.direct_pipeline, &temporal.transparent_pipeline,
+                               &temporal.gpu_pipeline}) {
+            if (*pipeline)
+                vkDestroyPipeline(device, *pipeline, nullptr);
+            *pipeline = {};
+        }
+        for (auto* layout : {&temporal.resolve_pipeline_layout,
+                             &temporal.composite_pipeline_layout}) {
+            if (*layout)
+                vkDestroyPipelineLayout(device, *layout, nullptr);
+            *layout = {};
+        }
+        if (temporal.descriptor_pool)
+            vkDestroyDescriptorPool(device, temporal.descriptor_pool, nullptr);
+        temporal.descriptor_pool = {};
+        for (auto* layout : {&temporal.resolve_layout, &temporal.composite_layout}) {
+            if (*layout)
+                vkDestroyDescriptorSetLayout(device, *layout, nullptr);
+            *layout = {};
+        }
+        temporal.resolve_sets[0] = temporal.resolve_sets[1] = {};
+        temporal.composite_sets[0] = temporal.composite_sets[1] = {};
+    }
     void cleanup() {
         if (device)
             vkDeviceWaitIdle(device);
@@ -356,6 +406,12 @@ struct Renderer::Impl {
         destroy(scene.deferred_count_stage);
         destroy(scene.hzb[0]);
         destroy(scene.hzb[1]);
+        destroy(temporal.scene_color);
+        destroy(temporal.velocity);
+        for (auto& image : temporal.history_color)
+            destroy(image);
+        for (auto& image : temporal.history_depth)
+            destroy(image);
         destroy(vertices);
         destroy(readback);
         destroy(lighting_header);
@@ -366,6 +422,7 @@ struct Renderer::Impl {
         destroy(shadow);
         destroy(local_shadow);
         if (device) {
+            destroy_temporal_interfaces();
             destroy_scene_interfaces();
             if (pipeline)
                 vkDestroyPipeline(device, pipeline, nullptr);
@@ -375,6 +432,8 @@ struct Renderer::Impl {
                 vkDestroyPipeline(device, shadow_pipeline, nullptr);
             if (sprite_pipeline)
                 vkDestroyPipeline(device, sprite_pipeline, nullptr);
+            if (temporal_ui_pipeline)
+                vkDestroyPipeline(device, temporal_ui_pipeline, nullptr);
             if (pipeline_layout)
                 vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
             if (descriptor_pool)
@@ -575,6 +634,7 @@ struct Renderer::Impl {
         height = c.height;
         if (!width || !height)
             throw std::invalid_argument("Renderer dimensions must be nonzero");
+        (void)temporal_internal_extent(width, height, c.temporal_mode, c.render_scale);
         std::vector<const char*> extensions;
         if (!c.headless) {
             if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
@@ -666,10 +726,12 @@ struct Renderer::Impl {
             vkGetPhysicalDeviceFeatures2(gpu, &features);
             if (!f13.synchronization2 || !f13.dynamicRendering)
                 continue;
-            VkFormatProperties color_props{}, depth_props{}, hzb_props{};
+            VkFormatProperties color_props{}, depth_props{}, hzb_props{}, velocity_props{};
             vkGetPhysicalDeviceFormatProperties(gpu, VK_FORMAT_R8G8B8A8_UNORM, &color_props);
             vkGetPhysicalDeviceFormatProperties(gpu, VK_FORMAT_D32_SFLOAT, &depth_props);
             vkGetPhysicalDeviceFormatProperties(gpu, VK_FORMAT_R32_SFLOAT, &hzb_props);
+            vkGetPhysicalDeviceFormatProperties(gpu, VK_FORMAT_R16G16B16A16_SFLOAT,
+                                               &velocity_props);
             if (!(color_props.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) ||
                 !(depth_props.optimalTilingFeatures &
                   VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) ||
@@ -697,6 +759,7 @@ struct Renderer::Impl {
                     max_compute_groups_x = properties.limits.maxComputeWorkGroupCount[0];
                     max_storage_buffer_range = properties.limits.maxStorageBufferRange;
                     max_image_dimension = properties.limits.maxImageDimension2D;
+                    independent_blend_supported = features.features.independentBlend;
                     scene.available = (queues[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
                                       properties.limits.maxPerStageDescriptorStorageBuffers >= 8 &&
                                       properties.limits.maxDescriptorSetStorageBuffers >= 8 &&
@@ -713,6 +776,29 @@ struct Renderer::Impl {
                          VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
                          VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
                          VK_FORMAT_FEATURE_TRANSFER_DST_BIT);
+                    temporal.capabilities.compute =
+                        (queues[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
+                        properties.limits.maxComputeWorkGroupInvocations >= 64 &&
+                        properties.limits.maxComputeWorkGroupSize[0] >= 8 &&
+                        properties.limits.maxComputeWorkGroupSize[1] >= 8 &&
+                        properties.limits.maxPerStageDescriptorSampledImages >= 5 &&
+                        properties.limits.maxPerStageDescriptorStorageImages >= 2;
+                    const auto velocity_features =
+                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
+                        VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                        VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
+                    temporal.capabilities.formats = independent_blend_supported &&
+                        (color_props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+                        (velocity_props.optimalTilingFeatures & velocity_features) ==
+                            velocity_features &&
+                        (hzb_props.optimalTilingFeatures &
+                         (VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                          VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)) ==
+                            (VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                             VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
+                    temporal.capabilities.extent =
+                        width <= max_image_dimension && height <= max_image_dimension &&
+                        (width + 7) / 8 <= max_compute_groups_x;
                 }
             }
         }
@@ -732,6 +818,9 @@ struct Renderer::Impl {
         VkDeviceCreateInfo di{};
         di.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         di.pNext = &f13;
+        VkPhysicalDeviceFeatures enabled_features{};
+        enabled_features.independentBlend = independent_blend_supported ? VK_TRUE : VK_FALSE;
+        di.pEnabledFeatures = &enabled_features;
         di.queueCreateInfoCount = 1;
         di.pQueueCreateInfos = &qi;
         const char* swap_extension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -807,8 +896,10 @@ struct Renderer::Impl {
         make_targets();
         make_descriptors();
         make_pipelines();
-        if (scene.available && c.visibility_mode != VisibilityMode::Direct)
+        if (scene.available && (c.visibility_mode != VisibilityMode::Direct ||
+                                c.temporal_mode != TemporalMode::Off))
             make_scene_descriptors_and_pipelines();
+        make_temporal_interfaces_and_pipelines();
         white = std::make_shared<Texture>();
         white->width = white->height = 1;
         white->rgba = {255, 255, 255, 255};
@@ -823,16 +914,50 @@ struct Renderer::Impl {
         destroy(readback);
         destroy(scene.hzb[0]);
         destroy(scene.hzb[1]);
+        destroy(temporal.scene_color);
+        destroy(temporal.velocity);
+        for (auto& image : temporal.history_color)
+            destroy(image);
+        for (auto& image : temporal.history_depth)
+            destroy(image);
+        temporal.has_completed_image = false;
         scene.hzb_history_valid = false;
+        temporal.capabilities.extent = width <= max_image_dimension &&
+            height <= max_image_dimension && (width + 7) / 8 <= max_compute_groups_x;
+        const auto effective = select_effective_temporal_mode(config.temporal_mode,
+                                                               temporal.capabilities);
+        const auto internal = temporal_internal_extent(width, height, effective,
+            effective == TemporalMode::Upscale ? config.render_scale : 1.f);
+        temporal.internal_width = internal[0];
+        temporal.internal_height = internal[1];
         color = make_image(width, height, VK_FORMAT_R8G8B8A8_UNORM,
                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                            VK_IMAGE_ASPECT_COLOR_BIT);
-        depth = make_image(width, height, VK_FORMAT_D32_SFLOAT,
+        depth = make_image(internal[0], internal[1], VK_FORMAT_D32_SFLOAT,
                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
                                VK_IMAGE_USAGE_SAMPLED_BIT,
                            VK_IMAGE_ASPECT_DEPTH_BIT);
-        const auto padded_width = std::bit_ceil(width);
-        const auto padded_height = std::bit_ceil(height);
+        if (effective != TemporalMode::Off) {
+            temporal.scene_color = make_image(internal[0], internal[1],
+                VK_FORMAT_R8G8B8A8_UNORM,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+            temporal.velocity = make_image(internal[0], internal[1],
+                VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+            for (auto& image : temporal.history_color)
+                image = make_image(width, height, VK_FORMAT_R16G16B16A16_SFLOAT,
+                    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                    VK_IMAGE_ASPECT_COLOR_BIT);
+            for (auto& image : temporal.history_depth)
+                image = make_image(width, height, VK_FORMAT_R32_SFLOAT,
+                    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                    VK_IMAGE_ASPECT_COLOR_BIT);
+            temporal.completed_index = 0;
+        }
+        const auto padded_width = std::bit_ceil(internal[0]);
+        const auto padded_height = std::bit_ceil(internal[1]);
         scene.hzb_extent_supported = scene.hzb_supported &&
             padded_width <= max_image_dimension && padded_height <= max_image_dimension &&
             (padded_width + 7u) / 8u <= max_compute_groups_x;
@@ -858,6 +983,73 @@ struct Renderer::Impl {
         last_pixels.clear();
         if (scene.graphics_layout)
             refresh_scene_descriptors();
+        if (temporal.resolve_layout && effective != TemporalMode::Off)
+            refresh_temporal_descriptors();
+    }
+    void refresh_temporal_descriptors() {
+        if (!temporal.resolve_layout || !temporal.scene_color.handle)
+            return;
+        if (temporal.descriptor_pool)
+            vkDestroyDescriptorPool(device, temporal.descriptor_pool, nullptr);
+        temporal.descriptor_pool = {};
+        const std::array<VkDescriptorPoolSize, 2> sizes{{
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 12},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4}}};
+        VkDescriptorPoolCreateInfo pool_info{};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.maxSets = 4;
+        pool_info.poolSizeCount = static_cast<std::uint32_t>(sizes.size());
+        pool_info.pPoolSizes = sizes.data();
+        check(vkCreateDescriptorPool(device, &pool_info, nullptr, &temporal.descriptor_pool),
+              "Create temporal descriptor pool");
+        const std::array<VkDescriptorSetLayout, 4> layouts{
+            temporal.resolve_layout, temporal.resolve_layout,
+            temporal.composite_layout, temporal.composite_layout};
+        VkDescriptorSetAllocateInfo allocation{};
+        allocation.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocation.descriptorPool = temporal.descriptor_pool;
+        allocation.descriptorSetCount = static_cast<std::uint32_t>(layouts.size());
+        allocation.pSetLayouts = layouts.data();
+        std::array<VkDescriptorSet, 4> sets{};
+        check(vkAllocateDescriptorSets(device, &allocation, sets.data()),
+              "Allocate temporal descriptors");
+        temporal.resolve_sets[0] = sets[0];
+        temporal.resolve_sets[1] = sets[1];
+        temporal.composite_sets[0] = sets[2];
+        temporal.composite_sets[1] = sets[3];
+        for (std::uint32_t next = 0; next < 2; ++next) {
+            const std::array<VkDescriptorImageInfo, 7> images{{
+                {VK_NULL_HANDLE, temporal.scene_color.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                {VK_NULL_HANDLE, depth.view, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL},
+                {VK_NULL_HANDLE, temporal.velocity.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                {VK_NULL_HANDLE, temporal.history_color[1 - next].view,
+                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                {VK_NULL_HANDLE, temporal.history_depth[1 - next].view,
+                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                {VK_NULL_HANDLE, temporal.history_color[next].view, VK_IMAGE_LAYOUT_GENERAL},
+                {VK_NULL_HANDLE, temporal.history_depth[next].view, VK_IMAGE_LAYOUT_GENERAL}}};
+            std::array<VkWriteDescriptorSet, 8> writes{};
+            for (std::uint32_t binding = 0; binding < 7; ++binding) {
+                writes[binding].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[binding].dstSet = temporal.resolve_sets[next];
+                writes[binding].dstBinding = binding;
+                writes[binding].descriptorCount = 1;
+                writes[binding].descriptorType = binding < 5
+                    ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                writes[binding].pImageInfo = &images[binding];
+            }
+            writes[7].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[7].dstSet = temporal.composite_sets[next];
+            writes[7].dstBinding = 0;
+            writes[7].descriptorCount = 1;
+            writes[7].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            const VkDescriptorImageInfo composite_image{
+                VK_NULL_HANDLE, temporal.history_color[next].view,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+            writes[7].pImageInfo = &composite_image;
+            vkUpdateDescriptorSets(device, static_cast<std::uint32_t>(writes.size()),
+                                   writes.data(), 0, nullptr);
+        }
     }
     void make_swapchain() {
         if (!surface)
@@ -1121,8 +1313,9 @@ struct Renderer::Impl {
             vertex = shader(shaders[0]);
             fragment = shader(shaders[1]);
             shadow_vertex = shader(shaders[2]);
-            for (int mode = 0; mode < 4; ++mode) {
-                bool shadow_pass = mode == 2, ui = mode == 1, sprite = mode == 3;
+            for (int mode = 0; mode < 5; ++mode) {
+                bool shadow_pass = mode == 2, ui = mode == 1 || mode == 4,
+                     sprite = mode == 3, temporal_ui = mode == 4;
                 VkPipelineShaderStageCreateInfo stages[2]{};
                 stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
                 stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -1193,7 +1386,8 @@ struct Renderer::Impl {
                 rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
                 rendering.colorAttachmentCount = shadow_pass ? 0 : 1;
                 rendering.pColorAttachmentFormats = &format;
-                rendering.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+                rendering.depthAttachmentFormat = temporal_ui ? VK_FORMAT_UNDEFINED
+                                                                : VK_FORMAT_D32_SFLOAT;
                 VkGraphicsPipelineCreateInfo pi{};
                 pi.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
                 pi.pNext = &rendering;
@@ -1208,7 +1402,8 @@ struct Renderer::Impl {
                 pi.pColorBlendState = &cb;
                 pi.pDynamicState = &dynamic;
                 pi.layout = pipeline_layout;
-                auto* output = shadow_pass ? &shadow_pipeline
+                auto* output = temporal_ui ? &temporal_ui_pipeline
+                               : shadow_pass ? &shadow_pipeline
                                : ui        ? &ui_pipeline
                                : sprite    ? &sprite_pipeline
                                            : &pipeline;
@@ -1471,11 +1666,218 @@ struct Renderer::Impl {
         for (auto module : {vertex, fragment, main_cull, hzb_shader, post_cull})
             vkDestroyShaderModule(device, module, nullptr);
     }
-    GpuVertex gpu_vertex(const Vertex& v, const DrawItem& item, const Mat4& vp) {
+    void make_temporal_interfaces_and_pipelines() {
+        // Validate the complete shader package even on devices that fall back to Off.
+        const auto post = detail::load_temporal_shader_bundle(shader_directory());
+        const auto raster = detail::load_temporal_scene_shader_bundle(shader_directory());
+        for (std::size_t i = 0; i < post.size(); ++i)
+            if (!temporal.shader_layouts[i].empty() &&
+                temporal.shader_layouts[i] != post[i].layout_fingerprint)
+                throw std::runtime_error("Temporal shader layout changed; active pipeline preserved");
+        for (std::size_t i = 0; i < raster.size(); ++i)
+            if (!temporal.scene_shader_layouts[i].empty() &&
+                temporal.scene_shader_layouts[i] != raster[i].layout_fingerprint)
+                throw std::runtime_error("Temporal scene layout changed; active pipeline preserved");
+        if (!temporal.capabilities.compute || !temporal.capabilities.formats)
+            return;
+        if (!temporal.resolve_layout) {
+            std::array<VkDescriptorSetLayoutBinding, 7> bindings{};
+            for (std::uint32_t i = 0; i < bindings.size(); ++i)
+                bindings[i] = {i, i < 5 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+                                        : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                               1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+            VkDescriptorSetLayoutCreateInfo descriptor_info{};
+            descriptor_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            descriptor_info.bindingCount = static_cast<std::uint32_t>(bindings.size());
+            descriptor_info.pBindings = bindings.data();
+            check(vkCreateDescriptorSetLayout(device, &descriptor_info, nullptr,
+                                              &temporal.resolve_layout),
+                  "Create temporal resolve descriptor layout");
+            bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            descriptor_info.bindingCount = 1;
+            check(vkCreateDescriptorSetLayout(device, &descriptor_info, nullptr,
+                                              &temporal.composite_layout),
+                  "Create temporal composite descriptor layout");
+            VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 64};
+            VkPipelineLayoutCreateInfo layout_info{};
+            layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            layout_info.setLayoutCount = 1;
+            layout_info.pSetLayouts = &temporal.resolve_layout;
+            layout_info.pushConstantRangeCount = 1;
+            layout_info.pPushConstantRanges = &push;
+            check(vkCreatePipelineLayout(device, &layout_info, nullptr,
+                                         &temporal.resolve_pipeline_layout),
+                  "Create temporal resolve pipeline layout");
+            layout_info.pSetLayouts = &temporal.composite_layout;
+            layout_info.pushConstantRangeCount = 0;
+            check(vkCreatePipelineLayout(device, &layout_info, nullptr,
+                                         &temporal.composite_pipeline_layout),
+                  "Create temporal composite pipeline layout");
+        }
+        std::array<VkShaderModule, 6> modules{};
+        try {
+            modules[0] = shader(post[0]);
+            modules[1] = shader(post[1]);
+            modules[2] = shader(post[2]);
+            modules[3] = shader(raster[0]);
+            modules[4] = shader(raster[1]);
+            modules[5] = shader(raster[2]);
+            VkComputePipelineCreateInfo compute{};
+            compute.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+            compute.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            compute.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+            compute.stage.module = modules[0];
+            compute.stage.pName = "main";
+            compute.layout = temporal.resolve_pipeline_layout;
+            check(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &compute, nullptr,
+                                           &temporal.resolve_pipeline),
+                  "Create temporal resolve pipeline");
+            const auto make_graphics = [&](VkShaderModule vertex, VkShaderModule fragment,
+                                           VkPipelineLayout layout, bool gpu, bool composite,
+                                           bool depth_write, VkPipeline& output) {
+                std::array<VkPipelineShaderStageCreateInfo, 2> stages{};
+                for (auto& stage : stages) {
+                    stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+                    stage.pName = "main";
+                }
+                stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+                stages[0].module = vertex;
+                stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+                stages[1].module = fragment;
+                const VkVertexInputBindingDescription binding{
+                    0, static_cast<std::uint32_t>(gpu ? sizeof(SceneVertex)
+                                                      : sizeof(GpuVertex)),
+                    VK_VERTEX_INPUT_RATE_VERTEX};
+                const std::array<VkVertexInputAttributeDescription, 8> direct_attrs{{
+                    {0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuVertex, clip)},
+                    {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(GpuVertex, world)},
+                    {2, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(GpuVertex, normal)},
+                    {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuVertex, color)},
+                    {4, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GpuVertex, material)},
+                    {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GpuVertex, uv)},
+                    {6, 0, VK_FORMAT_R32G32B32A32_SFLOAT,
+                     offsetof(GpuVertex, previous_clip)},
+                    {7, 0, VK_FORMAT_R32_SFLOAT, offsetof(GpuVertex, motion_valid)}}};
+                const std::array<VkVertexInputAttributeDescription, 4> gpu_attrs{{
+                    {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(SceneVertex, position)},
+                    {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(SceneVertex, normal)},
+                    {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(SceneVertex, color)},
+                    {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(SceneVertex, uv)}}};
+                VkPipelineVertexInputStateCreateInfo input{};
+                input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+                input.vertexBindingDescriptionCount = 1;
+                input.pVertexBindingDescriptions = &binding;
+                input.vertexAttributeDescriptionCount = composite ? 1
+                    : gpu ? static_cast<std::uint32_t>(gpu_attrs.size())
+                          : static_cast<std::uint32_t>(direct_attrs.size());
+                input.pVertexAttributeDescriptions = gpu ? gpu_attrs.data()
+                                                             : direct_attrs.data();
+                VkPipelineInputAssemblyStateCreateInfo assembly{};
+                assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+                assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+                VkPipelineViewportStateCreateInfo viewport{};
+                viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+                viewport.viewportCount = viewport.scissorCount = 1;
+                VkPipelineRasterizationStateCreateInfo raster_state{};
+                raster_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+                raster_state.polygonMode = VK_POLYGON_MODE_FILL;
+                raster_state.cullMode = VK_CULL_MODE_NONE;
+                raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+                raster_state.lineWidth = 1;
+                VkPipelineMultisampleStateCreateInfo samples{};
+                samples.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+                samples.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+                VkPipelineDepthStencilStateCreateInfo depth_state{};
+                depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+                depth_state.depthTestEnable = !composite;
+                depth_state.depthWriteEnable = !composite && depth_write;
+                depth_state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+                VkPipelineColorBlendAttachmentState color_blend{};
+                color_blend.colorWriteMask = 15;
+                color_blend.blendEnable = !composite;
+                color_blend.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+                color_blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                color_blend.colorBlendOp = VK_BLEND_OP_ADD;
+                color_blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                color_blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                color_blend.alphaBlendOp = VK_BLEND_OP_ADD;
+                VkPipelineColorBlendAttachmentState velocity_blend{};
+                velocity_blend.colorWriteMask = 15;
+                const std::array<VkPipelineColorBlendAttachmentState, 2> blends{
+                    color_blend, velocity_blend};
+                VkPipelineColorBlendStateCreateInfo blend_state{};
+                blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+                blend_state.attachmentCount = composite ? 1 : 2;
+                blend_state.pAttachments = blends.data();
+                const std::array<VkDynamicState, 2> states{VK_DYNAMIC_STATE_VIEWPORT,
+                                                            VK_DYNAMIC_STATE_SCISSOR};
+                VkPipelineDynamicStateCreateInfo dynamic{};
+                dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+                dynamic.dynamicStateCount = static_cast<std::uint32_t>(states.size());
+                dynamic.pDynamicStates = states.data();
+                const std::array<VkFormat, 2> formats{VK_FORMAT_R8G8B8A8_UNORM,
+                                                       VK_FORMAT_R16G16B16A16_SFLOAT};
+                VkPipelineRenderingCreateInfo rendering{};
+                rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+                rendering.colorAttachmentCount = composite ? 1 : 2;
+                rendering.pColorAttachmentFormats = formats.data();
+                rendering.depthAttachmentFormat = composite ? VK_FORMAT_UNDEFINED
+                                                           : VK_FORMAT_D32_SFLOAT;
+                VkGraphicsPipelineCreateInfo info{};
+                info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+                info.pNext = &rendering;
+                info.stageCount = 2;
+                info.pStages = stages.data();
+                info.pVertexInputState = &input;
+                info.pInputAssemblyState = &assembly;
+                info.pViewportState = &viewport;
+                info.pRasterizationState = &raster_state;
+                info.pMultisampleState = &samples;
+                info.pDepthStencilState = &depth_state;
+                info.pColorBlendState = &blend_state;
+                info.pDynamicState = &dynamic;
+                info.layout = layout;
+                check(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info,
+                                                nullptr, &output),
+                      "Create temporal graphics pipeline");
+            };
+            make_graphics(modules[1], modules[2], temporal.composite_pipeline_layout,
+                          false, true, false, temporal.composite_pipeline);
+            make_graphics(modules[3], modules[4], pipeline_layout, false, false, true,
+                          temporal.direct_pipeline);
+            make_graphics(modules[3], modules[4], pipeline_layout, false, false, false,
+                          temporal.transparent_pipeline);
+            if (scene.graphics_pipeline_layout)
+                make_graphics(modules[5], modules[4], scene.graphics_pipeline_layout,
+                              true, false, true, temporal.gpu_pipeline);
+            for (std::size_t i = 0; i < post.size(); ++i)
+                temporal.shader_layouts[i] = post[i].layout_fingerprint;
+            for (std::size_t i = 0; i < raster.size(); ++i)
+                temporal.scene_shader_layouts[i] = raster[i].layout_fingerprint;
+        } catch (...) {
+            for (auto module : modules)
+                if (module)
+                    vkDestroyShaderModule(device, module, nullptr);
+            throw;
+        }
+        for (auto module : modules)
+            vkDestroyShaderModule(device, module, nullptr);
+        refresh_temporal_descriptors();
+    }
+    GpuVertex gpu_vertex(const Vertex& v, const DrawItem& item, const Mat4& vp,
+                         const Mat4* previous_model = nullptr,
+                         const Mat4* previous_vp = nullptr) {
         GpuVertex out{};
         auto world = point(item.model, {v.position[0], v.position[1], v.position[2], 1});
         auto clip = point(vp, world);
         std::copy(clip.begin(), clip.end(), out.clip);
+        if (previous_model && previous_vp) {
+            const auto previous_world = point(*previous_model,
+                                               {v.position[0], v.position[1], v.position[2], 1});
+            const auto previous_clip = point(*previous_vp, previous_world);
+            std::copy(previous_clip.begin(), previous_clip.end(), out.previous_clip);
+            out.motion_valid = 1.f;
+        }
         std::copy_n(world.begin(), 3, out.world);
         // Inverse-transpose 3x3, including nonuniform scale. Singular models have no valid normal.
         const auto& m = item.model;
@@ -1771,6 +2173,19 @@ struct Renderer::Impl {
                 statistics.gpu_post_visible = 0;
         statistics.lod_counts = {};
         statistics.visibility_counters_valid = false;
+        statistics.requested_temporal_mode = config.temporal_mode;
+        statistics.effective_temporal_mode = select_effective_temporal_mode(
+            config.temporal_mode, temporal.capabilities);
+        statistics.temporal_fallback_reason = temporal_fallback_reason(
+            config.temporal_mode, temporal.capabilities);
+        statistics.temporal_history_valid = false;
+        statistics.temporal_valid_motion_instances = 0;
+        statistics.temporal_internal_width = temporal.internal_width;
+        statistics.temporal_internal_height = temporal.internal_height;
+        statistics.temporal_jitter = {};
+        statistics.gpu_temporal_resolve_ms = statistics.gpu_temporal_composite_ms =
+            statistics.gpu_ui_ms = 0;
+        statistics.graph_passes.clear();
         for (auto it = bounds_cache.begin(); it != bounds_cache.end();)
             it = it->second.owner.expired() ? bounds_cache.erase(it) : std::next(it);
         for (auto it = opacity_cache.begin(); it != opacity_cache.end();)
@@ -1781,6 +2196,7 @@ struct Renderer::Impl {
         const bool gpu_active = statistics.effective_visibility_mode != VisibilityMode::Direct;
         const bool occlusion = statistics.effective_visibility_mode ==
             VisibilityMode::GpuOcclusion;
+        const bool temporal_active = statistics.effective_temporal_mode != TemporalMode::Off;
         statistics.gpu_visibility_active = gpu_active;
         statistics.hzb_valid = false;
         bool can_present = surface != VK_NULL_HANDLE;
@@ -1826,23 +2242,63 @@ struct Renderer::Impl {
             scene_viewport = {x, y, std::max(0.f, std::min(rect[2], float(width) - x)),
                               std::max(0.f, std::min(rect[3], float(height) - y))};
         }
+        const auto output_scene_viewport = scene_viewport;
+        if (temporal_active) {
+            const float sx = float(temporal.internal_width) / float(width);
+            const float sy = float(temporal.internal_height) / float(height);
+            scene_viewport = {scene_viewport[0] * sx, scene_viewport[1] * sy,
+                              scene_viewport[2] * sx, scene_viewport[3] * sy};
+            statistics.temporal_jitter = temporal_jitter(
+                statistics.frame,
+                std::max(1u, static_cast<std::uint32_t>(std::ceil(scene_viewport[2]))),
+                std::max(1u, static_cast<std::uint32_t>(std::ceil(scene_viewport[3]))));
+        }
+        Mat4 raster_vp = snapshot.view_projection;
+        if (temporal_active)
+            for (int column = 0; column < 4; ++column) {
+                raster_vp[column * 4] +=
+                    statistics.temporal_jitter[0] * raster_vp[column * 4 + 3];
+                raster_vp[column * 4 + 1] +=
+                    statistics.temporal_jitter[1] * raster_vp[column * 4 + 3];
+            }
         const std::string view_id = snapshot.view_id.empty() ? "default" : snapshot.view_id;
+        TemporalHistoryKey temporal_key;
+        temporal_key.view_id = view_id;
+        temporal_key.output_width = width;
+        temporal_key.output_height = height;
+        temporal_key.internal_width = temporal.internal_width;
+        temporal_key.internal_height = temporal.internal_height;
+        temporal_key.scene_rect = output_scene_viewport;
+        temporal_key.projection = snapshot.projection;
+        temporal_key.view_projection = snapshot.view_projection;
+        temporal_key.camera_eye = snapshot.eye;
+        temporal_key.mode = statistics.effective_temporal_mode;
+        temporal_key.render_scale = temporal_active ? config.render_scale : 1.f;
+        temporal_key.shader_generation = temporal.shader_generation;
+        temporal_key.camera_cut = snapshot.camera_cut;
+        auto temporal_decision = temporal.history.prepare(temporal_key);
+        if (temporal_active && temporal_decision.valid && !temporal.has_completed_image)
+            temporal_decision = {false, TemporalResetReason::FirstFrame};
+        statistics.temporal_history_valid = temporal_active && temporal_decision.valid;
+        statistics.temporal_reset_reason = temporal_active
+            ? temporal_decision.reason
+            : statistics.temporal_fallback_reason == TemporalFallbackReason::None
+                  ? temporal_decision.reason : TemporalResetReason::Unsupported;
         const bool history_compatible = occlusion && scene.hzb_history_valid &&
             !snapshot.camera_cut && scene.previous_view_id == view_id &&
             scene.previous_viewport == scene_viewport &&
             scene.previous_projection == snapshot.projection;
-        if (!history_compatible)
-            instance_tracker.invalidate_view(view_id);
         if (occlusion)
             scene.hzb_current = history_compatible ? 1 - scene.hzb_current : 0;
         PreparedScene gpu_frame;
-        gpu_frame.view.current_vp = snapshot.view_projection;
+        gpu_frame.view.current_vp = raster_vp;
         gpu_frame.view.previous_vp = scene.previous_vp;
         gpu_frame.view.viewport = scene_viewport;
         gpu_frame.view.previous_viewport = scene.previous_viewport;
         if (scene.hzb_mips) {
             const auto dimensions = std::array<std::uint32_t, 4>{
-                std::bit_ceil(width), std::bit_ceil(height), scene.hzb_mips, 0};
+                std::bit_ceil(temporal.internal_width),
+                std::bit_ceil(temporal.internal_height), scene.hzb_mips, 0};
             gpu_frame.view.hzb_dimensions = dimensions;
             gpu_frame.view.previous_hzb_dimensions = dimensions;
         }
@@ -1853,6 +2309,8 @@ struct Renderer::Impl {
             std::shared_ptr<const Mesh> mesh;
             bool gpu{};
             bool opaque{};
+            bool motion_valid{};
+            Mat4 previous_model{identity};
         };
         std::vector<SelectedDraw> selected_draws;
         selected_draws.reserve(snapshot.draws.size());
@@ -1910,7 +2368,12 @@ struct Renderer::Impl {
                                                    item.model, bounds, view_id);
             const bool opaque = item.color[3] >= 1.f && is_opaque(item.texture);
             const bool eligible = gpu_active && opaque;
-            selected_draws.push_back({&item, selected_mesh, eligible, opaque});
+            const bool motion_valid = temporal_active && temporal_decision.valid &&
+                previous.previous_valid && opaque;
+            if (motion_valid)
+                ++statistics.temporal_valid_motion_instances;
+            selected_draws.push_back({&item, selected_mesh, eligible, opaque, motion_valid,
+                                      previous.previous_valid ? previous.previous_model : item.model});
             if (!eligible)
                 continue;
             auto [range_it, inserted] = mesh_ranges.try_emplace(selected_mesh.get());
@@ -1983,7 +2446,10 @@ struct Renderer::Impl {
                     (previous.previous_bounds.max[axis] -
                      previous.previous_bounds.min[axis]) * .5f;
             }
-            instance.metadata = gpu_instance_metadata(previous, history_compatible);
+            instance.metadata = gpu_instance_metadata(previous, history_compatible,
+                                                       temporal_decision.valid);
+            instance.previous_model = previous.previous_valid ? previous.previous_model
+                                                               : item.model;
             if (gpu_frame.instances.size() >= UINT32_MAX)
                 throw std::overflow_error("GPU scene instance capacity exceeded");
             bin_it->instances.push_back(static_cast<std::uint32_t>(gpu_frame.instances.size()));
@@ -2071,7 +2537,9 @@ struct Renderer::Impl {
             auto emit = [&](std::uint32_t index) {
                 if (index >= mesh.vertices.size())
                     throw std::out_of_range("Mesh index outside vertex range");
-                data.push_back(gpu_vertex(mesh.vertices[index], item, snapshot.view_projection));
+                data.push_back(gpu_vertex(mesh.vertices[index], item, raster_vp,
+                                          selected.motion_valid ? &selected.previous_model : nullptr,
+                                          selected.motion_valid ? &scene.previous_vp : nullptr));
             };
             if (mesh.indices.empty())
                 for (std::uint32_t i = 0; i < mesh.vertices.size(); ++i)
@@ -2089,7 +2557,7 @@ struct Renderer::Impl {
                         item.texture ? item.texture.get() : white.get()};
             if (outside(data, first))
                 ++statistics.culled_meshes;
-            else if (gpu_active && !selected.opaque)
+            else if (!selected.opaque && (gpu_active || temporal_active))
                 transparent_batches.push_back(batch);
             else
                 scene_batches.push_back(batch);
@@ -2122,7 +2590,7 @@ struct Renderer::Impl {
             for (auto i : {0, 1, 2, 0, 2, 3}) {
                 const float corners[4][2] = {{-.5f, -.5f}, {.5f, -.5f}, {.5f, .5f}, {-.5f, .5f}};
                 float x = corners[i][0] * sprite.size[0], y = corners[i][1] * sprite.size[1];
-                auto clip = point(snapshot.view_projection,
+                auto clip = point(raster_vp,
                                   {sprite.position[0] + c * x - s * y,
                                    sprite.position[1] + s * x + c * y, sprite.position[2], 1});
                 GpuVertex vertex{};
@@ -2169,6 +2637,15 @@ struct Renderer::Impl {
                                   triangles.texture ? triangles.texture.get() : white.get(),
                                   triangles.clip_rect});
         }
+        const auto composite_first = static_cast<std::uint32_t>(data.size());
+        if (temporal_active)
+            for (const auto xy : {Vec2{-1, -1}, Vec2{3, -1}, Vec2{-1, 3}}) {
+                GpuVertex vertex{};
+                vertex.clip[0] = xy[0];
+                vertex.clip[1] = xy[1];
+                vertex.clip[3] = 1;
+                data.push_back(vertex);
+            }
         std::vector<Batch> shadow_batch_by_source(snapshot.draws.size());
         if (sun_raster || local_raster) {
             std::vector<std::uint8_t> required(snapshot.draws.size());
@@ -2402,10 +2879,23 @@ struct Renderer::Impl {
         auto set_scene_viewport = [&] {
             VkViewport viewport{scene_viewport[0], scene_viewport[1],
                                 scene_viewport[2], scene_viewport[3], 0, 1};
-            VkRect2D scissor{{static_cast<int>(scene_viewport[0]),
-                              static_cast<int>(scene_viewport[1])},
-                             {static_cast<std::uint32_t>(scene_viewport[2]),
-                              static_cast<std::uint32_t>(scene_viewport[3])}};
+            VkRect2D scissor{};
+            if (temporal_active) {
+                const auto left = static_cast<std::int32_t>(std::floor(scene_viewport[0]));
+                const auto top = static_cast<std::int32_t>(std::floor(scene_viewport[1]));
+                const auto right = static_cast<std::int32_t>(std::ceil(
+                    scene_viewport[0] + scene_viewport[2]));
+                const auto bottom = static_cast<std::int32_t>(std::ceil(
+                    scene_viewport[1] + scene_viewport[3]));
+                scissor = {{left, top},
+                           {static_cast<std::uint32_t>(std::max(0, right - left)),
+                            static_cast<std::uint32_t>(std::max(0, bottom - top))}};
+            } else {
+                scissor = {{static_cast<int>(scene_viewport[0]),
+                            static_cast<int>(scene_viewport[1])},
+                           {static_cast<std::uint32_t>(scene_viewport[2]),
+                            static_cast<std::uint32_t>(scene_viewport[3])}};
+            }
             vkCmdSetViewport(command, 0, 1, &viewport);
             vkCmdSetScissor(command, 0, 1, &scissor);
         };
@@ -2419,7 +2909,8 @@ struct Renderer::Impl {
             if (transparent_batches.empty())
                 return;
             vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
-            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              temporal_active ? temporal.transparent_pipeline : pipeline);
             vkCmdPushConstants(command, pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                                0, sizeof(push), &push);
@@ -2430,9 +2921,10 @@ struct Renderer::Impl {
                 ++statistics.draw_calls;
             }
         };
-        auto draw_sprites_and_ui = [&] {
+        auto draw_sprites = [&] {
             vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
-            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, sprite_pipeline);
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              temporal_active ? temporal.transparent_pipeline : sprite_pipeline);
             vkCmdPushConstants(command, pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                sizeof(push), &push);
@@ -2442,8 +2934,12 @@ struct Renderer::Impl {
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
+        };
+        auto draw_ui = [&] {
+            vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
             set_viewport(width, height);
-            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline);
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              temporal_active ? temporal_ui_pipeline : ui_pipeline);
             for (auto batch : ui_batches) {
                 VkRect2D scissor{{0, 0}, {width, height}};
                 if (batch.clip_rect[2] > 0 && batch.clip_rect[3] > 0) {
@@ -2490,9 +2986,12 @@ struct Renderer::Impl {
             }
         };
         RenderGraph graph;
+        if (temporal_active)
+            graph.import("history_previous");
         auto add_pass = [&](std::string name, std::vector<std::string> reads,
                             std::vector<std::string> writes, RenderGraph::Callback callback) {
             const auto label_name = name;
+            statistics.graph_passes.push_back(label_name);
             graph.add(std::move(name), std::move(reads), std::move(writes),
                       [this, &timestamp_cursor, &timestamp_labels, label_name,
                        callback = std::move(callback)] {
@@ -2654,18 +3153,22 @@ struct Renderer::Impl {
                                       VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
                 }
             });
-        add_pass(occlusion ? "MainRaster" : "ForwardAndUI",
+        Image& raster_color = temporal_active ? temporal.scene_color : color;
+        const auto raster_width = temporal_active ? temporal.internal_width : width;
+        const auto raster_height = temporal_active ? temporal.internal_height : height;
+        add_pass(occlusion || temporal_active ? "MainRaster" : "ForwardAndUI",
                  gpu_active ? std::vector<std::string>{"shadow", "local_shadow",
                                                        "main_indirect", "main_visible"}
                             : std::vector<std::string>{"shadow", "local_shadow"},
-                 {"color", "depth"}, [&] {
-            transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                 temporal_active ? std::vector<std::string>{"scene_color", "depth", "scene_velocity"}
+                                 : std::vector<std::string>{"color", "depth"}, [&] {
+            transition(command, raster_color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
             transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_DEPTH_BIT);
             VkRenderingAttachmentInfo ca{};
             ca.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-            ca.imageView = color.view;
+            ca.imageView = raster_color.view;
             ca.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             ca.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             ca.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -2676,19 +3179,33 @@ struct Renderer::Impl {
             da.imageView = depth.view;
             da.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             da.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            da.storeOp = occlusion ? VK_ATTACHMENT_STORE_OP_STORE
+            da.storeOp = occlusion || temporal_active ? VK_ATTACHMENT_STORE_OP_STORE
                                    : VK_ATTACHMENT_STORE_OP_DONT_CARE;
             da.clearValue.depthStencil = {1, 0};
+            VkRenderingAttachmentInfo va{};
+            std::array<VkRenderingAttachmentInfo, 2> color_attachments{ca, va};
+            if (temporal_active) {
+                transition(command, temporal.velocity,
+                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                va.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                va.imageView = temporal.velocity.view;
+                va.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                va.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                va.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                color_attachments[1] = va;
+            }
             VkRenderingInfo rendering{};
             rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            rendering.renderArea = {{0, 0}, {width, height}};
+            rendering.renderArea = {{0, 0}, {raster_width, raster_height}};
             rendering.layerCount = 1;
-            rendering.colorAttachmentCount = 1;
-            rendering.pColorAttachments = &ca;
+            rendering.colorAttachmentCount = temporal_active ? 2 : 1;
+            rendering.pColorAttachments = color_attachments.data();
             rendering.pDepthAttachment = &da;
             vkCmdBeginRendering(command, &rendering);
             set_scene_viewport();
-            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              temporal_active ? temporal.direct_pipeline : pipeline);
             vkCmdPushConstants(command, pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                sizeof(push), &push);
@@ -2697,7 +3214,8 @@ struct Renderer::Impl {
                 VkDeviceSize scene_offset{};
                 vkCmdBindVertexBuffers(command, 0, 1, &scene.vertices.handle, &scene_offset);
                 vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  scene.graphics_pipeline);
+                                  temporal_active ? temporal.gpu_pipeline
+                                                  : scene.graphics_pipeline);
                 for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
                     auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
                     const std::array<VkDescriptorSet, 3> sets{descriptor, lighting_set,
@@ -2716,7 +3234,8 @@ struct Renderer::Impl {
                     ++statistics.draw_calls;
                 }
                 vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
-                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  temporal_active ? temporal.direct_pipeline : pipeline);
                 vkCmdPushConstants(command, pipeline_layout,
                                    VK_SHADER_STAGE_VERTEX_BIT |
                                        VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -2730,7 +3249,9 @@ struct Renderer::Impl {
             }
             if (!occlusion) {
                 draw_transparent();
-                draw_sprites_and_ui();
+                draw_sprites();
+                if (!temporal_active)
+                    draw_ui();
             }
             vkCmdEndRendering(command);
         });
@@ -2743,12 +3264,12 @@ struct Renderer::Impl {
                            VK_IMAGE_ASPECT_COLOR_BIT);
                 vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
                                   scene.hzb_pipeline);
-                const auto padded_width = std::bit_ceil(width);
-                const auto padded_height = std::bit_ceil(height);
+                const auto padded_width = std::bit_ceil(raster_width);
+                const auto padded_height = std::bit_ceil(raster_height);
                 for (std::uint32_t mip = 0; mip < scene.hzb_mips; ++mip) {
-                    const std::uint32_t source_width = mip == 0 ? width
+                    const std::uint32_t source_width = mip == 0 ? raster_width
                         : std::max(1u, padded_width >> (mip - 1));
-                    const std::uint32_t source_height = mip == 0 ? height
+                    const std::uint32_t source_height = mip == 0 ? raster_height
                         : std::max(1u, padded_height >> (mip - 1));
                     const std::uint32_t output_width =
                         std::max(1u, padded_width >> mip);
@@ -2788,15 +3309,19 @@ struct Renderer::Impl {
                                       VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
                 }
             });
-            add_pass("PostRasterAndUI", {"color", "depth", "post_indirect", "post_visible"},
-                     {"color", "depth"}, [&] {
-                transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            add_pass(temporal_active ? "PostRasterScene" : "PostRasterAndUI",
+                     {temporal_active ? "scene_color" : "color", "depth",
+                      "post_indirect", "post_visible"},
+                     temporal_active ? std::vector<std::string>{"scene_color", "depth",
+                                                                 "scene_velocity"}
+                                     : std::vector<std::string>{"color", "depth"}, [&] {
+                transition(command, raster_color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                            VK_IMAGE_ASPECT_COLOR_BIT);
                 transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                            VK_IMAGE_ASPECT_DEPTH_BIT);
                 VkRenderingAttachmentInfo ca{};
                 ca.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                ca.imageView = color.view;
+                ca.imageView = raster_color.view;
                 ca.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 ca.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
                 ca.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -2805,13 +3330,27 @@ struct Renderer::Impl {
                 da.imageView = depth.view;
                 da.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
                 da.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-                da.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                da.storeOp = temporal_active ? VK_ATTACHMENT_STORE_OP_STORE
+                                            : VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                VkRenderingAttachmentInfo va{};
+                std::array<VkRenderingAttachmentInfo, 2> color_attachments{ca, va};
+                if (temporal_active) {
+                    transition(command, temporal.velocity,
+                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                               VK_IMAGE_ASPECT_COLOR_BIT);
+                    va.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                    va.imageView = temporal.velocity.view;
+                    va.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                    va.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                    va.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                    color_attachments[1] = va;
+                }
                 VkRenderingInfo rendering{};
                 rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                rendering.renderArea = {{0, 0}, {width, height}};
+                rendering.renderArea = {{0, 0}, {raster_width, raster_height}};
                 rendering.layerCount = 1;
-                rendering.colorAttachmentCount = 1;
-                rendering.pColorAttachments = &ca;
+                rendering.colorAttachmentCount = temporal_active ? 2 : 1;
+                rendering.pColorAttachments = color_attachments.data();
                 rendering.pDepthAttachment = &da;
                 vkCmdBeginRendering(command, &rendering);
                 set_scene_viewport();
@@ -2820,7 +3359,8 @@ struct Renderer::Impl {
                     vkCmdBindVertexBuffers(command, 0, 1, &scene.vertices.handle,
                                            &scene_offset);
                     vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      scene.graphics_pipeline);
+                                      temporal_active ? temporal.gpu_pipeline
+                                                      : scene.graphics_pipeline);
                     for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
                         auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
                         const std::array<VkDescriptorSet, 3> sets{descriptor, lighting_set,
@@ -2841,7 +3381,105 @@ struct Renderer::Impl {
                     }
                 }
                 draw_transparent();
-                draw_sprites_and_ui();
+                draw_sprites();
+                if (!temporal_active)
+                    draw_ui();
+                vkCmdEndRendering(command);
+            });
+        }
+        const std::uint32_t next_history = temporal.has_completed_image
+            ? 1 - temporal.completed_index : 0;
+        if (temporal_active) {
+            add_pass("TemporalResolve",
+                     {"scene_color", "depth", "scene_velocity", "history_previous"},
+                     {"resolved_color", "resolved_depth"}, [&] {
+                transition(command, temporal.scene_color,
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                transition(command, depth, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_DEPTH_BIT);
+                transition(command, temporal.velocity,
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                transition(command, temporal.history_color[1 - next_history],
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                transition(command, temporal.history_depth[1 - next_history],
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                transition(command, temporal.history_color[next_history],
+                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+                transition(command, temporal.history_depth[next_history],
+                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+                struct ResolvePush {
+                    std::array<std::uint32_t, 4> dimensions;
+                    std::array<float, 4> output_rect, internal_rect;
+                    std::array<std::uint32_t, 4> flags;
+                };
+                static_assert(sizeof(ResolvePush) == 64);
+                ResolvePush parameters{{width, height, raster_width, raster_height},
+                                       output_scene_viewport, scene_viewport,
+                                       {statistics.temporal_history_valid ? 1u : 0u, 0, 0, 0}};
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                  temporal.resolve_pipeline);
+                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        temporal.resolve_pipeline_layout, 0, 1,
+                                        &temporal.resolve_sets[next_history], 0, nullptr);
+                vkCmdPushConstants(command, temporal.resolve_pipeline_layout,
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(parameters),
+                                   &parameters);
+                vkCmdDispatch(command, (width + 7) / 8, (height + 7) / 8, 1);
+            });
+            add_pass("TemporalComposite", {"resolved_color"}, {"color"}, [&] {
+                transition(command, temporal.history_color[next_history],
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                VkRenderingAttachmentInfo attachment{};
+                attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                attachment.imageView = color.view;
+                attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                std::copy(snapshot.clear_color.begin(), snapshot.clear_color.end(),
+                          attachment.clearValue.color.float32);
+                VkRenderingInfo rendering{};
+                rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                rendering.renderArea = {{0, 0}, {width, height}};
+                rendering.layerCount = 1;
+                rendering.colorAttachmentCount = 1;
+                rendering.pColorAttachments = &attachment;
+                vkCmdBeginRendering(command, &rendering);
+                set_viewport(width, height);
+                vkCmdBindVertexBuffers(command, 0, 1, &vertices.handle, &offset);
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  temporal.composite_pipeline);
+                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        temporal.composite_pipeline_layout, 0, 1,
+                                        &temporal.composite_sets[next_history], 0, nullptr);
+                vkCmdDraw(command, 3, 1, composite_first, 0);
+                vkCmdEndRendering(command);
+            });
+            add_pass("UI", {"color"}, {"color"}, [&] {
+                if (ui_batches.empty())
+                    return;
+                transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
+                VkRenderingAttachmentInfo attachment{};
+                attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                attachment.imageView = color.view;
+                attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                VkRenderingInfo rendering{};
+                rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                rendering.renderArea = {{0, 0}, {width, height}};
+                rendering.layerCount = 1;
+                rendering.colorAttachmentCount = 1;
+                rendering.pColorAttachments = &attachment;
+                vkCmdBeginRendering(command, &rendering);
+                draw_ui();
                 vkCmdEndRendering(command);
             });
         }
@@ -2989,11 +3627,20 @@ struct Renderer::Impl {
             statistics.visibility_counters_valid = true;
         }
         instance_tracker.finish_frame();
-        scene.previous_vp = snapshot.view_projection;
+        scene.previous_vp = raster_vp;
         scene.previous_projection = snapshot.projection;
         scene.previous_viewport = scene_viewport;
         scene.previous_view_id = view_id;
         scene.hzb_history_valid = occlusion;
+        temporal.previous_jittered_vp = raster_vp;
+        temporal.history.complete(temporal_key);
+        if (temporal_active) {
+            temporal.completed_index = temporal.has_completed_image
+                ? 1 - temporal.completed_index : 0;
+            temporal.has_completed_image = true;
+        } else {
+            temporal.has_completed_image = false;
+        }
         ++statistics.frame;
         statistics.gpu_allocated_bytes = vertices.allocation_size + readback.allocation_size +
                                          color.allocation_size + depth.allocation_size +
@@ -3115,6 +3762,10 @@ void Renderer::set_visibility_mode(VisibilityMode mode) {
         !impl_->scene.graphics_layout) {
         try {
             impl_->make_scene_descriptors_and_pipelines();
+            if (impl_->temporal.resolve_layout) {
+                impl_->destroy_temporal_interfaces();
+                impl_->make_temporal_interfaces_and_pipelines();
+            }
         } catch (...) {
             impl_->destroy_scene_interfaces();
             throw;
@@ -3129,6 +3780,17 @@ void Renderer::set_visibility_mode(VisibilityMode mode) {
 }
 VisibilityMode Renderer::visibility_mode() const {
     return impl_->config.visibility_mode;
+}
+void Renderer::set_temporal_mode(TemporalMode mode, float scale) {
+    (void)temporal_internal_extent(impl_->width, impl_->height, mode, scale);
+    if (impl_->config.temporal_mode == mode && impl_->config.render_scale == scale)
+        return;
+    impl_->config.temporal_mode = mode;
+    impl_->config.render_scale = scale;
+    impl_->make_targets();
+}
+TemporalMode Renderer::temporal_mode() const {
+    return impl_->config.temporal_mode;
 }
 void Renderer::set_visibility_diagnostics(bool enabled) {
     impl_->config.visibility_diagnostics = enabled;

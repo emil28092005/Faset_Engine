@@ -17,6 +17,24 @@ foreach(FASET_ENTRY vertexMain fragmentMain shadowMain)
     DEPENDS "${PROJECT_SOURCE_DIR}/shaders/baseline.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
   list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
 endforeach()
+foreach(FASET_ENTRY temporalVertexMain temporalFragmentMain)
+  set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.spv")
+  add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json"
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+            --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/baseline.slang"
+            --entry "${FASET_ENTRY}" --output "${FASET_SHADER_DIRECTORY}"
+    BYPRODUCTS "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.slang-reflection.json"
+    DEPENDS "${PROJECT_SOURCE_DIR}/shaders/baseline.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+  list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
+endforeach()
+set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.spv")
+add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.reflection.json"
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+          --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang"
+          --entry gpuTemporalVertexMain --define FASET_GPU_GRAPHICS=1 --output "${FASET_SHADER_DIRECTORY}"
+  BYPRODUCTS "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.slang-reflection.json"
+  DEPENDS "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.reflection.json")
 foreach(FASET_ENTRY gpuVertexMain gpuShadowMain gpuCullMain gpuHzbMain gpuPostCullMain)
   if(FASET_ENTRY STREQUAL "gpuVertexMain" OR FASET_ENTRY STREQUAL "gpuShadowMain")
     set(FASET_GPU_DEFINE FASET_GPU_GRAPHICS=1)

@@ -31,7 +31,9 @@ void locations(const Json& fields, std::initializer_list<const char*> types, con
     }
 }
 void validate_layout(const Json& layout, std::string_view entry) {
-    const bool fragment = entry == "fragmentMain";
+    const bool fragment = entry == "fragmentMain" || entry == "temporalFragmentMain";
+    const bool temporal = entry == "temporalVertexMain" ||
+                          entry == "temporalFragmentMain";
     require(layout.at("stage") == (fragment ? "fragment" : "vertex"), "shader stage changed");
     const auto& descriptors = layout.at("descriptors");
     require(descriptors.is_array() && descriptors.size() == 8, "descriptor count changed");
@@ -77,24 +79,42 @@ void validate_layout(const Json& layout, std::string_view entry) {
                 "SPIR-V matrix storage convention changed");
     }
     if (fragment) {
-        locations(layout.at("inputs"),
-                  {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
-                  "fragment inputs");
-        locations(layout.at("outputs"), {"float32x4"}, "fragment outputs");
+        if (temporal) {
+            locations(layout.at("inputs"),
+                      {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2",
+                       "float32x4", "float32x4", "float32"}, "temporal fragment inputs");
+            locations(layout.at("outputs"), {"float32x4", "float32x4"},
+                      "temporal fragment outputs");
+        } else {
+            locations(layout.at("inputs"),
+                      {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
+                      "fragment inputs");
+            locations(layout.at("outputs"), {"float32x4"}, "fragment outputs");
+        }
     } else {
-        locations(layout.at("inputs"),
-                  {"float32x4", "float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
-                  "vertex inputs");
+        if (temporal) {
+            locations(layout.at("inputs"),
+                      {"float32x4", "float32x3", "float32x3", "float32x4", "float32x2",
+                       "float32x2", "float32x4", "float32"}, "temporal vertex inputs");
+            locations(layout.at("outputs"),
+                      {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2",
+                       "float32x4", "float32x4", "float32"}, "temporal vertex outputs");
+        } else {
+            locations(layout.at("inputs"),
+                      {"float32x4", "float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
+                      "vertex inputs");
         if (entry == "vertexMain")
             locations(layout.at("outputs"),
                       {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
                       "vertex outputs");
         else
             locations(layout.at("outputs"), {}, "shadow outputs");
+        }
     }
 }
 void validate_gpu_layout(const Json& layout, std::string_view entry) {
-    const bool graphics = entry == "gpuVertexMain" || entry == "gpuShadowMain";
+    const bool graphics = entry == "gpuVertexMain" || entry == "gpuShadowMain" ||
+                          entry == "gpuTemporalVertexMain";
     const bool hzb = entry == "gpuHzbMain";
     const bool compute = !graphics;
     require(layout.at("stage") == (compute ? "compute" : "vertex"), "GPU shader stage changed");
@@ -102,8 +122,8 @@ void validate_gpu_layout(const Json& layout, std::string_view entry) {
     const std::size_t expected_count = graphics ? 3 : hzb ? 2 : 10;
     require(descriptors.is_array() && descriptors.size() == expected_count,
             "GPU descriptor count changed");
-    const std::array<int, 10> compute_strides{224, 16, 16, 4, 16, 4, 4, 0, 0, 208};
-    const std::array<int, 3> graphics_strides{224, 4, 208};
+    const std::array<int, 10> compute_strides{288, 16, 16, 4, 16, 4, 4, 0, 0, 208};
+    const std::array<int, 3> graphics_strides{288, 4, 208};
     for (std::size_t i = 0; i < expected_count; ++i) {
         const auto& binding = descriptors[i];
         require(binding.at("set") == (graphics ? 2 : 0) && binding.at("binding") == i &&
@@ -147,7 +167,13 @@ void validate_gpu_layout(const Json& layout, std::string_view entry) {
         locations(layout.at("inputs"),
                   {"float32x3", "float32x3", "float32x4", "float32x2"},
                   "GPU vertex inputs");
-        if (entry == "gpuVertexMain")
+        if (entry == "gpuVertexMain" || entry == "gpuTemporalVertexMain")
+            if (entry == "gpuTemporalVertexMain")
+                locations(layout.at("outputs"),
+                          {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2",
+                           "float32x4", "float32x4", "float32"},
+                          "GPU temporal vertex outputs");
+            else
             locations(layout.at("outputs"),
                       {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
                       "GPU vertex outputs");
@@ -205,7 +231,7 @@ void validate_temporal_layout(const Json& layout, std::string_view entry) {
         locations(layout.at("inputs"), {}, "temporal resolve inputs");
         locations(layout.at("outputs"), {}, "temporal resolve outputs");
     } else if (vertex) {
-        locations(layout.at("inputs"), {}, "temporal composite vertex inputs");
+        locations(layout.at("inputs"), {"float32x4"}, "temporal composite vertex inputs");
         locations(layout.at("outputs"), {}, "temporal composite vertex outputs");
     } else {
         locations(layout.at("inputs"), {}, "temporal composite fragment inputs");
@@ -213,12 +239,14 @@ void validate_temporal_layout(const Json& layout, std::string_view entry) {
                   "temporal composite fragment outputs");
     }
     const auto& input_builtins = layout.at("input_builtins");
-    require(input_builtins.is_array() && input_builtins.size() == 1 &&
-                input_builtins[0].at("semantic") ==
-                    (resolve ? "SV_DISPATCHTHREADID" : vertex ? "SV_VERTEXID" : "SV_POSITION") &&
-                input_builtins[0].at("type") == (vertex ? "uint32" : resolve ? "uint32x3"
-                                                                       : "float32x4"),
-            "temporal entry input builtin changed");
+    require(input_builtins.is_array() && input_builtins.size() == (vertex ? 0u : 1u),
+            "temporal entry input builtin count changed");
+    if (!vertex)
+        require(input_builtins[0].at("semantic") ==
+                    (resolve ? "SV_DISPATCHTHREADID" : "SV_POSITION") &&
+                    input_builtins[0].at("type") ==
+                    (resolve ? "uint32x3" : "float32x4"),
+                "temporal entry input builtin changed");
     const auto& output_builtins = layout.at("output_builtins");
     require(output_builtins.is_array() && output_builtins.size() == (vertex ? 1u : 0u),
             "temporal entry output builtin count changed");
@@ -279,8 +307,10 @@ detail::ShaderCode load(const std::filesystem::path& directory, const char* entr
         ? (std::string_view(entry) == "temporalResolveMain" ? 5u
            : std::string_view(entry) == "temporalCompositeVertexMain" ? 0u : 4u)
         : gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
-                  std::string_view(entry) == "gpuShadowMain") ? 0u : 5u)
-              : (std::string_view(entry) == "fragmentMain" ? 4u : 0u);
+                  std::string_view(entry) == "gpuShadowMain" ||
+                  std::string_view(entry) == "gpuTemporalVertexMain") ? 0u : 5u)
+              : ((std::string_view(entry) == "fragmentMain" ||
+                  std::string_view(entry) == "temporalFragmentMain") ? 4u : 0u);
     validate_spirv(result.words, stage);
     return result;
 }
@@ -302,8 +332,16 @@ detail::load_temporal_shader_bundle(const std::filesystem::path& directory) {
             load(directory, "temporalCompositeVertexMain", false, true),
             load(directory, "temporalCompositeFragmentMain", false, true)};
 }
+std::array<detail::ShaderCode, 3>
+detail::load_temporal_scene_shader_bundle(const std::filesystem::path& directory) {
+    return {load(directory, "temporalVertexMain"),
+            load(directory, "temporalFragmentMain"),
+            load(directory, "gpuTemporalVertexMain", true)};
+}
 void validate_shader_bundle(const std::filesystem::path& directory) {
     (void)detail::load_shader_bundle(directory);
+    (void)detail::load_temporal_shader_bundle(directory);
+    (void)detail::load_temporal_scene_shader_bundle(directory);
 }
 void validate_gpu_shader_bundle(const std::filesystem::path& directory) {
     (void)detail::load_gpu_shader_bundle(directory);

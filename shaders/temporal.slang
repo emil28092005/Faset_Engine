@@ -130,10 +130,8 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
 [[vk::binding(0,0)]] Texture2D<float4> resolvedHistoryColor;
 
 [shader("vertex")]
-float4 temporalCompositeVertexMain(uint vertexId : SV_VertexID) : SV_Position {
-    const float2 position = vertexId == 0 ? float2(-1, -1)
-        : vertexId == 1 ? float2(3, -1) : float2(-1, 3);
-    return float4(position, 0, 1);
+float4 temporalCompositeVertexMain(float4 clip : POSITION) : SV_Position {
+    return clip;
 }
 
 [shader("fragment")]

@@ -63,7 +63,7 @@ class ReflectionTests(unittest.TestCase):
                 (d["set"], d["binding"]): d["element_stride"]
                 for d in gpu_vertex["layout"]["descriptors"]
             }
-            self.assertEqual([graphics[2, i] for i in range(3)], [224, 4, 208])
+            self.assertEqual([graphics[2, i] for i in range(3)], [288, 4, 208])
 
     def test_gpu_vertex_paths_do_not_require_shader_draw_parameters(self):
         # SV_InstanceID makes Slang subtract BaseInstance and emit DrawParameters.
@@ -92,9 +92,31 @@ class ReflectionTests(unittest.TestCase):
                 self.assertIn(1, capabilities)  # Shader
                 self.assertNotIn(4427, capabilities)  # DrawParameters
 
+    def test_temporal_composite_does_not_require_optional_draw_parameters(self):
+        compiler = os.environ["FASET_TEST_SLANGC"]
+        with tempfile.TemporaryDirectory(prefix="faset-temporal-composite-") as directory:
+            process = subprocess.run(
+                [sys.executable, str(SCRIPT), "--compiler", compiler, "--source",
+                 str(SCRIPT.parents[1] / "shaders" / "temporal.slang"), "--entry",
+                 "temporalCompositeVertexMain", "--define", "FASET_TEMPORAL_COMPOSITE=1",
+                 "--output", directory], capture_output=True, text=True,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            bytecode = (Path(directory) / "temporalCompositeVertexMain.spv").read_bytes()
+            words = struct.unpack(f"<{len(bytecode) // 4}I", bytecode)
+            capabilities = set()
+            offset = 5
+            while offset < len(words):
+                count, opcode = words[offset] >> 16, words[offset] & 0xffff
+                self.assertGreater(count, 0)
+                if opcode == 17:
+                    capabilities.add(words[offset + 1])
+                offset += count
+            self.assertNotIn(4427, capabilities)  # DrawParameters
+
     def test_gpu_storage_resources_keep_kind_and_stride(self):
         parameters = [
-            parameter("instances", 0, "structuredBuffer", "read", 224),
+            parameter("instances", 0, "structuredBuffer", "read", 288),
             parameter("visibleIds", 1, "structuredBuffer", "readWrite", 4),
             parameter("depthOutput", 2, "texture2D", "readWrite"),
             parameter("depthInput", 3, "texture2D", "read"),
@@ -111,7 +133,7 @@ class ReflectionTests(unittest.TestCase):
         descriptors = layout["descriptors"]
         self.assertEqual(
             [(d["type"], d.get("element_stride")) for d in descriptors],
-            [("storage_buffer", 224), ("storage_buffer", 4),
+            [("storage_buffer", 288), ("storage_buffer", 4),
              ("storage_image_2d", None), ("sampled_image_2d", None)],
         )
 
@@ -128,7 +150,7 @@ class ReflectionTests(unittest.TestCase):
             metadata = json.loads((Path(directory) / "gpuCullMain.reflection.json").read_text())
             bindings = {item["binding"]: item for item in metadata["layout"]["descriptors"]}
             self.assertEqual([bindings[n]["element_stride"] for n in (0, 1, 2, 3, 4, 5, 6, 9)],
-                             [224, 16, 16, 4, 16, 4, 4, 208])
+                             [288, 16, 16, 4, 16, 4, 4, 208])
             self.assertEqual([bindings[n]["type"] for n in (7, 8)],
                              ["sampled_image_2d", "sampled_image_2d"])
 
