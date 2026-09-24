@@ -147,6 +147,71 @@ and reads back the full image, so `cpu_ms` is wall time including waits, not CPU
 utilization. An open scene can run slower with HZB; visibility correctness and
 full-frame speed are separate findings.
 
+## Measure P3 lighting and shadows
+
+A Player `--profile` sample includes `effective_lighting_path`, local lights
+submitted/omitted, requested/effective sun cascades, requested/rasterized local
+shadow faces, tile use, shadow drop reasons, caster draws, and explicit atlas
+allocation bytes. `gpu_main_raster_ms`, `gpu_sun_shadow_ms`, and
+`gpu_local_shadow_ms` are GPU timestamps or `null` when timestamps are
+unavailable. A light can illuminate while its shadow faces are dropped. A
+submitted-light count of zero is a different workload from 128 lights whose
+shadows are disabled. See [Lighting](lighting.md) for the capacity policy and
+[Diagnostics](diagnostics.md) for the Editor counters.
+
+The same sample includes `effective_lighting_path` (`forward` or `tiled`),
+`gpu_light_tiles_ms`, and `light_tile_count`. Stored candidate and overflow
+counts are present only when visibility diagnostics readback was enabled;
+`light_tile_counts_valid: false` means their `null` values are unavailable,
+not zero. The normal `Auto` setting currently resolves to `forward` after the
+fixed dense 1080p benchmark showed that tile construction cost outweighed its
+raster savings. A C++ renderer integration can explicitly request `Tiled` for
+a localized-light scene, then check the actual path before comparing timings.
+
+The fixed-scene benchmark compares 0, 4, 16, 32, 64, and 128 local lights under
+Direct, GPU frustum, and GPU occlusion visibility, with shadows on and off. Its
+wrapper runs three independent 1920×1080 repetitions per configuration, each
+with ten warm-up and thirty recorded frames. First inspect the planned matrix:
+
+```sh
+python3 tools/benchmark_p3_lighting.py --list-runs
+```
+
+From the repository, after a Linux Release renderer build, run one shadow setting
+into a new output directory. Supply the actual device driver identity:
+
+```sh
+python3 tools/benchmark_p3_lighting.py --sweep \
+  --executable build/linux-release/faset_p3_lighting_benchmark \
+  --output .cache/p3-lighting-off \
+  --shadows off --driver 'REPLACE_WITH_ACTUAL_DRIVER' --validation off
+```
+
+The wrapper writes one raw CSV per run, `merged.csv`, and `summary.json`. Keep
+all three with the exact source revision and device. It checks that every run
+used its requested visibility mode and submitted every requested light. GPU
+timestamps for the main raster isolate fragment-heavy lighting better than
+renderer wall time, which includes GPU waits and synchronous readback. Shadow
+time is split into sun and local GPU durations. The Forward+ decision compares
+the median of three run medians against the matching zero-light configuration;
+the threshold is **1.0 ms extra main raster time or 15% of the zero-light GPU
+frame** at 32, 64, or 128 lights on the Linux physical reference GPU. The
+[P3 lighting validation record](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/p3-lighting-2026-09-24/README.md)
+states the measured decision and scope. A software Vulkan run checks
+functionality, not physical GPU performance.
+
+For a direct comparison of the two algorithms on the same scene, invoke the
+Release executable twice with `--lighting forward` and `--lighting tiled`,
+using the same `--lights`, `--shadows`, `--visibility`, and output size. The
+default `--light-layout dense` preserves the fixed benchmark scene;
+`--light-layout localized` reduces point-light ranges to 1.75 units as a
+separately labelled workload. Compare `gpu_build_plus_raster_ms`, which includes
+`gpu_light_tiles_ms`, rather than raster time alone. One optional diagnostic
+frame with `--tile-diagnostics on` reports candidate and overflow counts but
+adds a GPU readback, so do not mix it into the timed runs. The
+[Forward+ measurement](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/23-p3-forward-plus-2026-09-24.md) retains
+raw frames, shader hashes, and the decision.
+
 ## Current performance scope
 
 The accepted MVP path uses direct draws and CPU culling; P2 adds optional GPU
