@@ -40,6 +40,7 @@ Linux/Windows, десктопные 2D/3D, C++ сначала и Lua следу�
 - [18 — Сборка и доставка](18-build-cook-and-delivery.md): инкрементальность, cache, состав Player и единый BuildService.
 - [19 — P2 GPU visibility: протокол приёмки](19-p2-gpu-visibility-acceptance.md): GPU-сценарии, допуски сравнения и методика измерений; отделяет проверку реализации от предложений исследования 15.
 - [20 — P2 GPU visibility: первый benchmark](20-p2-gpu-visibility-benchmark-2026-09-23.md): три запуска, raw CSV, p50/p95 и границы интерпретации на Linux reference GPU.
+- [22 — P3 light scaling and Forward+ decision](22-p3-lighting-benchmark-2026-09-24.md): Release-замеры 0–128 источников света, все три режима видимости, raw CSV и проверка порога для Forward+.
 - [21 — P2 GPU visibility: оптимизация MainCull](21-p2-gpu-visibility-optimization-2026-09-23.md): отдельные измерения переноса выходных буферов в память GPU и замены CAS-цикла на atomic add.
 
 ## Происхождение и воспроизводимость
