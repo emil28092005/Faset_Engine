@@ -1,0 +1,19 @@
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p3-benchmark-release/build/linux-release
+    Start  7: render_lighting_sun
+1/5 Test  #7: render_lighting_sun ................   Passed    5.08 sec
+    Start  8: render_lighting_local
+2/5 Test  #8: render_lighting_local ..............   Passed    4.26 sec
+    Start  9: render_lighting_policy
+3/5 Test  #9: render_lighting_policy .............   Passed    0.00 sec
+    Start 17: render_lighting_benchmark_schema
+4/5 Test #17: render_lighting_benchmark_schema ...   Passed    5.36 sec
+    Start 18: render_lighting_benchmark_smoke
+5/5 Test #18: render_lighting_benchmark_smoke ....   Passed    1.59 sec
+
+100% tests passed, 0 tests failed out of 5
+
+Label Time Summary:
+gpu    =  10.93 sec*proc (3 tests)
+p3     =  16.29 sec*proc (5 tests)
+
+Total Test time (real) =  16.30 sec

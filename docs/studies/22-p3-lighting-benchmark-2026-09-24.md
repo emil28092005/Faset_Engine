@@ -39,6 +39,8 @@ Each configuration's p50 is the median of three run medians. The overhead compar
 
 All 3,240 frames submitted the requested local-light count, reported zero Vulkan errors, and retained the requested visibility mode. Validation was **off** during the performance sweep; zero reported errors here is not a validation-layer pass. Separate GPU tests exercise validation and image correctness.
 
+As a separate functional check, the same Release source passed [all five P3 CTests on the pinned Linux SwiftShader ICD](data/p3-lighting-2026-09-24/forward/swiftshader-release-p3-ctest.txt), including sun/local shadow images and the benchmark smoke case. SwiftShader is software Vulkan; these 64 × 64 tests are not another 1920 × 1080 performance measurement. The Windows SwiftShader CI and post-Forward+ runs remain separate acceptance steps.
+
 With shadows on, four point lights request 24 faces but only 12 fit atomically in the 16-tile atlas (two full six-face point lights). The same 12 faces remain at 16–128 lights; 128 lights request 768 faces and explicitly drop 756. The corresponding local shadow GPU p50 stays near 0.018 ms. Thus the scaling above is mainly fragment shading, not additional shadow-map rendering. The table does not imply that 128 shadowed points are supported simultaneously.
 
 `gpu_ms` includes the renderer's synchronous framebuffer capture copy, while `cpu_ms` includes submission and wait. Neither is an interactive game frame rate. The gate deliberately uses GPU raster timestamps; the post-occlusion raster pass is included when active. The fixed geometry and light arrangement, GPU clock state, and one driver limit generalization to other scenes and devices. The retained raw data allow this conclusion to be recomputed without trusting the prose.
