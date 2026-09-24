@@ -527,7 +527,9 @@ passed all 61 CTests and the real export integration. Two C++ and one Lua-only
 Release package validated and rendered 120 frames each after relocation with
 source paths unavailable; the [raw Windows report](validation/p1-iteration-2026-09-24/windows-4ac02ee/playable-report.json)
 records hashes and software Vulkan device identity. The later `d7a7a7c`
-real-diagnostic-navigation assertion still awaits its Windows CI result.
+real-diagnostic-navigation assertion is covered by the clean combined
+[`4a3453e` Windows graphics run](https://github.com/emil28092005/Faset_Engine/actions/runs/35944875002):
+74/74 CTests, real export integration and three relocated games passed.
 Windows had no active Khronos validation layer, and no physical Windows GPU
 performance result is claimed.
 
@@ -571,8 +573,8 @@ lights, Direct/GPU frustum/GPU occlusion, shadows on/off, three independent
 repeats, ten warm-up and thirty measured frames per configuration. It reached
 the agreed Forward+ gate: main-raster overhead at 32 lights was about 0.50 ms
 relative to the matching zero-light case, roughly 30% of that GPU frame;
-64 and 128 lights added about 1.02 and 2.03 ms. Its raw CSV/report are being
-published separately with the exact benchmark revision and driver.
+64 and 128 lights added about 1.02 and 2.03 ms. Its exact-revision raw CSV and
+report are retained in [study 22](studies/22-p3-lighting-benchmark-2026-09-24.md).
 
 Revision `a0a4e29` adds an explicit depth-free 16×16 tiled Forward+ path. One
 compute invocation tests every submitted point/spot range sphere against a
@@ -595,5 +597,35 @@ pinned Linux SwiftShader passed all six P3 cases. At `a0a4e29`,
 [native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35939232585)
 and [Windows graphics/SwiftShader CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35939232615)
 passed. The Windows job completed all 64 CTests and ran two relocated Release
-games for 120 frames each. P3 temporal reconstruction and the final combined
-revision still require their own acceptance.
+games for 120 frames each. The later combined and temporal acceptance follows
+below; this paragraph describes only the original lighting checkpoint.
+
+## P1+P3 combined renderer checkpoint
+
+At clean source `4a3453e`, the integrated P1 cache, P3 lighting/Forward+ and
+first-generation temporal renderer built on Linux and passed 72 of 73 Debug
+CTests with one compositor-dependent native window skip and no failures. The
+[native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35944874993)
+passed on Linux and Windows; the
+[Windows graphics CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35944875002)
+passed 74/74 CTests on pinned SwiftShader, the real Release export integration,
+and three relocated 120-frame C++ 2D, C++ 3D and Lua-only games. The matching
+Linux physical-GPU export check rendered the same three source-hidden packages
+for 120 frames with active Khronos validation and no reported errors; the P1
+[final Release dossier](validation/p1-iteration-2026-09-24/final-release/README.md)
+also profiles the exact C++ demo scenes for 240 frames. Their time budgets
+passed, but the old ≤20 MiB explicit-allocation target missed at 43.02/43.12
+MiB due to two eager 16 MiB shadow atlases.
+
+The [integrated P3 lighting repeat](studies/24-p3-integrated-forward-plus-2026-09-24.md)
+retains 7,560 per-frame raw rows at 1920×1080, both shadow states, three
+visibility paths and a separately labelled localized-light workload. On the
+dense fixture, tile build plus raster was 11–13% slower at 32–128 lights;
+localized light ranges made it 43–54% faster. `Auto` therefore remains forward
+and `Tiled` explicit. This is pass-local cost on a single GPU, not a full-game
+speedup or a physical Windows performance claim. The
+[temporal dossier](validation/p3-temporal-2026-09-24/README.md) records Off,
+TAA and 0.67 Upscale raw image sequences and bounded 720p cost on the physical
+Linux GPU, with its own exact shader-source revision. TAA/Upscale remain opt-in
+because scene quality and whole-frame
+timing require game-specific comparison.
