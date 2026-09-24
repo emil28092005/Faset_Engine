@@ -7,7 +7,7 @@ These files preserve bounded checks and their inputs. Each record states its sou
 - [P2 GPU visibility Linux evidence](p2-gpu-visibility-2026-09-23/README.md): Debug/Release GPU acceptance, lavapipe functional checks, relocated Player exports, and explicit platform/performance limits.
 - [P2 pinned SwiftShader compatibility](p2-swiftshader-2026-09-23/README.md): the Windows CI regression, shader capability fix, independent review closure, final native CI and relocated Player evidence.
 - [P3 lighting and shadows](p3-lighting-2026-09-24/README.md): implementation, Forward+ A/B and image parity, acceptance matrix, bounded Linux evidence, and remaining Windows/platform checks; temporal reconstruction is tracked separately.
-- [P3 temporal reconstruction](p3-temporal-2026-09-24/README.md): Off/TAA/Upscale source captures, edge and reveal measurements, and bounded 720p costs.
+- [P3 temporal reconstruction](p3-temporal-2026-09-24/README.md): Off/TAA/Upscale source captures, three-path image-quality matrix, edge and reveal measurements, and bounded 720p costs.
 - [Windows software Vulkan](windows-software-vulkan-2026-09-18/README.md): fresh native build, 35 tests, launcher/window/MCP workflows and both relocated Release games on SwiftShader.
 - [Checkpoint 5 Linux acceptance](checkpoint5-linux-2026-09-18/README.md): clean offline source build, first Editor launch, exact-candidate standalone games and live Blender checks.
 - [Final Linux source checks](final-linux-2026-09-18/README.md): `4cb8255` integrated test results and both Release games after the asset-relocation correction, including package manifests and standalone captures.
