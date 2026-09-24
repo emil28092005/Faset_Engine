@@ -39,7 +39,9 @@ with tempfile.TemporaryDirectory(prefix="faset-player-diagnostics-") as temporar
                   "shadow_caster_budget_drops", "shadow_unavailable_drops",
                   "shadow_caster_draws", "sun_shadow_atlas_bytes",
                   "local_shadow_atlas_bytes", "gpu_main_raster_ms",
-                  "gpu_sun_shadow_ms", "gpu_local_shadow_ms"]:
+                  "gpu_sun_shadow_ms", "gpu_local_shadow_ms",
+                  "gpu_light_tiles_ms", "light_tile_count", "light_tile_counts_valid",
+                  "light_tile_candidate_count", "light_tile_overflow_count"]:
         assert field in lighting, (field, lighting)
     assert lighting["submitted_local_lights"] == 0 and \
            lighting["effective_sun_cascades"] == 0 and \

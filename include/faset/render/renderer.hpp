@@ -136,6 +136,7 @@ struct Snapshot {
     std::optional<CameraFrustum> camera_frustum{};
 };
 enum class VisibilityMode { Direct, GpuFrustum, GpuOcclusion };
+enum class LightingMode { Auto, Forward, Tiled };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.
 void validate_shader_bundle(const std::filesystem::path& directory);
 void validate_gpu_shader_bundle(const std::filesystem::path& directory);
@@ -146,6 +147,9 @@ struct RendererConfig {
     bool headless{false};
     bool validation{true};
     VisibilityMode visibility_mode{VisibilityMode::Direct};
+    // Auto prefers the 16x16 tiled light list at 32+ submitted local lights.
+    // Forward remains the reference and the fallback on unsupported devices.
+    LightingMode lighting_mode{LightingMode::Auto};
     // GPU counter readback is diagnostic-only; normal visibility uses no CPU feedback.
     bool visibility_diagnostics{false};
     // Optional isolated shader bundle, useful for editor preview and shader reload tests.
@@ -204,6 +208,11 @@ struct FrameStats {
     double gpu_main_cull_ms{}, gpu_main_raster_ms{}, gpu_hzb_ms{};
     double gpu_post_cull_ms{}, gpu_post_raster_ms{};
     double gpu_sun_shadow_ms{}, gpu_local_shadow_ms{};
+    double gpu_light_tiles_ms{};
+    std::uint32_t light_tile_count{};
+    // Optional tile-list readback, valid only when visibility diagnostics are on.
+    bool light_tile_counts_valid{};
+    std::uint32_t light_tile_candidate_count{}, light_tile_overflow_count{};
     std::string effective_lighting_path{"forward"};
     std::string device;
 };

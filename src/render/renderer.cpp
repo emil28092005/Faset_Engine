@@ -95,6 +95,12 @@ struct ShadowViewGpu {
     std::array<float, 4> guarded_clamp{};
     std::array<float, 4> bias_flags{};
 };
+struct LightTilePush {
+    Mat4 view_projection;
+    std::array<float, 4> viewport;
+    std::array<std::uint32_t, 4> dimensions;
+};
+static_assert(sizeof(LightTilePush) == 96);
 static_assert(sizeof(LightingHeaderGpu) == 80 &&
               offsetof(LightingHeaderGpu, sun_direction_intensity) == 16 &&
               offsetof(LightingHeaderGpu, sun_color) == 32 &&
@@ -225,7 +231,7 @@ struct Renderer::Impl {
     float timestamp_period{};
     std::uint32_t timestamp_bits{};
     VkSemaphore acquired{}, present_ready{};
-    std::array<std::string, 3> shader_layouts{};
+    std::array<std::string, 4> shader_layouts{};
     VkSwapchainKHR swapchain{};
     VkFormat swap_format{};
     VkExtent2D swap_extent{};
@@ -234,7 +240,9 @@ struct Renderer::Impl {
     Image color, depth, shadow, local_shadow;
     std::uint32_t sun_shadow_size{}, local_shadow_size{};
     Buffer vertices, readback;
-    Buffer lighting_header, lighting_locals, lighting_views;
+    Buffer lighting_header, lighting_locals, lighting_views, light_tile_words,
+           light_tile_readback;
+    bool light_tiles_capable{};
     SceneResources scene;
     InstanceTracker instance_tracker;
     std::unordered_map<std::string, std::size_t> previous_lods;
@@ -254,6 +262,11 @@ struct Renderer::Impl {
     VkDescriptorSetLayout lighting_layout{};
     VkDescriptorPool lighting_pool{};
     VkDescriptorSet lighting_set{};
+    VkDescriptorSetLayout light_tile_layout{};
+    VkDescriptorPool light_tile_pool{};
+    VkDescriptorSet light_tile_set{};
+    VkPipelineLayout light_tile_pipeline_layout{};
+    VkPipeline light_tile_pipeline{};
     VkSampler shadow_sampler{}, color_sampler{};
     VkPipelineLayout pipeline_layout{};
     VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{}, sprite_pipeline{};
@@ -361,12 +374,15 @@ struct Renderer::Impl {
         destroy(lighting_header);
         destroy(lighting_locals);
         destroy(lighting_views);
+        destroy(light_tile_words);
+        destroy(light_tile_readback);
         destroy(color);
         destroy(depth);
         destroy(shadow);
         destroy(local_shadow);
         if (device) {
             destroy_scene_interfaces();
+            destroy_light_tile_interfaces();
             if (pipeline)
                 vkDestroyPipeline(device, pipeline, nullptr);
             if (ui_pipeline)
@@ -697,6 +713,13 @@ struct Renderer::Impl {
                     max_compute_groups_x = properties.limits.maxComputeWorkGroupCount[0];
                     max_storage_buffer_range = properties.limits.maxStorageBufferRange;
                     max_image_dimension = properties.limits.maxImageDimension2D;
+                    light_tiles_capable =
+                        (queues[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
+                        properties.limits.maxComputeWorkGroupInvocations >= 64 &&
+                        properties.limits.maxComputeWorkGroupSize[0] >= 64 &&
+                        properties.limits.maxPerStageDescriptorStorageBuffers >= 4 &&
+                        properties.limits.maxDescriptorSetStorageBuffers >= 4 &&
+                        max_compute_groups_x > 0;
                     scene.available = (queues[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
                                       properties.limits.maxPerStageDescriptorStorageBuffers >= 8 &&
                                       properties.limits.maxDescriptorSetStorageBuffers >= 8 &&
@@ -805,7 +828,19 @@ struct Renderer::Impl {
             }
         }
         make_targets();
+        light_tile_words = make_buffer(16,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         make_descriptors();
+        if (light_tiles_capable) {
+            try {
+                make_light_tile_descriptors();
+            } catch (const std::exception&) {
+                destroy_light_tile_interfaces();
+                light_tiles_capable = false;
+            }
+        }
         make_pipelines();
         if (scene.available && c.visibility_mode != VisibilityMode::Direct)
             make_scene_descriptors_and_pipelines();
@@ -964,7 +999,7 @@ struct Renderer::Impl {
         pi.pPoolSizes = sizes;
         check(vkCreateDescriptorPool(device, &pi, nullptr, &descriptor_pool),
               "Create descriptor pool");
-        std::array<VkDescriptorSetLayoutBinding, 4> lighting_bindings{};
+        std::array<VkDescriptorSetLayoutBinding, 5> lighting_bindings{};
         for (std::uint32_t i = 0; i < lighting_bindings.size(); ++i)
             lighting_bindings[i] = {i,
                                     i == 3 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
@@ -975,7 +1010,7 @@ struct Renderer::Impl {
         check(vkCreateDescriptorSetLayout(device, &li, nullptr, &lighting_layout),
               "Create lighting descriptor layout");
         VkDescriptorPoolSize lighting_sizes[] = {
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1}};
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1}};
         pi.flags = 0;
         pi.maxSets = 1;
         pi.poolSizeCount = 2;
@@ -998,6 +1033,59 @@ struct Renderer::Impl {
         check(vkCreateSampler(device, &si, nullptr, &shadow_sampler), "Create shadow sampler");
         si.magFilter = si.minFilter = VK_FILTER_LINEAR;
         check(vkCreateSampler(device, &si, nullptr, &color_sampler), "Create color sampler");
+    }
+    void destroy_light_tile_interfaces() {
+        if (!device)
+            return;
+        if (light_tile_pipeline)
+            vkDestroyPipeline(device, light_tile_pipeline, nullptr);
+        if (light_tile_pipeline_layout)
+            vkDestroyPipelineLayout(device, light_tile_pipeline_layout, nullptr);
+        if (light_tile_pool)
+            vkDestroyDescriptorPool(device, light_tile_pool, nullptr);
+        if (light_tile_layout)
+            vkDestroyDescriptorSetLayout(device, light_tile_layout, nullptr);
+        light_tile_pipeline = {};
+        light_tile_pipeline_layout = {};
+        light_tile_pool = {};
+        light_tile_layout = {};
+        light_tile_set = {};
+    }
+    void make_light_tile_descriptors() {
+        const std::array<VkDescriptorSetLayoutBinding, 2> bindings{{
+            {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+            {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}}};
+        VkDescriptorSetLayoutCreateInfo layout{};
+        layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout.bindingCount = static_cast<std::uint32_t>(bindings.size());
+        layout.pBindings = bindings.data();
+        check(vkCreateDescriptorSetLayout(device, &layout, nullptr, &light_tile_layout),
+              "Create light tile descriptor layout");
+        VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2};
+        VkDescriptorPoolCreateInfo pool_info{};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.maxSets = 1;
+        pool_info.poolSizeCount = 1;
+        pool_info.pPoolSizes = &size;
+        check(vkCreateDescriptorPool(device, &pool_info, nullptr, &light_tile_pool),
+              "Create light tile descriptor pool");
+        VkDescriptorSetAllocateInfo allocation{};
+        allocation.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocation.descriptorPool = light_tile_pool;
+        allocation.descriptorSetCount = 1;
+        allocation.pSetLayouts = &light_tile_layout;
+        check(vkAllocateDescriptorSets(device, &allocation, &light_tile_set),
+              "Allocate light tile descriptors");
+        VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                                 sizeof(LightTilePush)};
+        VkPipelineLayoutCreateInfo pipeline{};
+        pipeline.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipeline.setLayoutCount = 1;
+        pipeline.pSetLayouts = &light_tile_layout;
+        pipeline.pushConstantRangeCount = 1;
+        pipeline.pPushConstantRanges = &push;
+        check(vkCreatePipelineLayout(device, &pipeline, nullptr, &light_tile_pipeline_layout),
+              "Create light tile pipeline layout");
     }
     VkDescriptorSet upload_texture(std::shared_ptr<const Texture> source) {
         if (!source)
@@ -1214,6 +1302,30 @@ struct Renderer::Impl {
                                            : &pipeline;
                 check(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, output),
                       "Create graphics pipeline");
+            }
+            if (light_tiles_capable) {
+                VkShaderModule tile_shader{};
+                try {
+                    tile_shader = shader(shaders[3]);
+                    VkComputePipelineCreateInfo tile{};
+                    tile.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+                    tile.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+                    tile.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+                    tile.stage.module = tile_shader;
+                    tile.stage.pName = "main";
+                    tile.layout = light_tile_pipeline_layout;
+                    check(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &tile,
+                                                   nullptr, &light_tile_pipeline),
+                          "Create light tile compute pipeline");
+                } catch (const std::exception&) {
+                    // Optional acceleration: keep the validated forward renderer.
+                    if (light_tile_pipeline)
+                        vkDestroyPipeline(device, light_tile_pipeline, nullptr);
+                    light_tile_pipeline = {};
+                    light_tiles_capable = false;
+                }
+                if (tile_shader)
+                    vkDestroyShaderModule(device, tile_shader, nullptr);
             }
         } catch (...) {
             vkDestroyShaderModule(device, vertex, nullptr);
@@ -1635,14 +1747,15 @@ struct Renderer::Impl {
         upload_scene_buffer(buffer, values.data(), values.size() * sizeof(T), usage);
     }
     void update_lighting_descriptors() {
-        const std::array<VkDescriptorBufferInfo, 3> buffers{{
+        const std::array<VkDescriptorBufferInfo, 4> buffers{{
             {lighting_header.handle, 0, lighting_header.size},
             {lighting_locals.handle, 0, lighting_locals.size},
-            {lighting_views.handle, 0, lighting_views.size}}};
+            {lighting_views.handle, 0, lighting_views.size},
+            {light_tile_words.handle, 0, light_tile_words.size}}};
         const VkDescriptorImageInfo atlas{VK_NULL_HANDLE,
                                           local_shadow.handle ? local_shadow.view : shadow.view,
                                           VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL};
-        std::array<VkWriteDescriptorSet, 4> writes{};
+        std::array<VkWriteDescriptorSet, 5> writes{};
         for (std::uint32_t i = 0; i < writes.size(); ++i) {
             writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writes[i].dstSet = lighting_set;
@@ -1653,7 +1766,25 @@ struct Renderer::Impl {
             if (i == 3)
                 writes[i].pImageInfo = &atlas;
             else
-                writes[i].pBufferInfo = &buffers[i];
+                writes[i].pBufferInfo = &buffers[i == 4 ? 3 : i];
+        }
+        vkUpdateDescriptorSets(device, static_cast<std::uint32_t>(writes.size()),
+                               writes.data(), 0, nullptr);
+    }
+    void update_light_tile_descriptors() {
+        if (!light_tile_set)
+            return;
+        const std::array<VkDescriptorBufferInfo, 2> buffers{{
+            {lighting_locals.handle, 0, lighting_locals.size},
+            {light_tile_words.handle, 0, light_tile_words.size}}};
+        std::array<VkWriteDescriptorSet, 2> writes{};
+        for (std::uint32_t i = 0; i < writes.size(); ++i) {
+            writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[i].dstSet = light_tile_set;
+            writes[i].dstBinding = i;
+            writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[i].descriptorCount = 1;
+            writes[i].pBufferInfo = &buffers[i];
         }
         vkUpdateDescriptorSets(device, static_cast<std::uint32_t>(writes.size()),
                                writes.data(), 0, nullptr);
@@ -1765,6 +1896,10 @@ struct Renderer::Impl {
         statistics.local_shadow_atlas_bytes = local_shadow_size
             ? local_shadow.allocation_size : 0;
         statistics.gpu_local_shadow_ms = 0;
+        statistics.gpu_light_tiles_ms = 0;
+        statistics.light_tile_count = 0;
+        statistics.light_tile_counts_valid = false;
+        statistics.light_tile_candidate_count = statistics.light_tile_overflow_count = 0;
         statistics.effective_lighting_path = "forward";
         statistics.gpu_bins = statistics.gpu_visible_instances =
             statistics.gpu_frustum_rejected = statistics.gpu_occlusion_deferred =
@@ -2354,7 +2489,64 @@ struct Renderer::Impl {
         upload_scene_buffer(lighting_header, &lighting, sizeof(lighting), 0);
         upload_scene_vector(lighting_locals, gpu_lights);
         upload_scene_vector(lighting_views, gpu_shadow_views);
+        constexpr std::uint32_t light_tile_side = 16;
+        constexpr std::uint32_t light_tile_stride_words = 66;
+        constexpr std::uint32_t light_tile_capacity = 64;
+        const std::uint32_t light_tiles_x = width / light_tile_side +
+                                            (width % light_tile_side != 0);
+        const std::uint32_t light_tiles_y = height / light_tile_side +
+                                            (height % light_tile_side != 0);
+        const std::uint64_t light_tile_count =
+            std::uint64_t(light_tiles_x) * light_tiles_y;
+        const std::uint64_t light_tile_bytes =
+            (4u + light_tile_count * light_tile_stride_words) * sizeof(std::uint32_t);
+        // The fixed 1080p reference scene has broad overlapping lights: 32 and
+        // 64 nearly fill every tile, and 128 overflows every tile. Until a
+        // validated runtime occupancy predictor exists, Auto keeps the measured
+        // faster full scan. The explicit mode supports sparse-light projects.
+        const bool requested_light_tiles =
+            config.lighting_mode == LightingMode::Tiled;
+        bool use_light_tiles = requested_light_tiles && lighting.counts[0] > 0 &&
+            light_tiles_capable && light_tile_pipeline && light_tile_set &&
+            std::all_of(scene_viewport.begin(), scene_viewport.end(),
+                        [](float value) { return std::isfinite(value); }) &&
+            scene_viewport[2] > 0 && scene_viewport[3] > 0 &&
+            light_tile_count <= std::numeric_limits<std::uint32_t>::max() &&
+            light_tile_bytes <= max_storage_buffer_range &&
+            (light_tile_count + 63) / 64 <= max_compute_groups_x;
+        if (use_light_tiles && light_tile_words.size < light_tile_bytes) {
+            try {
+                auto replacement = make_buffer(light_tile_bytes,
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                destroy(light_tile_words);
+                light_tile_words = replacement;
+            } catch (const std::exception&) {
+                use_light_tiles = false;
+            }
+        }
+        if (use_light_tiles) {
+            statistics.effective_lighting_path = "tiled";
+            statistics.light_tile_count = static_cast<std::uint32_t>(light_tile_count);
+        }
+        bool collect_light_tile_counts = use_light_tiles && config.visibility_diagnostics;
+        if (collect_light_tile_counts && light_tile_readback.size < light_tile_bytes) {
+            try {
+                auto replacement = make_buffer(light_tile_bytes,
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+                destroy(light_tile_readback);
+                light_tile_readback = replacement;
+            } catch (const std::exception&) {
+                collect_light_tile_counts = false;
+            }
+        }
         update_lighting_descriptors();
+        if (use_light_tiles)
+            update_light_tile_descriptors();
         Vec3 light_eye{-direction[0] * 30, -direction[1] * 30, -direction[2] * 30};
         Vec3 light_up = std::abs(direction[1]) > .98f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
         Push push{sun_raster && !shadow_plan.sun_views.empty()
@@ -2596,6 +2788,38 @@ struct Renderer::Impl {
                                VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
                                VK_IMAGE_ASPECT_DEPTH_BIT);
             });
+        if (use_light_tiles)
+            add_pass("LightTileBuild", {}, {"light_tiles"}, [&] {
+                scene_barrier(VK_PIPELINE_STAGE_2_HOST_BIT,
+                              VK_ACCESS_2_HOST_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                  light_tile_pipeline);
+                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        light_tile_pipeline_layout, 0, 1,
+                                        &light_tile_set, 0, nullptr);
+                const LightTilePush tile_push{
+                    snapshot.view_projection, scene_viewport,
+                    {light_tiles_x, light_tiles_y, lighting.counts[0], light_tile_capacity}};
+                vkCmdPushConstants(command, light_tile_pipeline_layout,
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                                   sizeof(tile_push), &tile_push);
+                vkCmdDispatch(command,
+                              static_cast<std::uint32_t>((light_tile_count + 63) / 64), 1, 1);
+                scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+            });
+        else
+            add_pass("LightTileFallback", {}, {"light_tiles"}, [&] {
+                vkCmdFillBuffer(command, light_tile_words.handle, 0, 16, 0);
+                scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+            });
         if (gpu_active)
             add_pass("MainCull", {"shadow"},
                      {"main_indirect", "main_visible", "deferred_ids"}, [&] {
@@ -2656,8 +2880,9 @@ struct Renderer::Impl {
             });
         add_pass(occlusion ? "MainRaster" : "ForwardAndUI",
                  gpu_active ? std::vector<std::string>{"shadow", "local_shadow",
-                                                       "main_indirect", "main_visible"}
-                            : std::vector<std::string>{"shadow", "local_shadow"},
+                                                       "light_tiles", "main_indirect", "main_visible"}
+                            : std::vector<std::string>{"shadow", "local_shadow",
+                                                       "light_tiles"},
                  {"color", "depth"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
@@ -2845,7 +3070,9 @@ struct Renderer::Impl {
                 vkCmdEndRendering(command);
             });
         }
-        add_pass("Readback", {"color"}, {"capture"}, [&] {
+        add_pass("Readback", collect_light_tile_counts
+                     ? std::vector<std::string>{"color", "light_tiles"}
+                     : std::vector<std::string>{"color"}, {"capture"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
             VkBufferImageCopy copy{};
@@ -2877,6 +3104,19 @@ struct Renderer::Impl {
                 const VkBufferCopy count_copy{0, 0, sizeof(std::uint32_t)};
                 vkCmdCopyBuffer(command, scene.deferred_count.handle,
                                 scene.deferred_count_stage.handle, 1, &count_copy);
+                scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_HOST_BIT,
+                              VK_ACCESS_2_HOST_READ_BIT);
+            }
+            if (collect_light_tile_counts) {
+                scene_barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                              VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                              VK_ACCESS_2_TRANSFER_READ_BIT);
+                const VkBufferCopy tile_copy{0, 0, light_tile_bytes};
+                vkCmdCopyBuffer(command, light_tile_words.handle,
+                                light_tile_readback.handle, 1, &tile_copy);
                 scene_barrier(VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                               VK_ACCESS_2_TRANSFER_WRITE_BIT,
                               VK_PIPELINE_STAGE_2_HOST_BIT,
@@ -2925,6 +3165,7 @@ struct Renderer::Impl {
                 if (label == "MainCull") statistics.gpu_main_cull_ms = elapsed;
                 else if (label == "SunShadowAtlas") statistics.gpu_sun_shadow_ms = elapsed;
                 else if (label == "LocalShadowAtlas") statistics.gpu_local_shadow_ms = elapsed;
+                else if (label == "LightTileBuild") statistics.gpu_light_tiles_ms = elapsed;
                 else if (label == "MainRaster" || label == "ForwardAndUI")
                     statistics.gpu_main_raster_ms = elapsed;
                 else if (label == "BuildCurrentHZB") statistics.gpu_hzb_ms = elapsed;
@@ -2988,6 +3229,29 @@ struct Renderer::Impl {
             statistics.culled_meshes += statistics.gpu_frustum_rejected;
             statistics.visibility_counters_valid = true;
         }
+        if (collect_light_tile_counts) {
+            void* mapped_tiles{};
+            check(vkMapMemory(device, light_tile_readback.memory, 0,
+                              light_tile_bytes, 0, &mapped_tiles),
+                  "Read light tile diagnostics");
+            const auto* words = static_cast<const std::uint32_t*>(mapped_tiles);
+            if (words[0] != light_tiles_x || words[1] != 1 ||
+                words[2] != light_tiles_y || words[3] != light_tile_capacity) {
+                vkUnmapMemory(device, light_tile_readback.memory);
+                throw std::runtime_error("Light tile diagnostic header is inconsistent");
+            }
+            for (std::uint32_t tile = 0; tile < light_tile_count; ++tile) {
+                const auto base = 4u + tile * light_tile_stride_words;
+                if (words[base] > light_tile_capacity || words[base + 1] > 1) {
+                    vkUnmapMemory(device, light_tile_readback.memory);
+                    throw std::runtime_error("Light tile diagnostic record is invalid");
+                }
+                statistics.light_tile_candidate_count += words[base];
+                statistics.light_tile_overflow_count += words[base + 1];
+            }
+            vkUnmapMemory(device, light_tile_readback.memory);
+            statistics.light_tile_counts_valid = true;
+        }
         instance_tracker.finish_frame();
         scene.previous_vp = snapshot.view_projection;
         scene.previous_projection = snapshot.projection;
@@ -3001,7 +3265,9 @@ struct Renderer::Impl {
                                          local_shadow.allocation_size +
                                          lighting_header.allocation_size +
                                          lighting_locals.allocation_size +
-                                         lighting_views.allocation_size;
+                                         lighting_views.allocation_size +
+                                         light_tile_words.allocation_size +
+                                         light_tile_readback.allocation_size;
         statistics.texture_count = static_cast<std::uint32_t>(textures.size());
         for (const auto& [_, texture] : textures)
             statistics.gpu_allocated_bytes += texture.image.allocation_size;
@@ -3039,6 +3305,8 @@ bool Renderer::reload_shaders(std::string& error) {
     auto previous_ui = r.ui_pipeline;
     auto previous_shadow = r.shadow_pipeline;
     auto previous_sprite = r.sprite_pipeline;
+    auto previous_light_tile = r.light_tile_pipeline;
+    auto previous_light_tiles_capable = r.light_tiles_capable;
     auto previous_layout_fingerprints = r.shader_layouts;
     auto previous_gpu_fingerprints = r.scene.shader_layouts;
     auto previous_gpu = r.scene.graphics_pipeline;
@@ -3050,6 +3318,7 @@ bool Renderer::reload_shaders(std::string& error) {
     r.ui_pipeline = {};
     r.shadow_pipeline = {};
     r.sprite_pipeline = {};
+    r.light_tile_pipeline = {};
     r.scene.graphics_pipeline = r.scene.cull_pipeline = r.scene.post_pipeline =
         r.scene.hzb_pipeline = {};
     try {
@@ -3065,6 +3334,8 @@ bool Renderer::reload_shaders(std::string& error) {
             vkDestroyPipeline(r.device, r.shadow_pipeline, nullptr);
         if (r.sprite_pipeline)
             vkDestroyPipeline(r.device, r.sprite_pipeline, nullptr);
+        if (r.light_tile_pipeline)
+            vkDestroyPipeline(r.device, r.light_tile_pipeline, nullptr);
         if (r.pipeline_layout)
             vkDestroyPipelineLayout(r.device, r.pipeline_layout, nullptr);
         for (auto pipeline : {r.scene.graphics_pipeline, r.scene.cull_pipeline,
@@ -3076,6 +3347,8 @@ bool Renderer::reload_shaders(std::string& error) {
         r.ui_pipeline = previous_ui;
         r.shadow_pipeline = previous_shadow;
         r.sprite_pipeline = previous_sprite;
+        r.light_tile_pipeline = previous_light_tile;
+        r.light_tiles_capable = previous_light_tiles_capable;
         r.scene.graphics_pipeline = previous_gpu;
         r.scene.cull_pipeline = previous_cull;
         r.scene.post_pipeline = previous_post;
@@ -3089,6 +3362,8 @@ bool Renderer::reload_shaders(std::string& error) {
     vkDestroyPipeline(r.device, previous_ui, nullptr);
     vkDestroyPipeline(r.device, previous_shadow, nullptr);
     vkDestroyPipeline(r.device, previous_sprite, nullptr);
+    if (previous_light_tile)
+        vkDestroyPipeline(r.device, previous_light_tile, nullptr);
     for (auto pipeline : {previous_gpu, previous_cull, previous_post, previous_hzb})
         if (pipeline)
             vkDestroyPipeline(r.device, pipeline, nullptr);

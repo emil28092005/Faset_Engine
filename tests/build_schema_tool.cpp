@@ -60,7 +60,7 @@ int tool_main(int argc, char** argv) {
         for (const auto* target : {"faset_player", "faset_schema_exporter"})
             fs::copy_file(self, build / (std::string(target) + suffix),
                           fs::copy_options::overwrite_existing);
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
                                   "gpuHzbMain", "gpuPostCullMain"})
             for (const auto* extension : {".spv", ".reflection.json"})

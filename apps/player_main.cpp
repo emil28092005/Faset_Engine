@@ -125,7 +125,15 @@ Json profileFrames(const std::vector<ProfileSample>& samples) {
                           {"gpu_sun_shadow_ms",
                            gpuMeasured ? Json(sample.lighting.gpu_sun_shadow_ms) : Json(nullptr)},
                           {"gpu_local_shadow_ms",
-                           gpuMeasured ? Json(sample.lighting.gpu_local_shadow_ms) : Json(nullptr)}});
+                           gpuMeasured ? Json(sample.lighting.gpu_local_shadow_ms) : Json(nullptr)},
+                          {"gpu_light_tiles_ms",
+                           gpuMeasured ? Json(sample.lighting.gpu_light_tiles_ms) : Json(nullptr)},
+                          {"light_tile_count", sample.lighting.light_tile_count},
+                          {"light_tile_counts_valid", sample.lighting.light_tile_counts_valid},
+                          {"light_tile_candidate_count", sample.lighting.light_tile_counts_valid
+                              ? Json(sample.lighting.light_tile_candidate_count) : Json(nullptr)},
+                          {"light_tile_overflow_count", sample.lighting.light_tile_counts_valid
+                              ? Json(sample.lighting.light_tile_overflow_count) : Json(nullptr)}});
     }
     return {{"samples", std::move(frames)},
             {"summary_ms",

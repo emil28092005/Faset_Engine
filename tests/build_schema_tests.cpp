@@ -148,7 +148,7 @@ int test_main(int argc, char** argv) {
         const auto first = builds.wait(builds.start_build());
         check(first.state == "succeeded", "Valid custom schema v2 publishes: " + first.error);
         const auto directory = path_from_utf8(first.result.at("directory").get<std::string>());
-        for (const auto* entry : {"gpuVertexMain", "gpuShadowMain", "gpuCullMain",
+        for (const auto* entry : {"lightTileMain", "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
                                   "gpuHzbMain", "gpuPostCullMain"})
             for (const auto* extension : {".spv", ".reflection.json"})
                 check(fs::is_regular_file(directory / "shaders" /

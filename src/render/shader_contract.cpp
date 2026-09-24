@@ -30,15 +30,54 @@ void locations(const Json& fields, std::initializer_list<const char*> types, con
         ++index;
     }
 }
+void validate_tile_layout(const Json& layout) {
+    require(layout.at("stage") == "compute", "light tile shader stage changed");
+    const auto& descriptors = layout.at("descriptors");
+    require(descriptors.is_array() && descriptors.size() == 2,
+            "light tile descriptor count changed");
+    for (std::size_t i = 0; i < 2; ++i)
+        require(descriptors[i].at("set") == 0 && descriptors[i].at("binding") == i &&
+                    descriptors[i].at("count") == 1 &&
+                    descriptors[i].at("type") == "storage_buffer" &&
+                    descriptors[i].at("element_stride") == (i == 0 ? 80 : 4),
+                "light tile descriptor ABI changed");
+    const auto& constants = layout.at("push_constants");
+    require(constants.is_array() && constants.size() == 1 &&
+                constants[0].at("offset") == 0 && constants[0].at("size") == 96,
+            "light tile push size changed");
+    const auto& members = constants[0].at("members");
+    require(members.is_array() && members.size() == 3,
+            "light tile push members changed");
+    const int offsets[] = {0, 64, 80};
+    const char* types[] = {"float32x4x4", "float32x4", "uint32x4"};
+    for (std::size_t i = 0; i < 3; ++i)
+        require(members[i].at("offset") == offsets[i] &&
+                    members[i].at("size") == (i == 0 ? 64 : 16) &&
+                    members[i].at("type") == types[i],
+                "light tile push field changed");
+    const auto& blocks = layout.at("spirv_push_constants");
+    require(blocks.is_array() && blocks.size() == 1 &&
+                blocks[0].at("members").size() == 3,
+            "light tile SPIR-V push block changed");
+    const auto& actual = blocks[0].at("members");
+    for (std::size_t i = 0; i < 3; ++i)
+        require(actual[i].at("member") == i && actual[i].at("offset") == offsets[i],
+                "light tile SPIR-V push offset changed");
+    require(actual[0].at("matrix_layout") == "row-major" &&
+                actual[0].at("matrix_stride") == 16,
+            "light tile SPIR-V matrix storage convention changed");
+    locations(layout.at("inputs"), {}, "light tile inputs");
+    locations(layout.at("outputs"), {}, "light tile outputs");
+}
 void validate_layout(const Json& layout, std::string_view entry) {
     const bool fragment = entry == "fragmentMain";
     require(layout.at("stage") == (fragment ? "fragment" : "vertex"), "shader stage changed");
     const auto& descriptors = layout.at("descriptors");
-    require(descriptors.is_array() && descriptors.size() == 8, "descriptor count changed");
+    require(descriptors.is_array() && descriptors.size() == 9, "descriptor count changed");
     for (std::size_t i = 0; i < descriptors.size(); ++i) {
         const auto& binding = descriptors[i];
         const auto set = i < 4 ? 0 : 1;
-        const auto slot = i % 4;
+        const auto slot = set == 0 ? i : i - 4;
         require(binding.at("set") == set && binding.at("binding") == slot &&
                     binding.at("count") == 1,
                 "descriptor set, binding or array count changed");
@@ -46,8 +85,8 @@ void validate_layout(const Json& layout, std::string_view entry) {
                                     : slot == 3 ? "sampled_image_2d" : "storage_buffer";
         require(binding.at("type") == expected_type,
                 "descriptor type changed");
-        if (set == 1 && slot < 3)
-            require(binding.at("element_stride") == (slot == 2 ? 112 : 80),
+        if (set == 1 && slot != 3)
+            require(binding.at("element_stride") == (slot == 4 ? 4 : slot == 2 ? 112 : 80),
                     "lighting storage record stride changed");
         require(fragment || !binding.at("used").get<bool>(),
                 "vertex texture bindings are unsupported");
@@ -198,22 +237,25 @@ detail::ShaderCode load(const std::filesystem::path& directory, const char* entr
     require(metadata.at("layout_fingerprint") == fingerprint, "layout fingerprint mismatch");
     if (gpu)
         validate_gpu_layout(layout, entry);
+    else if (std::string_view(entry) == "lightTileMain")
+        validate_tile_layout(layout);
     else
         validate_layout(layout, entry);
     detail::ShaderCode result;
     result.layout_fingerprint = fingerprint;
     result.words.resize(bytes.size() / 4);
     std::memcpy(result.words.data(), bytes.data(), bytes.size());
-    validate_spirv(result.words, gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
+    validate_spirv(result.words, std::string_view(entry) == "lightTileMain" ? 5u :
+                   gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
                                            std::string_view(entry) == "gpuShadowMain") ? 0u : 5u)
                                      : (std::string_view(entry) == "fragmentMain" ? 4u : 0u));
     return result;
 }
 } // namespace
-std::array<detail::ShaderCode, 3>
+std::array<detail::ShaderCode, 4>
 detail::load_shader_bundle(const std::filesystem::path& directory) {
     return {load(directory, "vertexMain"), load(directory, "fragmentMain"),
-            load(directory, "shadowMain")};
+            load(directory, "shadowMain"), load(directory, "lightTileMain")};
 }
 std::array<detail::ShaderCode, 5>
 detail::load_gpu_shader_bundle(const std::filesystem::path& directory) {

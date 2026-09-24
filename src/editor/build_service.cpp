@@ -333,6 +333,7 @@ struct BuildService::Impl {
             copy_required_file(player, staging / ("faset_player" + executable_suffix()));
             copy_required_file(exporter, staging / ("faset_schema_exporter" + executable_suffix()));
             for (const auto* file : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv",
+                                     "lightTileMain.spv", "lightTileMain.reflection.json",
                                      "vertexMain.reflection.json", "fragmentMain.reflection.json",
                                      "shadowMain.reflection.json", "gpuVertexMain.spv",
                                      "gpuShadowMain.spv", "gpuCullMain.spv", "gpuHzbMain.spv",
@@ -585,6 +586,7 @@ struct BuildService::Impl {
             copy_required_file(build_directory / ("faset_player" + executable_suffix()),
                                staging / ("faset_player" + executable_suffix()));
             for (const auto* shader : {"vertexMain.spv", "fragmentMain.spv", "shadowMain.spv",
+                                       "lightTileMain.spv", "lightTileMain.reflection.json",
                                        "vertexMain.reflection.json", "fragmentMain.reflection.json",
                                        "shadowMain.reflection.json", "gpuVertexMain.spv",
                                        "gpuShadowMain.spv", "gpuCullMain.spv", "gpuHzbMain.spv",

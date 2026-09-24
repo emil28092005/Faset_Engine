@@ -383,6 +383,14 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
             ImGui::Separator();
             ImGui::TextUnformatted("Lighting and shadows");
             ImGui::Text("Lighting path: %s", stats.effective_lighting_path.c_str());
+            ImGui::Text("Light tiles: %u; GPU build %.2f ms",
+                        stats.light_tile_count, stats.gpu_light_tiles_ms);
+            if (stats.light_tile_counts_valid)
+                ImGui::Text("Tile entries: %u; overflow tiles: %u",
+                            stats.light_tile_candidate_count,
+                            stats.light_tile_overflow_count);
+            else if (stats.light_tile_count)
+                ImGui::TextDisabled("Tile entry counts unavailable until diagnostics readback");
             ImGui::Text("Local lights: %u submitted, %u omitted",
                         stats.submitted_local_lights, stats.omitted_local_lights);
             ImGui::Text("Sun cascades: %u / %u effective",
