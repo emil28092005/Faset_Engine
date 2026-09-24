@@ -72,6 +72,10 @@ a 1×1 sampled D32 fallback image can, affected lights remain unshadowed and
 report unavailable shadow views. A device without sampled D32 support cannot
 start this renderer. Scheduled atlas tiles are cleared and redrawn each frame;
 there is no persistent shadow cache yet.
+Both 2048² atlases are currently allocated when the renderer starts; together
+they account for 32 MiB of explicit Vulkan allocation even if a scene does not
+render a shadow face. The [clean Release reference](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/p1-iteration-2026-09-24/final-release/README.md)
+records the resulting memory budget miss in both small example games.
 Sprite-only scenes, a missing sun, and a sun with `casts_shadow: false` skip sun
 shadow raster work.
 
@@ -92,7 +96,8 @@ fixed dense benchmark was slower after including tile construction, so there
 is no automatic scene-dependent switch yet. The Player profile reports
 `effective_lighting_path`, tile GPU time and grid size; optional Editor
 diagnostics also report stored candidates and overflowing tiles. See
-[Profiling](profiling.md) and the [measured Forward+ study](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/23-p3-forward-plus-2026-09-24.md).
+[Profiling](profiling.md), the [original Forward+ study](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/23-p3-forward-plus-2026-09-24.md),
+and the [combined-code repeat](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/24-p3-integrated-forward-plus-2026-09-24.md).
 
 ## Add a point light through MCP
 

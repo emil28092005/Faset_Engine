@@ -115,16 +115,18 @@ evidence. The parallel [native/manual CI](https://github.com/emil28092005/Faset_
 passed on Linux and Windows. This is **software** Vulkan; Windows did not have an
 active Khronos validation layer (`validation_enabled: false`), and no physical
 Windows GPU/driver performance claim follows. The later [combined P1/P3 Windows
-graphics CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35942307579)
-at `87230f3` passed 74/74 CTests, including real diagnostic navigation, real
-Release export integration and all three relocated games. The physical-GPU
-Linux reference above had active validation.
+graphics CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35944875002)
+at clean `4a3453e` passed 74/74 CTests, including real diagnostic navigation,
+real Release export integration and all three relocated games for 120 frames.
+The [parallel native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35944874993)
+passed on Linux and Windows. The physical-GPU Linux reference above had active
+validation; Windows graphics used pinned SwiftShader.
 
 ## P1 acceptance record
 
 | Area | Evidence and current limit |
 | --- | --- |
-| Lua | Linux native and Release [relocated Lua result](../lua-release-2026-09-24/README.md), repeated in the [clean combined three-game Release reference](final-release/README.md); Windows CPU/SwiftShader [combined 74-test suite](https://github.com/emil28092005/Faset_Engine/actions/runs/35942307579) and [relocated Lua-only Release report](windows-4ac02ee/playable-report.json), 120 completed frames. |
+| Lua | Linux native and Release [relocated Lua result](../lua-release-2026-09-24/README.md), repeated in the [clean combined three-game Release reference](final-release/README.md); Windows CPU/SwiftShader [combined 74-test suite](https://github.com/emil28092005/Faset_Engine/actions/runs/35944875002) and [relocated Lua-only Release report](windows-4ac02ee/playable-report.json), 120 completed frames. |
 | Cache and rollback | [Five verified hits](report.json), `build_cache` and `build_schema_publication` contracts for headers, toolchain, schema/shader corruption and source races; the raw failed/recovered build retains the previous pointer. |
 | Diagnostics | `build_diagnostics` fixtures cover Clang, clang-cl, Lua, Unicode and unparseable output. The raw real failure above found a staged-source mapping gap; [the replay](diagnostic-replay.json), parser case, warning-flood case and real BuildService integration assertion cover the correction. |
 | Starters/navigation | [Four runnable C++/Lua × 2D/3D starters](../p1-starters-linux-2026-09-24.md) plus launcher/CLI and source-open tests. |

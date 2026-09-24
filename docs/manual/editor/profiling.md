@@ -236,7 +236,11 @@ separately labelled workload. Compare `gpu_build_plus_raster_ms`, which includes
 frame with `--tile-diagnostics on` reports candidate and overflow counts but
 adds a GPU readback, so do not mix it into the timed runs. The
 [Forward+ measurement](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/23-p3-forward-plus-2026-09-24.md) retains
-raw frames, shader hashes, and the decision.
+raw frames, shader hashes, and the initial decision. The
+[combined P1+P3 repeat](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/24-p3-integrated-forward-plus-2026-09-24.md)
+retains 7,560 further frame rows under both shadow settings. Timed tile-count
+fields are unavailable when diagnostic readback is off; do not interpret their
+placeholder zero as proof that no tile overflowed.
 
 ## Current performance scope
 

@@ -54,7 +54,7 @@ and temporal image/cost evidence has a [separate record](../p3-temporal-2026-09-
 | Driver, profile, real 64×64 benchmark smoke | `render_lighting_benchmark_schema`, `render_lighting_benchmark_smoke`, `player_shutdown_diagnostics` | Full Linux Debug green at `4a3453e` |
 | 1920×1080 0/4/16/32/64/128 Release sweep, three repeats, both shadow states | `tools/benchmark_p3_lighting.py --sweep` | Forward and tiled repeated at clean `4a3453e`: 6,480 raw frames across three visibility modes; study 24 |
 | 1920×1080 paired paths, 32/64/128 dense and localized lights | `faset_p3_lighting_benchmark --lighting forward|tiled` | Dense tiled 11–13% slower; localized tiled 43–54% faster in build+raster on the reference GPU; study 24 retains another 1,080 localized frames |
-| Windows native build, pinned SwiftShader GPU tests, relocated Release 2D/3D Players | `windows-graphics.yml`, `ci.yml` | Native/manual passed at `4a3453e`; Windows graphics at that revision is tracked below; `a0a4e29` passed 64 Windows CTests and two relocated 120-frame Release games |
+| Windows native build, pinned SwiftShader GPU tests, relocated Release 2D/3D Players | `windows-graphics.yml`, `ci.yml` | At `4a3453e`, native/manual passed, Windows graphics passed 74/74 CTests and three relocated 120-frame Release games including Lua; software Vulkan only |
 
 The supported-atlas GPU tests create a renderer with validation requested and
 assert zero reported Vulkan errors; a test result is a validation-layer pass only
@@ -71,7 +71,9 @@ RTX 2080 Ti with active Khronos validation and zero reported errors. The
 [native/manual CI run](https://github.com/emil28092005/Faset_Engine/actions/runs/35944874993)
 passed on Linux and Windows; the corresponding
 [Windows graphics run](https://github.com/emil28092005/Faset_Engine/actions/runs/35944875002)
-is the integrated SwiftShader acceptance run. The P3 paired sweep was repeated
+passed all 74 registered CTests on pinned SwiftShader, the real export
+integration, and all three source-hidden relocated Release games for 120 frames
+each. It is the integrated software-Vulkan acceptance run. The P3 paired sweep was repeated
 on this exact clean revision with identical binary and shader hashes across
 forward and tiled paths. The timed CSVs omit tile-occupancy readback: their
 zero-valued overflow field is **not** evidence of no overflow. Study 24 retains
@@ -132,8 +134,9 @@ frames, and validation errors. An offscreen capture's `cpu_ms` includes GPU wait
 and readback; it is not thread CPU time. The exact Release benchmark revision,
 driver and original paired path data are retained in study 23. The combined
 clean-revision repeat and three relocated physical-GPU games are now in study
-24 and the P1 record. Final Release full CTest and integrated Windows graphics
-results are tracked separately from the earlier source checkpoints.
+24 and the P1 record. Final Release full CTest remains separate from the
+earlier source checkpoints. The integrated Windows graphics run above passed;
+it is not a physical Windows GPU test.
 
 ## Limits carried forward
 
