@@ -231,7 +231,7 @@ void validate_temporal_layout(const Json& layout, std::string_view entry) {
     require(layout.at("stage") == (resolve ? "compute" : vertex ? "vertex" : "fragment"),
             "temporal shader stage changed");
     const auto& descriptors = layout.at("descriptors");
-    require(descriptors.is_array() && descriptors.size() == (resolve ? 7u : 1u),
+    require(descriptors.is_array() && descriptors.size() == (resolve ? 8u : 1u),
             "temporal descriptor count changed");
     for (std::size_t i = 0; i < descriptors.size(); ++i) {
         const auto& descriptor = descriptors[i];
@@ -239,8 +239,12 @@ void validate_temporal_layout(const Json& layout, std::string_view entry) {
                     descriptor.at("count") == 1,
                 "temporal descriptor set, binding or count changed");
         require(descriptor.at("type") ==
-                    (resolve && i >= 5 ? "storage_image_2d" : "sampled_image_2d"),
-                "temporal image descriptor type changed");
+                    (resolve && i == 7 ? "storage_buffer"
+                     : resolve && i >= 5 ? "storage_image_2d" : "sampled_image_2d"),
+                "temporal descriptor type changed");
+        if (resolve && i == 7)
+            require(descriptor.at("element_stride") == 4,
+                    "temporal counter element stride changed");
         require(descriptor.at("used") == (resolve || !vertex),
                 "temporal entry uses an unexpected image binding");
     }

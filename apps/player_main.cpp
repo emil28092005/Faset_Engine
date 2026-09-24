@@ -188,6 +188,14 @@ Json profileFrames(const std::vector<ProfileSample>& samples) {
                           {"temporal_internal_width", sample.lighting.temporal_internal_width},
                           {"temporal_internal_height", sample.lighting.temporal_internal_height},
                           {"temporal_jitter", sample.lighting.temporal_jitter},
+                          {"temporal_counters_valid",
+                           sample.lighting.temporal_counters_valid},
+                          {"temporal_accepted_pixels",
+                           sample.lighting.temporal_counters_valid
+                               ? Json(sample.lighting.temporal_accepted_pixels) : Json(nullptr)},
+                          {"temporal_rejected_pixels",
+                           sample.lighting.temporal_counters_valid
+                               ? Json(sample.lighting.temporal_rejected_pixels) : Json(nullptr)},
                           {"gpu_temporal_resolve_ms",
                            gpuMeasured ? Json(sample.lighting.gpu_temporal_resolve_ms) : Json(nullptr)},
                           {"gpu_temporal_composite_ms",

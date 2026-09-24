@@ -86,7 +86,7 @@ ImGuiKey key(std::string_view name) {
 } // namespace
 struct DebugOverlay::Impl {
     ImGuiContext* context{};
-    bool visible{}, freeze{}, show_hzb{};
+    bool visible{}, freeze{}, show_hzb{}, count_temporal_pixels{};
     bool hzb_sampled{}, hzb_available{};
     int hzb_mip{3}, hzb_last_mip{-1};
     std::uint64_t hzb_frame{};
@@ -464,6 +464,21 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
                 ImGui::Text("History: %s   Reset: %s",
                             stats.temporal_history_valid ? "valid" : "invalid",
                             temporal_reset_label(stats.temporal_reset_reason));
+                ImGui::Text("Jitter (clip): %+.5f, %+.5f",
+                            stats.temporal_jitter[0], stats.temporal_jitter[1]);
+                ImGui::TextDisabled("Internal pixel offset: %+.3f, %+.3f",
+                                    stats.temporal_jitter[0] * stats.temporal_internal_width * .5f,
+                                    stats.temporal_jitter[1] * stats.temporal_internal_height * .5f);
+                ImGui::Checkbox("Count temporal pixels (GPU readback)",
+                                &state.count_temporal_pixels);
+                if (stats.temporal_counters_valid)
+                    ImGui::Text("History pixels: %u accepted, %u rejected",
+                                stats.temporal_accepted_pixels,
+                                stats.temporal_rejected_pixels);
+                else if (state.count_temporal_pixels)
+                    ImGui::TextDisabled("History pixel counts unavailable for this frame");
+                else
+                    ImGui::TextDisabled("History pixel counts off");
                 if (stats.gpu_ms > 0)
                     ImGui::Text("GPU: resolve %.2f  composite %.2f  UI %.2f ms",
                                 stats.gpu_temporal_resolve_ms,
@@ -520,6 +535,8 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
     }
     // GPU counters are a diagnostics readback, never a normal renderer dependency.
     renderer.set_visibility_diagnostics(state.visible);
+    renderer.set_temporal_diagnostics(state.visible && state.count_temporal_pixels &&
+                                      renderer.temporal_mode() != render::TemporalMode::Off);
     ImGui::Render();
     const auto* data = ImGui::GetDrawData();
     if (!data || !data->Valid)

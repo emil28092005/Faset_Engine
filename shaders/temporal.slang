@@ -7,7 +7,7 @@ struct TemporalResolveParameters {
     uint4 dimensions;         // output width/height, internal width/height
     float4 outputSceneRect;   // output-pixel x/y/width/height
     float4 internalSceneRect; // internal-pixel x/y/width/height
-    uint4 flags;              // x = prior history valid
+    uint4 flags;              // x = prior history valid; y = count pixel decisions
     float4 jitterMotion;      // xy = current-minus-prior local UV; z = static camera
 };
 [[vk::push_constant]] ConstantBuffer<TemporalResolveParameters> temporalParameters;
@@ -20,6 +20,9 @@ struct TemporalResolveParameters {
 RWTexture2D<float4> nextHistoryColor;
 [[vk::binding(6,0)]] [vk::image_format("r32f")]
 RWTexture2D<float> nextHistoryDepth;
+// A tiny GPU counter buffer is bound for the normal pipeline too, but touched
+// only when explicit Editor diagnostics requests exact per-pixel statistics.
+[[vk::binding(7,0)]] RWStructuredBuffer<uint> historyDecisionCounts;
 
 int2 clampScenePixel(int2 pixel) {
     return clamp(pixel, int2(0), int2(temporalParameters.dimensions.zw) - 1);
@@ -90,6 +93,7 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
     const float4 currentColor = sceneColorAt(currentPixel);
     const float currentDepth = sceneDepthAt(currentPixel);
     float4 resolved = currentColor;
+    bool acceptedHistory = false;
 
     if (insideScene && temporalParameters.flags.x != 0) {
         const float4 centerMotion = sceneVelocityAt(currentPixel);
@@ -190,6 +194,7 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
                             (!matchingFar || !nearerOccluder)) {
                             const float3 priorColor = clamp(sampled, low, high);
                             resolved.rgb = lerp(currentColor.rgb, priorColor, weight);
+                            acceptedHistory = true;
                         }
                     }
                 }
@@ -198,6 +203,10 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
     }
     nextHistoryColor[outputPixel] = resolved;
     nextHistoryDepth[outputPixel] = currentDepth;
+    if (insideScene && temporalParameters.flags.y != 0) {
+        uint oldCount;
+        InterlockedAdd(historyDecisionCounts[acceptedHistory ? 0 : 1], 1, oldCount);
+    }
 }
 
 #elif defined(FASET_TEMPORAL_COMPOSITE)

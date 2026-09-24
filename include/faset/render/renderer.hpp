@@ -155,6 +155,8 @@ struct RendererConfig {
     LightingMode lighting_mode{LightingMode::Auto};
     // GPU counter readback is diagnostic-only; normal visibility uses no CPU feedback.
     bool visibility_diagnostics{false};
+    // Exact temporal pixel counters are opt-in; normal TAA avoids GPU readback.
+    bool temporal_diagnostics{false};
     // Optional isolated shader bundle, useful for editor preview and shader reload tests.
     std::filesystem::path shader_directory{};
 };
@@ -219,6 +221,8 @@ struct FrameStats {
     std::uint32_t temporal_valid_motion_instances{};
     std::uint32_t temporal_internal_width{}, temporal_internal_height{};
     std::array<float, 2> temporal_jitter{};
+    bool temporal_counters_valid{};
+    std::uint32_t temporal_accepted_pixels{}, temporal_rejected_pixels{};
     double gpu_temporal_resolve_ms{}, gpu_temporal_composite_ms{}, gpu_ui_ms{};
     std::vector<std::string> graph_passes;
     double gpu_light_tiles_ms{};
@@ -250,6 +254,7 @@ class Renderer {
     TemporalMode temporal_mode() const;
     float render_scale() const;
     void set_visibility_diagnostics(bool enabled);
+    void set_temporal_diagnostics(bool enabled);
     // Reads the most recently completed HZB mip for editor diagnostics only.
     // Normal visibility decisions remain entirely on the GPU.
     std::optional<HzbDebugImage> hzb_debug_image(std::uint32_t mip = 0);
