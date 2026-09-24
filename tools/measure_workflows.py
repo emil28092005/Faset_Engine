@@ -45,6 +45,71 @@ def parse_peak_rss(text):
     raise ValueError("GNU time did not produce a peak RSS record")
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def read_toolchain_paths(cache):
+    """Read the compiler and Slang paths CMake actually configured for this project."""
+    cache = Path(cache)
+    entries = {}
+    for line in cache.read_text(encoding="utf-8").splitlines():
+        if line.startswith(("#", "//")) or "=" not in line or ":" not in line:
+            continue
+        name_and_type, value = line.split("=", 1)
+        name = name_and_type.split(":", 1)[0]
+        entries[name] = value
+    paths = {}
+    for alias, key in (("cmake", "CMAKE_COMMAND"),
+                       ("ninja", "CMAKE_MAKE_PROGRAM"),
+                       ("c", "CMAKE_C_COMPILER"),
+                       ("cxx", "CMAKE_CXX_COMPILER"),
+                       ("slang", "SLANGC_EXECUTABLE")):
+        value = entries.get(key)
+        if not value:
+            raise ValueError(f"CMake cache lacks configured {key}")
+        path = Path(value)
+        if not path.is_absolute():
+            path = cache.parent / path
+        path = path.resolve()
+        if not path.is_file():
+            raise ValueError(f"Configured {key} is not a file: {path}")
+        paths[alias] = path
+    return paths
+
+
+def executable_version(path, argument):
+    try:
+        result = subprocess.run([str(path), argument], capture_output=True, text=True,
+                                encoding="utf-8", timeout=15)
+        return next((line for line in (result.stdout + "\n" + result.stderr).splitlines()
+                     if line.strip()), None)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def capture_binary_provenance(cache, editor, ui_binary):
+    """Bind a workflow report to configured tools and the two measured executables."""
+    paths = {**read_toolchain_paths(cache),
+             "editor": Path(editor).resolve(), "ui_latency_binary": Path(ui_binary).resolve()}
+    arguments = {"cmake": "--version", "ninja": "--version",
+                 "c": "--version", "cxx": "--version",
+                 "slang": "-version", "editor": "--version",
+                 "ui_latency_binary": "--version"}
+    binaries = {}
+    for name, path in paths.items():
+        if not path.is_file():
+            raise ValueError(f"Workflow binary is missing: {path}")
+        binaries[name] = {"path": str(path), "sha256": sha256_file(path),
+                          "version": executable_version(path, arguments[name])
+                          if name in {"cmake", "ninja", "c", "cxx", "slang"} else None}
+    return {"cmake_cache_sha256": sha256_file(cache), "binaries": binaries}
+
+
 def validate_report(report):
     if report.get("format") != "faset.workflow-measurements" or report.get("version") != 2:
         raise ValueError("Expected a version 2 Faset workflow report")
@@ -422,6 +487,9 @@ def main():
         except (OSError, subprocess.TimeoutExpired, IndexError):
             return None
 
+    binary_provenance = capture_binary_provenance(
+        project / ".faset/build/Debug/CMakeCache.txt", editor, ui_binary)
+
     report = {
         "format": "faset.workflow-measurements", "version": 2,
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -431,9 +499,9 @@ def main():
         "lua_source_project": str(lua_source), "editor": str(editor),
         "host": {"platform": platform.platform(), "cpu": cpu, "ram_kib": ram_kib,
                  "logical_cpus": os.cpu_count(), "python": platform.python_version()},
-        "toolchain": {"cmake": version(["cmake", "--version"]),
-                      "cxx": version(["clang++", "--version"]),
-                      "slang": version(["slangc", "-version"])},
+        "toolchain": {name: binary_provenance["binaries"][name]["version"]
+                      for name in ("cmake", "ninja", "c", "cxx", "slang")},
+        "binary_provenance": binary_provenance,
         "gpu": {"player_device": player_profiles[0]["device"],
                 "ui_device": ui_data["device"],
                 "driver": version(["nvidia-smi", "--query-gpu=driver_version",

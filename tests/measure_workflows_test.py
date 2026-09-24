@@ -2,6 +2,7 @@
 
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
 
 
@@ -74,6 +75,32 @@ class WorkflowReportTests(unittest.TestCase):
             'Command exited with non-zero status 1\n{"peak_rss_kib":353272}\n'), 353272)
         with self.assertRaises(ValueError):
             workflows.parse_peak_rss("Command exited with non-zero status 1\n")
+
+    def test_toolchain_provenance_uses_configured_binaries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            compiler, slang = root / "chosen-clang", root / "chosen-slangc"
+            cmake, ninja = root / "chosen-cmake", root / "chosen-ninja"
+            compiler.write_bytes(b"compiler bytes")
+            slang.write_bytes(b"slang bytes")
+            cmake.write_bytes(b"cmake bytes")
+            ninja.write_bytes(b"ninja bytes")
+            cache = root / "CMakeCache.txt"
+            cache.write_text(
+                f"CMAKE_COMMAND:INTERNAL={cmake}\n"
+                f"CMAKE_MAKE_PROGRAM:FILEPATH={ninja}\n"
+                f"CMAKE_C_COMPILER:UNINITIALIZED={compiler}\n"
+                f"CMAKE_CXX_COMPILER:FILEPATH={compiler}\n"
+                f"SLANGC_EXECUTABLE:FILEPATH={slang}\n", encoding="utf-8")
+            self.assertEqual(workflows.read_toolchain_paths(cache), {
+                "cmake": cmake.resolve(), "ninja": ninja.resolve(),
+                "c": compiler.resolve(), "cxx": compiler.resolve(), "slang": slang.resolve()})
+            self.assertEqual(workflows.sha256_file(slang),
+                             "6193cd06b2d7a7faf124bfc8e35d5e545c3835da61302c51530692dc04080822")
+            cache.write_text("CMAKE_C_COMPILER:FILEPATH=" + str(compiler) + "\n",
+                             encoding="utf-8")
+            with self.assertRaises(ValueError):
+                workflows.read_toolchain_paths(cache)
 
 
 if __name__ == "__main__":
