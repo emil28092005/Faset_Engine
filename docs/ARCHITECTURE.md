@@ -1,6 +1,6 @@
 # Faset Engine — архитектура
 
-Редакция 1.3 · 24 сентября 2026 · **MVP принят; реализация P1/P2 описана отдельно от исходных решений**.
+Редакция 1.4 · 24 сентября 2026 · **MVP принят; реализация P1–P3 описана отдельно от исходных решений**.
 
 Этот файл фиксирует решения пользователя. **Принято** означает выбранное направление реализации, а не автоматически завершённую возможность движка. Работающий код, выполненные проверки и текущие ограничения перечислены в [журнале реализации](IMPLEMENTATION.md). Этапы до MVP и после него, зависимости работ и критерии готовности находятся в [PLAN.md](../PLAN.md).
 
@@ -146,6 +146,47 @@ Release reference baseline точных демо. Исходный отчёт, r
 синтетическая сцена выявляет стоимость CPU simulation/snapshot; её время нельзя
 переносить на 2D/3D демо или выдавать за обещание кадровой частоты.
 
+## 11. P3 — освещение, тени и temporal reconstruction
+
+Один типизированный Light schema подаёт directional, point и spot sources в
+Direct и GPU visibility пути через общий shader ABI. При наличии любого
+авторского Light compatibility sun не создаётся. В кадре не более 128 local
+lights: selection ранжируется по priority, экранному влиянию и стабильному ID,
+а omitted lights явно видны в диагностике. Материал остаётся descriptor set 0,
+освещение — set 1, GPU scene graphics — set 2. Тени рассчитываются из frustum
+камеры и light views независимо от camera culling и prepared LOD: до четырёх
+стабилизированных sun cascades, отдельный атлас 16 spot/point faces и общий
+лимит 4096 caster draws. Шесть граней point-light резервируются атомарно; при
+переполнении свет сохраняется, но его тень отключается. Sun/local атласы пока
+создаются заранее и требуют памяти даже для сцены без shadow raster.
+
+Режим `Auto` использует прямой перебор submitted lights во фрагментном шейдере.
+Отдельный depth-free `Tiled` строит списки для 16×16 tiles, максимум 64 индекса
+на tile; переполнение возвращается к полному списку. Это безопасный явный выбор
+для измеренной сцены с локализованным светом. На плотном reference workload
+tile construction и raster вместе медленнее, поэтому автоматический выбор не
+основан на непроверенной occupancy-эвристике. [Совмещённый benchmark](studies/24-p3-integrated-forward-plus-2026-09-24.md)
+публикует оба результата и исходные кадры.
+
+`Off` остаётся default и эталонным выходом renderer. `TAA` рендерит 3D scene
+в выходном разрешении с jitter; `Upscale` использует внутреннее разрешение
+`ceil(output × scale)` при scale `[0.5, 1)`, но хранит color/depth history в
+выходном разрешении. Оба режима обрабатывают непрозрачную scene до отдельного
+UI pass, так что Editor/game UI не проходит temporal resolve. Предыдущие
+transforms и motion vectors имеют stable instance identity. Истории HZB и
+temporal color независимы; cut, смена view/projection/viewport/scale, resize,
+несовместимый shader reload и teleport сбрасывают temporal history. Pixels с
+невалидным motion, depth mismatch или reactive geometry используют текущий
+цвет. Упаковка Player содержит готовые Slang SPIR-V и reflection; runtime не
+требует Slang compiler. Фактический режим и причина fallback видны в профиле.
+
+TAA/Upscale пока **опциональны**: малые фиксированные сцены показывают
+уменьшение temporal variation, но тонкая геометрия теряет часть пиковой
+контрастности, а sparse 720p сцена не выигрывает по GPU времени. Оба режима
+добавляют output-resolution histories и повышают явные GPU allocations.
+[Датированная temporal-проверка](validation/p3-temporal-2026-09-24/README.md)
+показывает кадры, метрики и ограничения; это не эквивалент TSR/FSR/DLSS.
+
 ## История решений
 
 - **17.09.2026:** выбраны имя Faset Engine, Linux/Windows desktop 2D/3D, ручная работа и MCP, интеграция с Blender, Box2D и Box3D; подготовлены исследования.
@@ -154,5 +195,6 @@ Release reference baseline точных демо. Исходный отчёт, r
 - **18.09.2026:** английский принят основным языком интерфейса, диагностик и публичного API; уточнена граница прямых Vulkan-вызовов внутри собственного backend.
 - **23.09.2026:** после принятого MVP выполнен P2 GPU visibility/LOD на Linux reference GPU; direct renderer сохранён как начальный режим и эталон, ограничения и измерения вынесены в отдельный [протокол](studies/19-p2-gpu-visibility-acceptance.md).
 - **24.09.2026:** P1 итерация фиксирует проверяемое повторное использование schema/package, структурированную диагностику, стартовые C++/Lua проекты, безопасный autosave и измерительный протокол без C++ hot reload.
+- **24.09.2026:** P3 реализует typed lights, bounded shadow views, measured Forward+/forward selection и opt-in TAA/upscale с отдельными histories и sharp UI; результаты привязаны к контрольным сценам и GPU.
 
 Реализация идёт по [PLAN.md](../PLAN.md). Последующие изменения принятых контрактов фиксируются здесь с причиной и способом проверки.
