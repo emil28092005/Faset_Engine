@@ -1,0 +1,17 @@
+{
+  "seconds": 112.234292070003,
+  "returncode": 0,
+  "build_configuration": "Debug",
+  "source_hash": "1c51810574a3413c46a7cbd0ea2e84a9b802da1206a2b72bb78f6cc951367a11",
+  "command": [
+    "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+    "--project",
+    "/tmp/faset-p1-workflows-20260924-3/lua-project",
+    "--command",
+    "{\"name\": \"faset_build\", \"arguments\": {}}",
+    "--wait"
+  ],
+  "stdout": "raw/lua_initial_build-01-stdout.txt",
+  "stderr": "raw/lua_initial_build-01-stderr.txt",
+  "peak_rss_kib": 399232
+}

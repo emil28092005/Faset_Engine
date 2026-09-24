@@ -1,0 +1,13 @@
+{
+  "seconds": 2.011972838023212,
+  "returncode": 0,
+  "build_configuration": "Debug",
+  "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+  "command": [
+    "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor_ui_latency",
+    "/tmp/faset-p1-workflows-20260924-3/raw/editor-input-latency.json"
+  ],
+  "stdout": "raw/editor_ui_probe_process-01-stdout.txt",
+  "stderr": "raw/editor_ui_probe_process-01-stderr.txt",
+  "peak_rss_kib": 201432
+}

@@ -39,29 +39,58 @@ Use `--debug-physics` or press **F3** to show current physics box colliders. Deb
 geometry increases draw count, so record whether it was enabled. The collider view
 uses simulation poses; normal visuals can use interpolated poses.
 
-## Measure Editor and C++ workflows
+## Measure Editor, C++ and Lua iteration
 
 From the engine repository:
 
 ```sh
+cmake --build --preset linux-debug --target faset_editor faset_editor_ui_latency --parallel 2
 python3 tools/measure_workflows.py \
   --editor build/linux-debug/faset_editor \
   --project examples/projects/collect-3d \
-  --output .cache/my-workflow-measurement
+  --output /tmp/faset-workflow-measurement
 ```
 
-Use a new output directory. The tool copies the project, preserving your original,
-and records command startup, two-frame GUI startup/shutdown, first/cached Blender
-bundle import, initial/no-change/changed Debug builds and a subsequent Player frame.
-It checks that editing gameplay makes the schema stale and successful building
-clears that state. The initial build uses available dependency archives and OS
-caches; it is not a measurement of internet download speed.
+The UI probe must be built beside the Editor first. The default Lua input is
+`examples/lua`; use `--lua-project` to select another declared Lua project and
+`--ui-latency-binary` when the probe is elsewhere. Use a **new** output directory;
+the tool refuses to overwrite evidence. It copies both projects and never edits
+the checked-in examples.
+
+`report.json` version 2 separates the initial cold project configure/build,
+unchanged builds, changed `.cpp` builds, changed-header builds, deliberate compile
+failure/recovery, Lua edit-to-reload, first offscreen Player frame and synthetic
+Editor input-to-visible-state. Each warm/changed case has one warm-up and five
+measured repetitions. Each sample remains in `raw/` with command, stdout/stderr,
+duration and, on Linux, peak RSS; the report includes median and nearest-rank p95.
+The file hashes identify every changed source variant. Five unchanged builds must
+return a verified schema/package cache hit. The cold case begins with empty project
+`.faset` caches, **not** a cold OS file cache, newly downloaded dependencies or a
+fresh engine toolchain. It is a development `Debug` workflow.
+
+The first-frame value comes from the Player's `main_to_first_frame` profile after
+five one-frame offscreen runs. It excludes OS process loading and says nothing about
+window presentation latency. The separate UI probe applies keyboard input through
+the retained Editor UI, then measures 100 post-warm-up offscreen frames; it is not
+native desktop input-to-photon latency. A watched Lua Player records five
+edit-to-successful-reload times, including its polling and log notification. A
+3,000-frame Player profile compares explicit Vulkan allocation and texture maxima
+in frames 101–200 with frames 2901–3000. Zero growth over that interval is useful
+but does not prove the absence of all leaks. The tool also adds 512 deterministic
+objects to a disposable scene and profiles 240 frames; this stresses scene
+simulation/snapshot work, not representative game content.
 
 On Linux, GNU `time` records peak RSS for each command and its waited-for children.
 This is a maximum, not the sum of simultaneous compiler processes. Other platforms
-report this field as null unless equivalent measurement support is added. The tool
-keeps raw stdout/stderr, durations, hardware and revision information alongside its
-report. A dirty source checkout is explicitly identified.
+report this field as null unless equivalent measurement support is added. The report
+keeps raw stdout/stderr, profiles, hardware, driver, build setting, source hashes,
+Git revision and dirty-tree state. New runs also hash the exact CMake, Ninja, C/C++
+compiler, Slang, Editor and UI-probe binaries selected by the disposable project's
+`CMakeCache.txt`. Compare profiles only with the same scene, configuration,
+resolution, validation/readback settings and hardware class. The
+[dated P1 workflow record](https://github.com/emil28092005/Faset_Engine/blob/main/docs/validation/p1-iteration-2026-09-24/README.md)
+retains a successful Debug run and its exact raw files. Its post-run binary
+provenance supplement is explicitly separate from the original report.
 
 `tools/verify_playable_exports.py` separately verifies the two sample games in
 relocated Release packages and records their Player profiles. Its assertions test

@@ -45,8 +45,14 @@ ctest --test-dir build/linux-release --no-tests=error --output-on-failure \
 
 The render used the Player's synthetic fixed timestep and offscreen Vulkan
 presentation. It does not establish manual window interaction or physical
-Windows GPU compatibility. The Windows graphics workflow now includes this Lua
-package beside both C++ examples under a pinned SwiftShader Vulkan driver; its
-result must be recorded separately after CI completes.
+Windows GPU compatibility. The separate
+[Windows graphics run at `4ac02ee`](https://github.com/emil28092005/Faset_Engine/actions/runs/35937433040)
+passed 61/61 CTests and relocated all three Release games under pinned SwiftShader.
+The Lua-only package validated and completed 120 offscreen frames with its source
+project paths hidden. Its device is a **software** Vulkan implementation; the
+Khronos validation layer was not active on that Windows worker. The
+[P1 dossier's Windows report](../p1-iteration-2026-09-24/windows-4ac02ee/playable-report.json)
+retains the source/package identities and result. This does not establish
+physical Windows GPU compatibility.
 
 ![Lua game rendered by the relocated Release Player](lua.png)

@@ -9,8 +9,10 @@ Player process. **Stop** leaves the authoring document unchanged.
 
 1. Edit `Scripts/Gameplay.cpp` and its explicit schema declarations.
 2. Stop the running Player.
-3. Choose **Build C++**. The compiler and SchemaExporter run outside the Editor.
-4. Read compiler errors in the Console. A failed build retains the previous schema
+3. Choose **Build**. CMake/Ninja build native gameplay and the separate
+   SchemaExporter refreshes the Inspector schema when inputs changed.
+4. Read compiler errors in the Console. Select a project-source diagnostic to open
+   its line in your external editor. A failed build retains the previous schema
    and binary; the schema status reports that it is stale.
 5. After a successful build, edit the behavior's exposed fields in the Inspector.
 6. Choose **Play**. It builds if necessary and launches the captured scene.
@@ -22,6 +24,22 @@ and gameplay progress do not write back into authoring or its Undo history.
 The Player supports pause and single-step. Editor controls use a private session
 control file; they do not expose runtime entity queries through MCP. Closing the
 Player is observed by the Editor, which keeps its logs and authoring state.
+
+An unchanged second build still asks CMake/Ninja to verify their dependency graph.
+When the native outputs, gameplay sources, toolchain, shaders and runtime inputs
+match the validated package, **Jobs** reports `schema_cache_hit` and
+`generation_reused` as true and returns the same immutable generation without a
+second SchemaExporter run or package copy. A changed `.cpp`, header, Lua declaration,
+build recipe or relevant tool invalidates that reuse. A damaged cached package is
+not treated as a hit. The job also exposes elapsed phases and a build fingerprint;
+see [Developer diagnostics](diagnostics.md) for structured errors and raw logs.
+
+If a build fails, correct the listed source and build again. The prior playable
+generation remains available, but stale Inspector metadata is not evidence that
+the failed edit built successfully. Save the scene separately: named dirty scenes
+autosave after two idle seconds by default, while an unnamed scene needs **Save As**.
+External file changes produce a visible conflict instead of an overwrite; the
+[workspace guide](workspace.md#create-and-save-a-scene) explains recovery.
 
 ## Export a standalone game
 

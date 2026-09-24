@@ -1,0 +1,2 @@
+New round: collect the three gold cubes, then reach the green exit. E resets.
+{"device":"NVIDIA GeForce RTX 2080 Ti","dimension":3,"effective_visibility_mode":"direct","frames":240,"gpu_visibility_active":false,"ticks":240,"validation_errors":0,"visibility_mode":"direct"}

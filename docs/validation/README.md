@@ -3,6 +3,7 @@
 These files preserve bounded checks and their inputs. Each record states its source revision or working-tree limitation; a passing record does not certify later commits or every supported platform.
 
 - [MVP acceptance dossier](mvp-acceptance.md): criterion-by-criterion closure, tested revisions and remaining compatibility coverage.
+- [P1 gameplay iteration](p1-iteration-2026-09-24/README.md): repeatable Debug C++/Lua workflow, raw samples, toolchain provenance, real compiler navigation and coverage limits.
 - [P2 GPU visibility Linux evidence](p2-gpu-visibility-2026-09-23/README.md): Debug/Release GPU acceptance, lavapipe functional checks, relocated Player exports, and explicit platform/performance limits.
 - [P2 pinned SwiftShader compatibility](p2-swiftshader-2026-09-23/README.md): the Windows CI regression, shader capability fix, independent review closure, final native CI and relocated Player evidence.
 - [Windows software Vulkan](windows-software-vulkan-2026-09-18/README.md): fresh native build, 35 tests, launcher/window/MCP workflows and both relocated Release games on SwiftShader.

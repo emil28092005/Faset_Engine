@@ -1,0 +1,100 @@
+{
+  "completed_frames": 1,
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "dimension": 3,
+  "effective_visibility_mode": "direct",
+  "fixed_delta_seconds": 0.016666666666666666,
+  "format": "faset.player-profile",
+  "height": 720,
+  "percentile_method": "nearest_rank_all_completed_frames_no_warmup_exclusion",
+  "presentation_mode": "offscreen",
+  "requested_frames": 1,
+  "resource_notes": "gpu_allocated_bytes sums live Vulkan memory allocations, including alignment, excluding driver internals. texture_count includes the white fallback texture.",
+  "samples": [
+    {
+      "draw_calls": 31,
+      "dropped_simulation_seconds": 0.0,
+      "effective_visibility_mode": "direct",
+      "fixed_ticks": 1,
+      "frame": 1,
+      "gpu_allocated_bytes": 15787008,
+      "gpu_ms": 0.598464,
+      "gpu_visibility_active": false,
+      "interpolation_alpha": 0.0,
+      "physics_debug": false,
+      "render_call_ms": 6.148188,
+      "renderer_cpu_ms": 6.13379,
+      "renderer_readback_cpu_ms": 2.782249,
+      "simulation_ms": 1.782522,
+      "snapshot_ms": 4.154998,
+      "texture_count": 1,
+      "tick": 1,
+      "vertices": 576,
+      "wall_ms": 12.241041
+    }
+  ],
+  "simulation_mode": "synthetic_fixed_timestep",
+  "startup_ms": {
+    "main_to_first_frame": 284.109137,
+    "renderer_initialization": 263.406445,
+    "scene_read": 4.604566,
+    "world_initialization": 3.645396
+  },
+  "summary_ms": {
+    "gpu": {
+      "max": 0.598464,
+      "min": 0.598464,
+      "p50": 0.598464,
+      "p95": 0.598464,
+      "samples": 1
+    },
+    "render_call": {
+      "max": 6.148188,
+      "min": 6.148188,
+      "p50": 6.148188,
+      "p95": 6.148188,
+      "samples": 1
+    },
+    "renderer_cpu": {
+      "max": 6.13379,
+      "min": 6.13379,
+      "p50": 6.13379,
+      "p95": 6.13379,
+      "samples": 1
+    },
+    "renderer_readback_cpu": {
+      "max": 2.782249,
+      "min": 2.782249,
+      "p50": 2.782249,
+      "p95": 2.782249,
+      "samples": 1
+    },
+    "simulation": {
+      "max": 1.782522,
+      "min": 1.782522,
+      "p50": 1.782522,
+      "p95": 1.782522,
+      "samples": 1
+    },
+    "snapshot": {
+      "max": 4.154998,
+      "min": 4.154998,
+      "p50": 4.154998,
+      "p95": 4.154998,
+      "samples": 1
+    },
+    "wall": {
+      "max": 12.241041,
+      "min": 12.241041,
+      "p50": 12.241041,
+      "p95": 12.241041,
+      "samples": 1
+    }
+  },
+  "timing_notes": "Durations use steady_clock wall time, not thread CPU usage. render_call/renderer_cpu include GPU waits, readback and window presentation. renderer_readback_cpu measures map/copy/unmap wall time within that call. GPU timestamps cover submitted rendering, not CPU work. A missing/zero GPU timestamp is null. Frame durations exclude profile bookkeeping and final capture/profile file writes. Startup begins at Player application entry after platform argument normalization, excluding OS loader/launcher.",
+  "validation_enabled": true,
+  "validation_errors": 0,
+  "version": 1,
+  "visibility_mode": "direct",
+  "width": 1280
+}

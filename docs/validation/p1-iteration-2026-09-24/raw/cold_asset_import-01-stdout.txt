@@ -1,0 +1,210 @@
+{
+  "error": "",
+  "id": "import-057b55f6-bdf7-4db3-bbc4-62396067f1c2",
+  "kind": "import",
+  "progress": 1.0,
+  "request": {
+    "allow_removed_outputs": false,
+    "path": "Assets/exit-arch/manifest.json",
+    "settings": null
+  },
+  "result": {
+    "asset_id": "5832763b-3ed0-44d6-9088-0b524f196a91",
+    "cache_hit": false,
+    "diagnostics": [],
+    "generation": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2",
+    "manifest": {
+      "asset_id": "5832763b-3ed0-44d6-9088-0b524f196a91",
+      "files": [
+        {
+          "path": "meshes/mesh-fc069a07a87e0f831fd92efdbc4efa1f-0.fmesh",
+          "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+          "size": 928
+        },
+        {
+          "path": "meshes/mesh-0961e2a3f92977836a3aa80cab09277e-0.fmesh",
+          "sha256": "98b38aca7d2786c58a2265ba4d1f2255123f03d31d947e239232cf55bfdc2c97",
+          "size": 928
+        },
+        {
+          "path": "meshes/mesh-93b5b3e52cb6bb120fefb80e2d8e222b-0.fmesh",
+          "sha256": "3875c16ea628d4126373ebfe07816621fbad3961596a2fcd112f1eec0e378071",
+          "size": 928
+        }
+      ],
+      "generation": "4a5bfcc1437a7b4d65c388da2beace0308cceda8e16503d08ce676260f21d5c2",
+      "importer": "faset-gltf-1/cgltf-1.15",
+      "input_key": {
+        "bundle_sha256": "7a13347adc89761fb02ebeab3c58ba87f319cd62f53ec87a3bb61bcd066ffa55",
+        "dependencies": {},
+        "importer": "faset-gltf-1/cgltf-1.15",
+        "settings": {},
+        "source": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+        "target_profile": "desktop-static-pbr-v1",
+        "toolchain": {
+          "cgltf": "360db1a95480fe102ae9c69b27c5d101167ff5ba",
+          "stb": "2c980bb59875b0d32144a71867fbdebb2f77cd20"
+        }
+      },
+      "kind": "scene",
+      "materials": [
+        {
+          "alpha_cutoff": 0.5,
+          "alpha_mode": "OPAQUE",
+          "base_color": [
+            0.2199999988079071,
+            0.28999999165534973,
+            0.3400000035762787,
+            1.0
+          ],
+          "base_color_texture": -1,
+          "double_sided": true,
+          "emissive": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "emissive_texture": -1,
+          "format": "faset.material",
+          "id": "material-bb63b094febbf90bb7049c9bcf7587bc",
+          "metallic": 0.07999999821186066,
+          "metallic_roughness_texture": -1,
+          "name": "Weathered stone",
+          "normal_texture": -1,
+          "occlusion_texture": -1,
+          "roughness": 0.800000011920929,
+          "unlit": false,
+          "version": 1
+        }
+      ],
+      "meshes": [
+        {
+          "id": "mesh-fc069a07a87e0f831fd92efdbc4efa1f",
+          "name": "Cube.001",
+          "primitives": [
+            {
+              "material": 0,
+              "path": "meshes/mesh-fc069a07a87e0f831fd92efdbc4efa1f-0.fmesh"
+            }
+          ]
+        },
+        {
+          "id": "mesh-0961e2a3f92977836a3aa80cab09277e",
+          "name": "Cube.002",
+          "primitives": [
+            {
+              "material": 0,
+              "path": "meshes/mesh-0961e2a3f92977836a3aa80cab09277e-0.fmesh"
+            }
+          ]
+        },
+        {
+          "id": "mesh-93b5b3e52cb6bb120fefb80e2d8e222b",
+          "name": "Cube.003",
+          "primitives": [
+            {
+              "material": 0,
+              "path": "meshes/mesh-93b5b3e52cb6bb120fefb80e2d8e222b-0.fmesh"
+            }
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "node-cec6e8cea80cf5a98ba3263a0156bee4",
+          "local_transform": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.4500000476837158,
+            1.2999999523162842,
+            1.0
+          ],
+          "mesh": 0,
+          "name": "Left post",
+          "parent_id": "",
+          "stable_source_id": true
+        },
+        {
+          "id": "node-5f8a90a6c4d27020d20bd4fa81d1d958",
+          "local_transform": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.4500000476837158,
+            -1.2999999523162842,
+            1.0
+          ],
+          "mesh": 1,
+          "name": "Right post",
+          "parent_id": "",
+          "stable_source_id": true
+        },
+        {
+          "id": "node-482463e486a8d1fd741340c653cd128f",
+          "local_transform": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            3.0,
+            0.0,
+            1.0
+          ],
+          "mesh": 2,
+          "name": "Lintel",
+          "parent_id": "",
+          "stable_source_id": true
+        }
+      ],
+      "outputs": [
+        "node-cec6e8cea80cf5a98ba3263a0156bee4",
+        "node-5f8a90a6c4d27020d20bd4fa81d1d958",
+        "node-482463e486a8d1fd741340c653cd128f",
+        "mesh-fc069a07a87e0f831fd92efdbc4efa1f",
+        "mesh-0961e2a3f92977836a3aa80cab09277e",
+        "mesh-93b5b3e52cb6bb120fefb80e2d8e222b",
+        "material-bb63b094febbf90bb7049c9bcf7587bc"
+      ],
+      "payload_source": "/tmp/faset-p1-workflows-20260924-3/project/Assets/exit-arch/payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb",
+      "schema_version": 1,
+      "settings": {},
+      "source": "/tmp/faset-p1-workflows-20260924-3/project/Assets/exit-arch/manifest.json",
+      "source_sha256": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+      "textures": []
+    },
+    "previous_generation": "",
+    "removed_output_ids": []
+  },
+  "stage": "complete",
+  "state": "succeeded"
+}
