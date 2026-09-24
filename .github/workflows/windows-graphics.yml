@@ -71,7 +71,7 @@ jobs:
           VK_LOADER_DEBUG: error,warn,driver
         run: ctest --preset windows-debug --timeout 180
       - name: Real Release exports, 2D and 3D execution, incremental Debug rebuild
-        run: build/windows-debug/faset_build_service_tests.exe --integration .cache/windows-export-e2e
+        run: build/windows-debug/faset_build_service_tests.exe --integration "${{ runner.temp }}/faset-windows-export-e2e"
       - name: Export and relocate C++ and Lua playable games
         run: python tools/verify_playable_exports.py --editor build/windows-debug/faset_editor.exe --output .cache/windows-playable-exports --include-lua
       - name: Preserve graphics and export evidence
@@ -89,8 +89,8 @@ jobs:
             .cache/windows-graphics/sdk/source-identity.json
             build/windows-debug/Testing/Temporary/LastTest.log
             build/windows-debug/*test.ppm
-            .cache/windows-export-e2e/result-*.json
-            .cache/windows-export-e2e/export-*/generations/*/manifest.json
-            .cache/windows-export-e2e/export-*/generations/*/verification.ppm
+            ${{ runner.temp }}/faset-windows-export-e2e/result-*.json
+            ${{ runner.temp }}/faset-windows-export-e2e/export-*/generations/*/manifest.json
+            ${{ runner.temp }}/faset-windows-export-e2e/export-*/generations/*/verification.ppm
             .cache/windows-playable-exports/report.json
             .cache/windows-playable-exports/evidence/*

@@ -82,6 +82,17 @@ void run(const fs::path& root) {
     }
     check(refused_unowned && fs::is_regular_file(user_directory / "do-not-delete.txt"),
           "Unowned native directory is never cleared");
+    auto engine_nested = config;
+    engine_nested.build_directory = engine_nested.engine_root / ".cache/unsafe-test-native-build";
+    bool refused_engine_overlap{};
+    try {
+        editor::ensure_native_toolchain_stamp(
+            engine_nested, engine_nested.build_directory / "Debug", changed_tool);
+    } catch (const std::exception&) {
+        refused_engine_overlap = true;
+    }
+    check(refused_engine_overlap && !fs::exists(engine_nested.build_directory),
+          "Integration fixture native builds cannot overlap the engine checkout");
     std::error_code native_link_error;
     fs::create_directory_symlink(user_directory, config.build_directory / "Release",
                                  native_link_error);
