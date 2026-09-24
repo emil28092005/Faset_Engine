@@ -238,6 +238,22 @@ def _binary_sha256(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def _shader_bundle_manifest(executable: Path) -> dict[str, str] | None:
+    # Test fixtures are Python programs. A native renderer loads SPIR-V from
+    # the shader directory beside its executable before checking other roots.
+    if executable.suffix.lower() == ".py":
+        return None
+    directory = executable.parent / "shaders"
+    required = ("vertexMain.spv", "fragmentMain.spv")
+    if not all((directory / name).is_file() for name in required):
+        raise ValueError(f"Benchmark shader bundle is missing beside {executable}")
+    files = sorted((path for path in directory.iterdir()
+                    if path.is_file() and
+                    (path.suffix == ".spv" or path.name.endswith(".reflection.json"))),
+                   key=lambda path: path.name)
+    return {path.name: _binary_sha256(path) for path in files}
+
+
 def _clean_source_revision(root: Path, expected: str) -> str:
     revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"],
                                        text=True).strip()
@@ -260,6 +276,7 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
     source = (source_root or Path(__file__).resolve().parents[1]).resolve()
     revision = _clean_source_revision(source, commit)
     binary_sha256 = _binary_sha256(executable)
+    shader_manifest = _shader_bundle_manifest(executable)
     if output.exists() and any(output.iterdir()):
         raise ValueError(f"Output directory must be new or empty: {output}")
     raw = output / "raw"
@@ -312,14 +329,17 @@ def sweep(executable: Path, output: Path, shadows: str, commit: str,
                                                     "acquisition_index"])
         writer.writeheader()
         writer.writerows(all_rows)
-    if _binary_sha256(executable) != binary_sha256 or _clean_source_revision(source, commit) != revision:
-        raise ValueError("Benchmark binary or source changed during the sweep")
+    if (_binary_sha256(executable) != binary_sha256 or
+            _shader_bundle_manifest(executable) != shader_manifest or
+            _clean_source_revision(source, commit) != revision):
+        raise ValueError("Benchmark binary, shader bundle or source changed during the sweep")
     summary = {"format": "faset.p3-lighting-benchmark", "version": 1,
                "commit": commit, "warmup_frames_per_run": WARMUP_FRAMES,
                "measured_frames_per_run": MEASURED_FRAMES, "width": WIDTH, "height": HEIGHT,
                "validation": validation, "driver": driver,
                "source_revision": revision, "source_root": str(source), "source_dirty": False,
                "benchmark_sha256": binary_sha256,
+               "shader_bundle": shader_manifest,
                "device": identity[0], "lighting_path": identity[2],
                "validation_enabled": identity[3] == "1", "build_configuration": identity[4],
                "run_order": run_order,
