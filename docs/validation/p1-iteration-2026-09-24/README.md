@@ -45,7 +45,7 @@ The run also imported the small Blender bundle cold and cached in 49 and 52 ms,
 respectively; Editor process startup dominates that tiny asset sample, so those
 two values do not establish import-cache speedup. The raw
 [failed-build job](raw/build_failure-01-stdout.txt) exposed a navigation defect:
-the compiler named the immutable source snapshot, and the original structured
+the compiler named the staged source copy, and the original structured
 diagnostic omitted `file`. A later fix maps only the verified staged `Scripts`
 subtree to project-relative source. A [real failed-build replay](diagnostic-replay.json)
 with the corrected Editor returns `Scripts/Gameplay.cpp`, line 73, column 2.
@@ -53,6 +53,12 @@ The `build_diagnostics` test also covers project-contained snapshot paths and
 Windows drives; `build_schema_publication` verifies that an error after 250
 third-party warnings survives the 200-row diagnostic limit. These are separate
 from this unmodified measurement.
+
+Follow-up `54d1bae` rehashes both the live source and the staged copy after
+native build and before reuse/publication. A fixture changes the staged C++
+header during schema export; the build fails and retains the last-good pointer.
+The copy is content-verified at those boundaries, not sealed against a same-user
+write-and-restore during compiler reads.
 
 The [3,000-frame lifecycle profile](raw/cpp-3000-frame-lifecycle.json) completed
 with zero Vulkan validation errors. Maximum explicit Vulkan allocation was
