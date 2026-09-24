@@ -12,8 +12,11 @@ and how those functions interact with scenes, physics, and the editor.
     for exact source revisions and coverage limits. The optional Lua module is
     documented separately; those historical acceptance results do not certify later
     changes. GPU visibility and prepared mesh LOD arrived after that MVP; see the
-    [visibility guide](editor/visibility-lod.md). Advanced lighting and geometry
-    systems remain later milestones.
+    [visibility guide](editor/visibility-lod.md). Authored local lights,
+    cascaded and local shadows, and opt-in temporal reconstruction arrived in
+    P3; see [Lighting](editor/lighting.md) and
+    [Temporal rendering](editor/temporal.md). Dynamic GI and virtualized geometry
+    remain later milestones.
 
 Start with [how gameplay works](scripting/index.md), then read
 [frame and physics updates](scripting/lifecycle.md). See
