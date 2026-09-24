@@ -64,11 +64,14 @@ tiles or draw budget still illuminates, **without a shadow**. Disabling
 The renderer reports requested faces, rendered faces, tiles, and drops by cause
 in [Diagnostics](diagnostics.md) and the [Player profile](profiling.md).
 
-Faset uses separate sampled D32 sun and local atlases, normally 2048×2048 pixels
-each. If a device cannot use that size, the renderer tries 1024×1024; if a
-sampled depth atlas cannot be created, the affected lights fall back to unshadowed
-illumination and report unavailable shadow views. Scheduled atlas tiles are
-cleared and redrawn each frame; there is no persistent shadow cache yet.
+Faset requires sampled D32 depth images for the renderer itself. On a supported
+device, it uses separate sun and local atlases, normally 2048×2048 pixels each.
+If an optional atlas cannot use that size, the renderer tries 1024×1024. When
+the local atlas cannot be allocated, or the sun atlas cannot be allocated but
+a 1×1 sampled D32 fallback image can, affected lights remain unshadowed and
+report unavailable shadow views. A device without sampled D32 support cannot
+start this renderer. Scheduled atlas tiles are cleared and redrawn each frame;
+there is no persistent shadow cache yet.
 Sprite-only scenes, a missing sun, and a sun with `casts_shadow: false` skip sun
 shadow raster work.
 
