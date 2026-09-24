@@ -135,6 +135,7 @@ struct Image {
     VkDeviceMemory memory{};
     VkImageView view{};
     std::vector<VkImageView> mip_views;
+    std::uint32_t width{}, height{};
     std::uint32_t mip_levels{1};
     VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
     VkDeviceSize allocation_size{};
@@ -539,6 +540,8 @@ struct Renderer::Impl {
     Image make_image(std::uint32_t w, std::uint32_t h, VkFormat format, VkImageUsageFlags usage,
                      VkImageAspectFlags aspect, std::uint32_t mip_levels = 1) {
         Image image{};
+        image.width = w;
+        image.height = h;
         image.mip_levels = mip_levels;
         VkImageCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -2403,6 +2406,8 @@ struct Renderer::Impl {
                 raster_vp[column * 4 + 1] +=
                     statistics.temporal_jitter[1] * raster_vp[column * 4 + 3];
             }
+        const auto raster_width = temporal_active ? temporal.internal_width : width;
+        const auto raster_height = temporal_active ? temporal.internal_height : height;
         const std::string view_id = snapshot.view_id.empty() ? "default" : snapshot.view_id;
         TemporalHistoryKey temporal_key;
         temporal_key.view_id = view_id;
@@ -2976,10 +2981,10 @@ struct Renderer::Impl {
         constexpr std::uint32_t light_tile_side = 16;
         constexpr std::uint32_t light_tile_stride_words = 66;
         constexpr std::uint32_t light_tile_capacity = 64;
-        const std::uint32_t light_tiles_x = width / light_tile_side +
-                                            (width % light_tile_side != 0);
-        const std::uint32_t light_tiles_y = height / light_tile_side +
-                                            (height % light_tile_side != 0);
+        const std::uint32_t light_tiles_x = raster_width / light_tile_side +
+                                            (raster_width % light_tile_side != 0);
+        const std::uint32_t light_tiles_y = raster_height / light_tile_side +
+                                            (raster_height % light_tile_side != 0);
         const std::uint64_t light_tile_count =
             std::uint64_t(light_tiles_x) * light_tiles_y;
         const std::uint64_t light_tile_bytes =
@@ -3306,7 +3311,7 @@ struct Renderer::Impl {
                                         light_tile_pipeline_layout, 0, 1,
                                         &light_tile_set, 0, nullptr);
                 const LightTilePush tile_push{
-                    snapshot.view_projection, scene_viewport,
+                    raster_vp, scene_viewport,
                     {light_tiles_x, light_tiles_y, lighting.counts[0], light_tile_capacity}};
                 vkCmdPushConstants(command, light_tile_pipeline_layout,
                                    VK_SHADER_STAGE_COMPUTE_BIT, 0,
@@ -3385,8 +3390,6 @@ struct Renderer::Impl {
                 }
             });
         Image& raster_color = temporal_active ? temporal.scene_color : color;
-        const auto raster_width = temporal_active ? temporal.internal_width : width;
-        const auto raster_height = temporal_active ? temporal.internal_height : height;
         add_pass(occlusion || temporal_active ? "MainRaster" : "ForwardAndUI",
                  gpu_active ? std::vector<std::string>{"shadow", "local_shadow",
                                                        "light_tiles", "main_indirect", "main_visible"}
@@ -4139,8 +4142,9 @@ std::optional<HzbDebugImage> Renderer::hzb_debug_image(std::uint32_t mip) {
         return std::nullopt;
     if (mip >= renderer.scene.hzb_mips)
         throw std::out_of_range("HZB debug mip outside pyramid");
-    const std::uint32_t w = std::max(1u, std::bit_ceil(renderer.width) >> mip);
-    const std::uint32_t h = std::max(1u, std::bit_ceil(renderer.height) >> mip);
+    auto& pyramid = renderer.scene.hzb[renderer.scene.hzb_current];
+    const std::uint32_t w = std::max(1u, pyramid.width >> mip);
+    const std::uint32_t h = std::max(1u, pyramid.height >> mip);
     auto staging = renderer.make_buffer(VkDeviceSize(w) * h * sizeof(float),
                                         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -4148,7 +4152,6 @@ std::optional<HzbDebugImage> Renderer::hzb_debug_image(std::uint32_t mip) {
                                         VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
     try {
         renderer.begin();
-        auto& pyramid = renderer.scene.hzb[renderer.scene.hzb_current];
         renderer.transition(renderer.command, pyramid, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                             VK_IMAGE_ASPECT_COLOR_BIT);
         VkBufferImageCopy copy{};
