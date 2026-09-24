@@ -171,8 +171,13 @@ if(BUILD_TESTING)
   set_tests_properties(render_lighting_benchmark_smoke PROPERTIES LABELS "gpu;p3" TIMEOUT 90)
   add_executable(faset_render_temporal_diagnostics_tests
     "${PROJECT_SOURCE_DIR}/tests/render_temporal_diagnostics_tests.cpp")
-  target_link_libraries(faset_render_temporal_diagnostics_tests PRIVATE faset_render)
+  target_link_libraries(faset_render_temporal_diagnostics_tests PRIVATE
+    faset_render SDL3::SDL3 Vulkan::Vulkan)
   add_test(NAME render_temporal_diagnostics COMMAND faset_render_temporal_diagnostics_tests)
   set_tests_properties(render_temporal_diagnostics PROPERTIES LABELS "gpu;p3")
+  add_test(NAME render_temporal_diagnostics_resize COMMAND
+    faset_render_temporal_diagnostics_tests --window-resize)
+  set_tests_properties(render_temporal_diagnostics_resize PROPERTIES
+    LABELS "gpu;window;p3" TIMEOUT 35 SKIP_RETURN_CODE 77)
 endif()
 install(FILES ${FASET_SHADER_OUTPUTS} DESTINATION shaders)

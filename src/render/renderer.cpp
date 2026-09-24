@@ -2338,14 +2338,8 @@ struct Renderer::Impl {
         statistics.lod_counts = {};
         statistics.visibility_counters_valid = false;
         statistics.requested_temporal_mode = config.temporal_mode;
-        statistics.effective_temporal_mode = select_effective_temporal_mode(
-            config.temporal_mode, temporal.capabilities);
-        statistics.temporal_fallback_reason = temporal_fallback_reason(
-            config.temporal_mode, temporal.capabilities);
         statistics.temporal_history_valid = false;
         statistics.temporal_valid_motion_instances = 0;
-        statistics.temporal_internal_width = temporal.internal_width;
-        statistics.temporal_internal_height = temporal.internal_height;
         statistics.temporal_jitter = {};
         statistics.temporal_counters_valid = false;
         statistics.temporal_accepted_pixels = statistics.temporal_rejected_pixels = 0;
@@ -2356,26 +2350,6 @@ struct Renderer::Impl {
             it = it->second.owner.expired() ? bounds_cache.erase(it) : std::next(it);
         for (auto it = opacity_cache.begin(); it != opacity_cache.end();)
             it = it->second.owner.expired() ? opacity_cache.erase(it) : std::next(it);
-        statistics.requested_visibility_mode = config.visibility_mode;
-        statistics.effective_visibility_mode = select_effective_visibility_mode(
-            config.visibility_mode, scene.available, scene.hzb_supported && scene.hzb_mips);
-        const bool gpu_active = statistics.effective_visibility_mode != VisibilityMode::Direct;
-        const bool occlusion = statistics.effective_visibility_mode ==
-            VisibilityMode::GpuOcclusion;
-        const bool temporal_active = statistics.effective_temporal_mode != TemporalMode::Off;
-        bool collect_temporal_counts = temporal_active && config.temporal_diagnostics;
-        if (collect_temporal_counts && !temporal.pixel_counts_stage.handle) {
-            try {
-                temporal.pixel_counts_stage = make_buffer(2 * sizeof(std::uint32_t),
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                    VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
-            } catch (const std::exception&) {
-                collect_temporal_counts = false;
-            }
-        }
-        statistics.gpu_visibility_active = gpu_active;
-        statistics.hzb_valid = false;
         bool can_present = surface != VK_NULL_HANDLE;
         if (surface) {
             // A capture may render between normal event-loop iterations. Keep the window
@@ -2388,6 +2362,35 @@ struct Renderer::Impl {
                 !(SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED));
             if (can_present && (dirty_swapchain || !swapchain))
                 make_swapchain();
+        }
+        // A swapchain resize can recreate temporal targets and destroy their
+        // diagnostic staging buffer. Decide the actual paths and allocate the
+        // readback only after that resource lifetime boundary.
+        statistics.effective_temporal_mode = select_effective_temporal_mode(
+            config.temporal_mode, temporal.capabilities);
+        statistics.temporal_fallback_reason = temporal_fallback_reason(
+            config.temporal_mode, temporal.capabilities);
+        statistics.temporal_internal_width = temporal.internal_width;
+        statistics.temporal_internal_height = temporal.internal_height;
+        const bool temporal_active = statistics.effective_temporal_mode != TemporalMode::Off;
+        statistics.requested_visibility_mode = config.visibility_mode;
+        statistics.effective_visibility_mode = select_effective_visibility_mode(
+            config.visibility_mode, scene.available, scene.hzb_supported && scene.hzb_mips);
+        const bool gpu_active = statistics.effective_visibility_mode != VisibilityMode::Direct;
+        const bool occlusion = statistics.effective_visibility_mode ==
+            VisibilityMode::GpuOcclusion;
+        statistics.gpu_visibility_active = gpu_active;
+        statistics.hzb_valid = false;
+        bool collect_temporal_counts = temporal_active && config.temporal_diagnostics;
+        if (collect_temporal_counts && !temporal.pixel_counts_stage.handle) {
+            try {
+                temporal.pixel_counts_stage = make_buffer(2 * sizeof(std::uint32_t),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+            } catch (const std::exception&) {
+                collect_temporal_counts = false;
+            }
         }
         // Retire atlas/image resources no longer retained by a caller.
         for (auto it = textures.begin(); it != textures.end();) {
