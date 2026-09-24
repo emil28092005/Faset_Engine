@@ -75,7 +75,6 @@ class Session {
     std::string pending_play_job_;
     Json pending_play_scene_;
     std::unique_ptr<PluginManager> plugins_;
-    std::map<std::string, std::string> submitted_sources_;
     std::string schema_source_signature_;
     bool schema_loaded_ = false;
     std::string schema_error_;

@@ -285,13 +285,10 @@ void Session::poll() {
             if (value.result.contains("schema"))
                 try {
                     load_schema(path_from_utf8(value.result.at("schema").get<std::string>()));
-                    // This signature represents the sources submitted with this job, not later
-                    // edits.
-                    if (value.result.contains("source_signature"))
-                        schema_source_signature_ =
-                            value.result.at("source_signature").get<std::string>();
-                    else if (submitted_sources_.contains(value.id))
-                        schema_source_signature_ = submitted_sources_.at(value.id);
+                    // The worker may start after the request and capture newer sources.
+                    // Only its validated build snapshot can identify this schema.
+                    schema_source_signature_ =
+                        value.result.at("source_signature").get<std::string>();
                     atomic_write_json(config_.project_root / ".faset/schema-state.json",
                                       {{"source_signature", schema_source_signature_}});
                 } catch (const std::exception& error) {
@@ -496,9 +493,7 @@ void Session::register_commands() {
                   "Incrementally compile gameplay and export C++/Lua metadata in separate native "
                   "processes. Returns a job ID.",
                   schema(Json::object()), [&](const Json&) {
-                      const auto signature = source_signature();
                       const auto id = builds_.start_build();
-                      submitted_sources_[id] = signature;
                       return Json{{"job", id}};
                   });
     commands_.add(
@@ -509,9 +504,7 @@ void Session::register_commands() {
         schema(Json::object()), [&](const Json&) {
             require(scripting::loadLuaProject(config_.project_root).enabled(), "lua.disabled",
                     "Declare scripting.lua.scripts in project.faset.json first");
-            const auto signature = source_signature();
             const auto id = builds_.start_build();
-            submitted_sources_[id] = signature;
             return Json{{"job", id}};
         });
     commands_.add("faset_lua_reload",
@@ -655,12 +648,10 @@ void Session::register_commands() {
                   "output directory. Returns a job ID.",
                   schema({{"document", text}, {"output", text}}, {"document", "output"}),
                   [&](const Json& args) {
-                      const auto signature = source_signature();
                       const auto id = builds_.start_export(
                           resolved_or_throw(commands_, args.at("document")),
                           project_path(config_.project_root,
                                        path_from_utf8(args.at("output").get<std::string>())));
-                      submitted_sources_[id] = signature;
                       return Json{{"job", id}};
                   });
     commands_.add(
@@ -685,9 +676,7 @@ void Session::register_commands() {
                   schema({{"document", text}}, {"document"}), [&](const Json& args) {
                       stop_player();
                       pending_play_scene_ = resolved_or_throw(commands_, args.at("document"));
-                      const auto signature = source_signature();
                       pending_play_job_ = builds_.start_build();
-                      submitted_sources_[pending_play_job_] = signature;
                       return Json{{"job", pending_play_job_}, {"play_pending", true}};
                   });
     commands_.add(

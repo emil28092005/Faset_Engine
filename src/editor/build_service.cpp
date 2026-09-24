@@ -501,6 +501,7 @@ struct BuildService::Impl {
                     {"schema", path_to_utf8(directory / "schema.json")},
                     {"lua_enabled", job.lua.enabled()},
                     {"lua_fingerprint", job.lua.fingerprint},
+                    {"source_signature", inputs.source_hash},
                     {"fingerprint", fingerprint},
                     {"schema_cache_hit", reused},
                     {"generation_reused", reused},
@@ -957,6 +958,7 @@ struct BuildService::Impl {
                 {"generation", job.status.id},
                 {"build", built},
                 {"schema", built.at("schema")},
+                {"source_signature", built.at("source_signature")},
                 {"player", built.at("player")},
                 {"build_directory", built.at("build_directory")},
                 {"configuration", built.at("configuration")}};

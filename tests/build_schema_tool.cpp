@@ -1,5 +1,8 @@
 #include <faset/core/io.hpp>
+#include <faset/core/process.hpp>
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 // Native stand-in for CMake and SchemaExporter. Tests exercise the real
 // asynchronous BuildService and publication code without compiling a game.
@@ -52,6 +55,15 @@ int tool_main(int argc, char** argv) {
             return 0;
         }
         if (argc > 2 && std::string_view(argv[1]) == "--build") {
+            if (fs::exists("block-native-build")) {
+                atomic_write("build-blocked", "ready\n");
+                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+                while (fs::exists("block-native-build") &&
+                       std::chrono::steady_clock::now() < deadline)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (fs::exists("block-native-build"))
+                    throw std::runtime_error("Timed out waiting for build fixture gate");
+            }
             if (fs::exists("emit-clang-error-and-fail-build")) {
                 for (int index = 0; index < 250; ++index)
                     std::cerr << "/external/library.cpp:1:1: warning: dependency warning "
@@ -81,7 +93,9 @@ int tool_main(int argc, char** argv) {
         for (const auto* name : {"sdl3", "entt", "box2d", "box3d", "json", "stb"})
             atomic_write(build / "_deps" / (std::string(name) + "-src") / "LICENSE.txt",
                          "Synthetic dependency notice for packaging tests only.\n");
-        const auto self = fs::absolute(path_from_utf8(argv[0]));
+        const auto invoked = path_from_utf8(argv[0]);
+        const auto self = invoked.has_parent_path() ? fs::absolute(invoked)
+                                                    : find_executable(argv[0]);
 #ifdef _WIN32
         constexpr auto suffix = ".exe";
 #else
