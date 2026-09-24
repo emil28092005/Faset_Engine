@@ -1,6 +1,6 @@
 # Документация Faset Engine
 
-Актуализировано 18.09.2026. C++ MVP реализован и принят в зафиксированных профилях Linux и Windows; результаты и пределы проверок — в [досье приёмки](validation/mvp-acceptance.md). Manual описывает текущие функции, PLAN отделяет их от следующих этапов.
+Актуализировано 24.09.2026. C++ MVP реализован и принят в зафиксированных профилях Linux и Windows; после него добавлены P1–P3. Результаты и пределы проверок находятся в [досье MVP](validation/mvp-acceptance.md), [P1 Release reference](validation/p1-iteration-2026-09-24/final-release/README.md), [P3 lighting](validation/p3-lighting-2026-09-24/README.md) и [P3 temporal](validation/p3-temporal-2026-09-24/README.md). Manual описывает текущие функции, PLAN отделяет их от следующих этапов.
 
 ## Канонические документы
 
