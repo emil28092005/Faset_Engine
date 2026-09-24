@@ -1,0 +1,299 @@
+{
+  "asset_generations": {},
+  "build_fingerprint": "a210b1cfff71fcd01e150f7e824d14b5dfe42e2629a92c84f349d89feacf3ed0",
+  "configuration": "Release",
+  "executable": "faset_player.exe",
+  "files": [
+    {
+      "path": "faset_player.exe",
+      "sha256": "34b4fd6350122072599709071d891f109060533b6c390b77615b08b68ab1569a",
+      "size": 4973056
+    },
+    {
+      "path": "Notices/box2d/LICENSE",
+      "sha256": "68a3e676d7e94093b102d5cba0d4e04af812040d6f230c3db67a6664574e43d2",
+      "size": 1067
+    },
+    {
+      "path": "Notices/box3d/LICENSE",
+      "sha256": "da5e31a26bf3cfd5ba5c96d6823e480128c81e76c107ef9d3ee5d94789184b90",
+      "size": 1067
+    },
+    {
+      "path": "Notices/dependencies.json",
+      "sha256": "262e8f63cf21c516829b1fedb0900ac90e76d62aa8f78d9ad02d8f24e0359e74",
+      "size": 2468
+    },
+    {
+      "path": "Notices/entt/LICENSE",
+      "sha256": "0785027ce472d7c61f05fba664a1d3ba6639c1593ced351ad9e4bed868765d99",
+      "size": 1097
+    },
+    {
+      "path": "Notices/Faset-NOTICE.txt",
+      "sha256": "30c2e7e80f5153b31ab57675e07246aef9165965d64e36022b426a26449ece3f",
+      "size": 204
+    },
+    {
+      "path": "Notices/json/LICENSE.MIT",
+      "sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+      "size": 1076
+    },
+    {
+      "path": "Notices/lua/LICENSE.txt",
+      "sha256": "18c02bc0a68f7bf638609d3729056bc1b260cd111cdd5ef0dcc33d365f420159",
+      "size": 1149
+    },
+    {
+      "path": "Notices/sdl3/LICENSE.txt",
+      "sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+      "size": 884
+    },
+    {
+      "path": "Notices/stb/LICENSE",
+      "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63",
+      "size": 2510
+    },
+    {
+      "path": "project.faset.json",
+      "sha256": "e07b12047f8141c3c4cc8f0e7d0905a5c635375e4494755e34191db0859ab86f",
+      "size": 175
+    },
+    {
+      "path": "README.txt",
+      "sha256": "fe27b3851e724087d90841a9878e41e972d74e1e414cb696b6c9ad53ff2c9038",
+      "size": 266
+    },
+    {
+      "path": "scene.fscene",
+      "sha256": "641ba14a1f9c3966b9ec797814fdfa54f954dc5e0d53ab00c645598edef61baf",
+      "size": 1681
+    },
+    {
+      "path": "Scripts/beacon.lua",
+      "sha256": "8d30f894795f231795d6585acaa5c8df66179597f5e608da8a596152bc9bd74a",
+      "size": 847
+    },
+    {
+      "path": "Scripts/player.lua",
+      "sha256": "8a525c978b9147312c4917e5c04a40443f923bfeea14fbafc014ca9bea1b9322",
+      "size": 1423
+    },
+    {
+      "path": "Scripts/util/motion.lua",
+      "sha256": "d35063ecaa127eeebc0c4931eeb5ed42fe69ab54f3e824caf8661fe60525c2a5",
+      "size": 157
+    },
+    {
+      "path": "shaders/fragmentMain.reflection.json",
+      "sha256": "9b55300034684c433a1defa7f3027d1dece064575f181670dd03b89aa63a532c",
+      "size": 3768
+    },
+    {
+      "path": "shaders/fragmentMain.spv",
+      "sha256": "fea4dd48664a510bad12b5e8582f2db798d4dbea62ce0de35dc2acfe32372733",
+      "size": 28960
+    },
+    {
+      "path": "shaders/gpuCullMain.reflection.json",
+      "sha256": "96e0d6557c6303a7a450e9ba6feb6a283163d16653daec5a63eca549c78b15c2",
+      "size": 3753
+    },
+    {
+      "path": "shaders/gpuCullMain.spv",
+      "sha256": "e5ea6589ddb3613b59f8e58420be95a534cf4149816bc65bae26b1395c638955",
+      "size": 16288
+    },
+    {
+      "path": "shaders/gpuHzbMain.reflection.json",
+      "sha256": "98ec71e97494b42fc558acd2296e46ae7bcb5850d11aef8bfd00c4ea349ba7e1",
+      "size": 2144
+    },
+    {
+      "path": "shaders/gpuHzbMain.spv",
+      "sha256": "08682362ee2120ed19d260e613285071747c3e436bb09bb6238e46f9cedc2308",
+      "size": 4140
+    },
+    {
+      "path": "shaders/gpuPostCullMain.reflection.json",
+      "sha256": "9cddc008fb32d2259dc22ce44f6d060a663c454fcd4e445c872106243f37a550",
+      "size": 3757
+    },
+    {
+      "path": "shaders/gpuPostCullMain.spv",
+      "sha256": "1f8edd3be1f99f9433494a6f7be68f1317d6e7099e19354a7b8130d5d932224d",
+      "size": 12548
+    },
+    {
+      "path": "shaders/gpuShadowMain.reflection.json",
+      "sha256": "89c682fe25b67804d991d010dd6841f2173617358508e64fca4d825bd4c14fb9",
+      "size": 2884
+    },
+    {
+      "path": "shaders/gpuShadowMain.spv",
+      "sha256": "f56e0ae3e9b31cb1e3f24e379c81e11c853f8a7102648aaaebc92a17c7e8e53c",
+      "size": 2492
+    },
+    {
+      "path": "shaders/gpuTemporalVertexMain.reflection.json",
+      "sha256": "bb5bfe6f167fe854b76c30ec8cc5a2eb6e54ab418a10ac4aa53090b63b992316",
+      "size": 3470
+    },
+    {
+      "path": "shaders/gpuTemporalVertexMain.spv",
+      "sha256": "dfe7309aafbd41974668b295e179354965db440e4156b9f12d6a67db16b357f9",
+      "size": 5996
+    },
+    {
+      "path": "shaders/gpuVertexMain.reflection.json",
+      "sha256": "47227a7c12cd469d4aac3d17a0b78477550db8fa2777845f5cd6a652fec42d87",
+      "size": 3248
+    },
+    {
+      "path": "shaders/gpuVertexMain.spv",
+      "sha256": "32421d4a91f3a88d5210fee7af34b48bcad83072f14e2ccb9ef2ff983e45f78f",
+      "size": 5016
+    },
+    {
+      "path": "shaders/lightTileMain.reflection.json",
+      "sha256": "c86a17d1b01a6f1797418f93aa09fa70a73b214282bf210d598cde7ffa7ce9b5",
+      "size": 2066
+    },
+    {
+      "path": "shaders/lightTileMain.spv",
+      "sha256": "92850edcc5ee5b586a90ce84ee69a98075a6fff3c13db4a57528d9431afe8b68",
+      "size": 6800
+    },
+    {
+      "path": "shaders/shadowMain.reflection.json",
+      "sha256": "24f4f5f30cc55f6730d198829048f13fc24c529f57d2d09f6e79e933315f5a63",
+      "size": 3768
+    },
+    {
+      "path": "shaders/shadowMain.spv",
+      "sha256": "7643b4d688492b5ee923b9606f0b0e70343ca05fa67673838206119a6f86d8d8",
+      "size": 784
+    },
+    {
+      "path": "shaders/temporalCompositeFragmentMain.reflection.json",
+      "sha256": "51513834e46536cac7521e4e91c8f877e1702362e6a8223ce9b29fc823d94e58",
+      "size": 997
+    },
+    {
+      "path": "shaders/temporalCompositeFragmentMain.spv",
+      "sha256": "9e21c8534c0e70a58ae018fb2d143bf9cfb70112e71b67585f525eef0aecad1b",
+      "size": 768
+    },
+    {
+      "path": "shaders/temporalCompositeVertexMain.reflection.json",
+      "sha256": "caacb282616fe3d5129acf7a4cc88f9fb923d9b24bccc6c82260baec5e7640eb",
+      "size": 994
+    },
+    {
+      "path": "shaders/temporalCompositeVertexMain.spv",
+      "sha256": "6b19f65b64f40d0a249660fdfba9dd5d95831ffab7314a307bf1f5cf39c6a248",
+      "size": 340
+    },
+    {
+      "path": "shaders/temporalFragmentMain.reflection.json",
+      "sha256": "d28069adc2b1d58bf6b32e8d267ecb6fc374602d032aa6e29a25d3cd19f3460a",
+      "size": 4062
+    },
+    {
+      "path": "shaders/temporalFragmentMain.spv",
+      "sha256": "03adc6673276979b3ea46becf3a36940d3061af77cb8c965c7471feff8dbf89a",
+      "size": 30976
+    },
+    {
+      "path": "shaders/temporalResolveMain.reflection.json",
+      "sha256": "533f8f4f8a0550b94c24a925abc6acedd45cf6d62df89c7a030c1aa81bd1c382",
+      "size": 3534
+    },
+    {
+      "path": "shaders/temporalResolveMain.spv",
+      "sha256": "5f579dfe762d201db5ba33483b14bd0e0d37051735874919a3913ee00157bad7",
+      "size": 23236
+    },
+    {
+      "path": "shaders/temporalVertexMain.reflection.json",
+      "sha256": "510ed900d9485b19e5649b14378c276d6c9df2c75e17ae7df7d908ed7c665e9a",
+      "size": 4128
+    },
+    {
+      "path": "shaders/temporalVertexMain.spv",
+      "sha256": "6cc3535c952a33ee46fd417fbec7fcad8f24357508b2119256b3077be3d60955",
+      "size": 1784
+    },
+    {
+      "path": "shaders/vertexMain.reflection.json",
+      "sha256": "009f4d731ae8668fb448d12ff7d5daa62bb64b22e0aab4cfa26712c737731d05",
+      "size": 3764
+    },
+    {
+      "path": "shaders/vertexMain.spv",
+      "sha256": "1ad2631c35d654f48166321ae43d4165043e1b919b14f1dc61caf97b1ada0898",
+      "size": 1224
+    },
+    {
+      "path": "Windows-Runtime.txt",
+      "sha256": "1c53b7b6890d4a10408acfa7a27760ca1b176bb43dba9c25f3e5d2ac2d7d15db",
+      "size": 227
+    }
+  ],
+  "format": "faset.export",
+  "generation": "5dcba522-6303-4c69-9ab8-19ddc4ef991f",
+  "lua_enabled": true,
+  "lua_fingerprint": "0e4d4cb17bbabafdd59df85ac4f624deb1cb2922d86bf100b3ce8bab81dc62ba",
+  "platform": "windows",
+  "prerequisites": [
+    "Windows x64",
+    "Vulkan 1.3 driver",
+    "Microsoft Visual C++ x64 Redistributable (Visual Studio 2022 or newer)"
+  ],
+  "renderer_profile": {
+    "api": "Vulkan 1.3",
+    "materials": [
+      "base-color factor and texture",
+      "metallic and roughness factors"
+    ],
+    "required_features": [
+      "dynamicRendering",
+      "synchronization2"
+    ],
+    "shadow_atlases": {
+      "caster_draw_limit": 4096,
+      "fallback_resolution": 1024,
+      "local_face_limit": 16,
+      "preferred_resolution": 2048,
+      "sampled_d32_required": true,
+      "sun_cascade_limit": 4
+    },
+    "texture_sampling": "linear clamp, one mip level",
+    "unsupported_material_features": [
+      "normal maps",
+      "metallic-roughness maps",
+      "emissive and occlusion maps",
+      "alpha mode selection",
+      "unlit mode",
+      "per-material face culling"
+    ]
+  },
+  "scene_hash": "143724a468d711cbdf9a9700310d7b0acef003ce1b21422ca5204e0e565fa02c",
+  "simulation": {
+    "fixed_delta": 0.016666666666666666,
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ],
+    "max_catch_up_ticks": 4,
+    "physics_substeps": 4
+  },
+  "units": {
+    "angle": "radian",
+    "coordinates": "right-handed Y-up",
+    "distance": "metre"
+  },
+  "validation_log": "{\"dimension\":2,\"validated\":true}\r\n",
+  "version": 1
+}

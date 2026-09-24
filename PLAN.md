@@ -206,7 +206,10 @@ D32 shadow-атласов по 16 MiB; даже 2D-сцена с нулём shad
 снимка worker, поэтому изменение C++ в очереди не создаёт ложный статус
 устаревания. [Финальная совмещённая проверка](docs/validation/p1-p3-final-2026-09-24/README.md)
 повторяет перенос трёх Release-игр на чистом `ed523c6`. Физический Windows GPU
-остаётся отдельным покрытием. Dynamic gameplay loading рассматривать при
+остаётся отдельным покрытием. На этой же ревизии [Windows graphics
+CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35949830251)
+прошёл 78/78 CTest и перенос трёх 120-кадровых игр через SwiftShader.
+Dynamic gameplay loading рассматривать при
 подтверждённой проблеме линковки, без обещания C++ hot reload в P1.
 
 ### P2. GPU-driven visibility и LOD

@@ -656,4 +656,9 @@ Debug suite passed 76 of 77 CTests with one compositor-dependent window skip;
 120 offscreen frames on the physical RTX 2080 Ti with active Vulkan validation
 and zero errors while the source project paths were hidden. The
 [final combined dossier](validation/p1-p3-final-2026-09-24/README.md) holds the
-clean-source verifier report and package manifests.
+clean-source verifier report and package manifests. At that same code revision,
+[Windows graphics CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35949830251)
+passed 78/78 CTests, the Release export integration and three relocated
+120-frame C++/Lua game runs on SwiftShader. The
+[native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35949830254)
+passed Linux and Windows native checks and strict MkDocs.

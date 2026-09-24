@@ -1,0 +1,3 @@
+# Retain the exact CRLF bytes from the Windows CI artifact for SHA-256 verification.
+*.json -text -whitespace
+*.gz binary

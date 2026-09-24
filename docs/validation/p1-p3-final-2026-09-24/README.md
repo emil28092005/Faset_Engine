@@ -21,7 +21,7 @@ profiles preserve the result without duplicating native build directories.
 | Linux Release P1/P3-focused CTest | 24 passed, 0 failed |
 | Relocated Release games on physical Linux GPU | C++ 2D, C++ 3D, Lua-only: 120 frames each; validation active, 0 errors |
 | [Native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35949830254) | Linux and Windows native checks plus strict MkDocs passed |
-| [Windows software-Vulkan CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35949830251) | Final revision run; see linked job result |
+| [Windows software-Vulkan CI](windows-swiftshader/README.md) | 78/78 CTests, Release export integration and three relocated 120-frame C++/Lua games passed on SwiftShader; validation layer unavailable |
 
 The P1 queued-edit regression verifies that an asynchronous Build or Export
 reports the gameplay-source hash captured by its worker, not the hash from when

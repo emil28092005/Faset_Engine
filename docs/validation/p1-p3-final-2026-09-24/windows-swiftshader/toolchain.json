@@ -1,0 +1,23 @@
+{
+  "sources": {
+    "headers": {
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "commit": "0d3f509e57041fbd073a1ee84cd9ccd36d148446",
+      "sha256": "e82005a6bd3289ce213232ef41e0f8722d1365ed72bf5cc4be56911c56bc30e0"
+    },
+    "loader": {
+      "repository": "KhronosGroup/Vulkan-Loader",
+      "commit": "32fcb949e253cbeb40cda7ea76122b492db579ae",
+      "sha256": "610fa9017226c49bc4f19398d94fce9e3c9ff94c14f6420f9fe24822707feacf"
+    },
+    "swiftshader": {
+      "repository": "google/swiftshader",
+      "commit": "1e80438d2b93ef36a7c05f8d2b81233bac0e3d16",
+      "sha256": "1c3a1afc397c7aa4d3275790bc9b451e80b144a1db665135d5519838bacf44a8"
+    }
+  },
+  "validation_layer": false,
+  "vulkan_sdk": "D:\\a\\Faset_Engine\\Faset_Engine\\.cache\\windows-graphics\\sdk",
+  "driver": "D:\\a\\Faset_Engine\\Faset_Engine\\.cache\\windows-graphics\\driver\\vk_swiftshader_icd.json",
+  "loader_only": false
+}

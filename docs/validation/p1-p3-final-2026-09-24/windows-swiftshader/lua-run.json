@@ -1,0 +1,18 @@
+{
+  "arguments": [
+    "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\faset-playable-exports-w6c8iavr\\Faset Café 世界\\lua\\faset_player.exe",
+    "--headless",
+    "--frames",
+    "120",
+    "--capture",
+    "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\faset-playable-exports-w6c8iavr\\Faset Café 世界\\lua\\verification.ppm",
+    "--profile",
+    "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\faset-playable-exports-w6c8iavr\\Faset Café 世界\\lua\\profile.json"
+  ],
+  "cwd": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\faset-playable-exports-w6c8iavr\\empty-working-directory",
+  "seconds": 1.9220000000000255,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"device\":\"SwiftShader Device (LLVM 10.0.0)\",\"dimension\":2,\"effective_temporal_mode\":\"off\",\"effective_visibility_mode\":\"direct\",\"frames\":120,\"gpu_visibility_active\":false,\"temporal_mode\":\"off\",\"ticks\":120,\"validation_errors\":0,\"visibility_mode\":\"direct\"}\n",
+  "stderr": "Lua player ready: A/D move, Space jump, E reset\n[Faset] Vulkan validation layer/debug-utils unavailable; validation disabled.\n"
+}

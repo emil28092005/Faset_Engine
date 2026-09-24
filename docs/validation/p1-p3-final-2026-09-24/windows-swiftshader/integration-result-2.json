@@ -1,0 +1,31 @@
+{
+  "build": {
+    "build_directory": "D:\\a\\_temp\\faset-windows-export-e2e\\native-build\\Release",
+    "configuration": "Release",
+    "directory": "D:\\a\\_temp\\faset-windows-export-e2e\\project\\.faset\\cache\\builds\\fbdea58e-124d-472b-b766-ca9e06d1905b",
+    "fingerprint": "fe40e3424d7b789082bd7c264853181baa6af3431b0c3a377618e83691e324ad",
+    "generation": "fbdea58e-124d-472b-b766-ca9e06d1905b",
+    "generation_reused": false,
+    "lua_enabled": false,
+    "lua_fingerprint": "",
+    "phase_times_ms": {
+      "configure": 42018,
+      "native_build": 96460,
+      "schema_package": 826,
+      "total": 139304
+    },
+    "player": "D:\\a\\_temp\\faset-windows-export-e2e\\project\\.faset\\cache\\builds\\fbdea58e-124d-472b-b766-ca9e06d1905b\\faset_player.exe",
+    "schema": "D:\\a\\_temp\\faset-windows-export-e2e\\project\\.faset\\cache\\builds\\fbdea58e-124d-472b-b766-ca9e06d1905b\\schema.json",
+    "schema_cache_hit": false,
+    "source_signature": "15301c593f735036cd5f41c6425120d867394fb7b40b0b1b060b7f530292b839"
+  },
+  "build_directory": "D:\\a\\_temp\\faset-windows-export-e2e\\native-build\\Release",
+  "configuration": "Release",
+  "directory": "D:\\a\\_temp\\faset-windows-export-e2e\\export-2\\generations\\fbdea58e-124d-472b-b766-ca9e06d1905b",
+  "executable": "D:\\a\\_temp\\faset-windows-export-e2e\\export-2\\generations\\fbdea58e-124d-472b-b766-ca9e06d1905b\\faset_player.exe",
+  "generation": "fbdea58e-124d-472b-b766-ca9e06d1905b",
+  "manifest": "D:\\a\\_temp\\faset-windows-export-e2e\\export-2\\generations\\fbdea58e-124d-472b-b766-ca9e06d1905b\\manifest.json",
+  "player": "D:\\a\\_temp\\faset-windows-export-e2e\\project\\.faset\\cache\\builds\\fbdea58e-124d-472b-b766-ca9e06d1905b\\faset_player.exe",
+  "schema": "D:\\a\\_temp\\faset-windows-export-e2e\\project\\.faset\\cache\\builds\\fbdea58e-124d-472b-b766-ca9e06d1905b\\schema.json",
+  "source_signature": "15301c593f735036cd5f41c6425120d867394fb7b40b0b1b060b7f530292b839"
+}
