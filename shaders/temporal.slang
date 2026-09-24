@@ -33,20 +33,38 @@ float sceneDepthAt(int2 pixel) {
 float4 sceneVelocityAt(int2 pixel) {
     return currentSceneVelocity.Load(int3(clampScenePixel(pixel), 0));
 }
-float4 historyBilinear(float2 uv) {
+float3 historyDepthAware(float2 uv, float expectedDepth, float tolerance,
+                         bool farSilhouette, float3 currentColor,
+                         out float acceptedWeight, out bool nearerOccluder) {
     float2 position = uv * float2(temporalParameters.dimensions.xy) - .5;
     int2 base = int2(floor(position));
     float2 fraction = position - float2(base);
     int2 limit = int2(temporalParameters.dimensions.xy) - 1;
-    int2 p00 = clamp(base, int2(0), limit);
-    int2 p10 = clamp(base + int2(1, 0), int2(0), limit);
-    int2 p01 = clamp(base + int2(0, 1), int2(0), limit);
-    int2 p11 = clamp(base + int2(1, 1), int2(0), limit);
-    float4 top = lerp(previousHistoryColor.Load(int3(p00, 0)),
-                      previousHistoryColor.Load(int3(p10, 0)), fraction.x);
-    float4 bottom = lerp(previousHistoryColor.Load(int3(p01, 0)),
-                         previousHistoryColor.Load(int3(p11, 0)), fraction.x);
-    return lerp(top, bottom, fraction.y);
+    float3 sum = 0;
+    acceptedWeight = 0;
+    nearerOccluder = false;
+    [unroll] for (int dy = 0; dy < 2; ++dy)
+        [unroll] for (int dx = 0; dx < 2; ++dx) {
+            const int2 tap = clamp(base + int2(dx, dy), int2(0), limit);
+            const float weight = (dx == 0 ? 1 - fraction.x : fraction.x) *
+                                 (dy == 0 ? 1 - fraction.y : fraction.y);
+            const float depth = previousHistoryDepth.Load(int3(tap, 0));
+            const bool matching = isfinite(depth) &&
+                abs(depth - expectedDepth) <= tolerance;
+            const bool far = farSilhouette && isfinite(depth) && depth >= .999;
+            nearerOccluder = nearerOccluder ||
+                (weight > 1e-5 && isfinite(depth) &&
+                 depth + tolerance < expectedDepth);
+            if (matching || far) {
+                sum += weight * previousHistoryColor.Load(int3(tap, 0)).rgb;
+                acceptedWeight += weight;
+            } else if (farSilhouette) {
+                // Old, closer occluders cannot bleed into a newly exposed edge.
+                sum += weight * currentColor;
+                acceptedWeight += weight;
+            }
+        }
+    return acceptedWeight > 1e-5 ? sum / acceptedWeight : currentColor;
 }
 
 [shader("compute")]
@@ -126,7 +144,12 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
                 }
         }
         if (centerValid || stationarySilhouette) {
-            const float2 previousLocalUV = sceneLocalUV - selectedMotion.xy;
+            // Velocity contains the raster jitter delta. Foreground history
+            // tracks scene motion in output pixels; a far-side subpixel edge
+            // still follows its prior jittered footprint to gather coverage.
+            const float2 previousLocalUV = sceneLocalUV -
+                (selectedMotion.xy -
+                 (stationarySilhouette ? float2(0) : temporalParameters.jitterMotion.xy));
             if (all(isfinite(previousLocalUV)) && all(previousLocalUV >= 0) &&
                 all(previousLocalUV < 1)) {
                 const float2 previousOutputUV =
@@ -139,7 +162,8 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
                     const float depthTolerance = .002 + .01 * selectedMotion.z;
                     const bool matchingSurface = isfinite(priorDepth) &&
                         abs(priorDepth - selectedMotion.z) <= depthTolerance;
-                    const bool matchingFar = (stationarySilhouette || stationaryForegroundEdge) &&
+                    const bool matchingFar = (stationarySilhouette ||
+                                              stationaryForegroundEdge) &&
                         isfinite(priorDepth) && priorDepth >= .999;
                     if (matchingSurface || matchingFar) {
                         float3 low = float3(1e30), high = float3(-1e30);
@@ -150,13 +174,23 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
                                 high = max(high, color);
                             }
                         const float2 motionPixels = selectedMotion.xy * outputRect.zw;
-                        const float weight = stationarySilhouette || matchingFar
-                            ? .3
+                        // Edge weights are intentionally bounded: strong far
+                        // history smears a moving reveal and loses wire contrast.
+                        const float weight = stationarySilhouette ? .15
+                            : matchingFar ? .11
                             : .9 * saturate(centerMotion.w) /
                                   (1 + .5 * length(motionPixels));
-                        const float3 priorColor = clamp(historyBilinear(previousOutputUV).rgb,
-                                                        low, high);
-                        resolved.rgb = lerp(currentColor.rgb, priorColor, weight);
+                        float acceptedWeight;
+                        bool nearerOccluder;
+                        const float3 sampled = historyDepthAware(
+                            previousOutputUV, selectedMotion.z, depthTolerance,
+                            stationarySilhouette || stationaryForegroundEdge,
+                            currentColor.rgb, acceptedWeight, nearerOccluder);
+                        if (acceptedWeight > 1e-5 &&
+                            (!matchingFar || !nearerOccluder)) {
+                            const float3 priorColor = clamp(sampled, low, high);
+                            resolved.rgb = lerp(currentColor.rgb, priorColor, weight);
+                        }
                     }
                 }
             }

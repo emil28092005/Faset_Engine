@@ -5,8 +5,13 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
+#include <sstream>
+#include <string>
 #include <vector>
 
 using namespace faset::render;
@@ -271,9 +276,318 @@ void occlusion_upscale_hzb_debug_uses_internal_extent() {
     require(renderer.stats().validation_errors == 0,
             "HZB debug readback followed by occlusion render must pass Vulkan validation");
 }
+
+double roi_rgb_sum(const std::vector<std::uint8_t>& image,
+                   std::uint32_t width, Region area) {
+    double result{};
+    for (auto y = area.y; y < area.y + area.height; ++y)
+        for (auto x = area.x; x < area.x + area.width; ++x)
+            for (std::size_t channel = 0; channel < 3; ++channel)
+                result += image[(std::size_t(y) * width + x) * 4 + channel];
+    return result;
+}
+
+double roi_peak(const std::vector<std::uint8_t>& image,
+                std::uint32_t width, Region area) {
+    std::uint8_t result{};
+    for (auto y = area.y; y < area.y + area.height; ++y)
+        for (auto x = area.x; x < area.x + area.width; ++x)
+            for (std::size_t channel = 0; channel < 3; ++channel)
+                result = std::max(result,
+                    image[(std::size_t(y) * width + x) * 4 + channel]);
+    return result;
+}
+
+std::size_t pixels_over_error(const std::vector<std::uint8_t>& first,
+                              const std::vector<std::uint8_t>& second,
+                              std::uint32_t width, Region area, int threshold) {
+    std::size_t count{};
+    for (auto y = area.y; y < area.y + area.height; ++y)
+        for (auto x = area.x; x < area.x + area.width; ++x) {
+            const auto base = (std::size_t(y) * width + x) * 4;
+            bool changed = false;
+            for (std::size_t channel = 0; channel < 3; ++channel)
+                changed |= std::abs(int(first[base + channel]) -
+                                    int(second[base + channel])) > threshold;
+            count += changed;
+        }
+    return count;
+}
+
+void preserve_thin_wire_contrast_without_reveal_halo() {
+    constexpr std::uint32_t width = 160, height = 120;
+    constexpr Region wire_roi{25, 12, 110, 95};
+    constexpr Region door_center{75, 55, 10, 10};
+    constexpr Region door_edge{65, 45, 30, 35};
+    for (const auto mode : {TemporalMode::TAA, TemporalMode::Upscale}) {
+        auto config = headless_config(width, height, VisibilityMode::Direct);
+        config.temporal_mode = mode;
+        config.render_scale = mode == TemporalMode::Upscale ? .67f : 1.f;
+        Renderer resolved(config), current_only(config);
+        auto wire = lit_scene(width, height);
+        wire.view_id = "contrast-wire";
+        wire.clear_color = {0, 0, 0, 1};
+        auto draw = cube({0, 0, 0}, {1, 1, 1, 1}, "wire");
+        draw.model = transform({}, {0, 0, .35f}, {.025f, 1.4f, .05f});
+        wire.draws.push_back(draw);
+        std::vector<std::vector<std::uint8_t>> raw_frames, resolved_frames;
+        double raw_energy{}, resolved_energy{}, raw_peak{}, resolved_peak{};
+        for (unsigned phase = 0; phase < 16; ++phase) {
+            resolved.render(wire);
+            if (phase >= 4) {
+                auto image = resolved.pixels();
+                resolved_energy += roi_rgb_sum(image, width, wire_roi);
+                resolved_peak += roi_peak(image, width, wire_roi);
+                resolved_frames.push_back(std::move(image));
+            }
+            wire.camera_cut = true;
+            current_only.render(wire);
+            if (phase >= 4) {
+                auto image = current_only.pixels();
+                raw_energy += roi_rgb_sum(image, width, wire_roi);
+                raw_peak += roi_peak(image, width, wire_roi);
+                raw_frames.push_back(std::move(image));
+            }
+            wire.camera_cut = false;
+        }
+        const auto raw_variation = frame_variation(raw_frames, width, wire_roi);
+        const auto resolved_variation = frame_variation(resolved_frames, width, wire_roi);
+        std::cerr << "Wire contrast " << (mode == TemporalMode::TAA ? "TAA" : "Upscale")
+                  << ": variation " << raw_variation << " -> " << resolved_variation
+                  << ", energy " << raw_energy << " -> " << resolved_energy
+                  << ", peak " << raw_peak << " -> " << resolved_peak << '\n';
+        const bool wire_quality = resolved_variation <= raw_variation * .95 &&
+            resolved_energy >= raw_energy * .95 &&
+            resolved_energy <= raw_energy * 1.05 &&
+            resolved_peak >= raw_peak * .9;
+
+        auto door = lit_scene(width, height);
+        door.view_id = "contrast-door";
+        door.clear_color = {0, 0, 0, 1};
+        door.draws.push_back(cube({0, 0, -2}, {.1f, .9f, .2f, 1}, "background"));
+        door.draws.push_back(cube({0, 0, 1}, {.9f, .1f, .1f, 1}, "door"));
+        Renderer background_only(config);
+        bool reveal_quality = true;
+        for (unsigned phase = 0; phase < 4; ++phase) {
+            if (phase == 2)
+                door.draws[1].model = transform({3, 0, 1});
+            resolved.render(door);
+            const auto image = resolved.pixels();
+            auto without_door = door;
+            without_door.draws.pop_back();
+            background_only.render(without_door);
+            const auto steady_background = background_only.pixels();
+            door.camera_cut = true;
+            current_only.render(door);
+            const auto current = current_only.pixels();
+            door.camera_cut = false;
+            if (phase == 2) {
+                require(mean_rgb_error(image, current, width, height,
+                                       door_center) <= 1.0,
+                        "Newly revealed center must be current background immediately");
+            }
+            if (phase >= 2) {
+                std::size_t old_red_pixels{};
+                for (auto y = door_edge.y; y < door_edge.y + door_edge.height; ++y)
+                    for (auto x = door_edge.x; x < door_edge.x + door_edge.width; ++x) {
+                        const auto base = (std::size_t(y) * width + x) * 4;
+                        old_red_pixels += image[base] > image[base + 1] + 20 &&
+                            image[base] > image[base + 2] + 20 && image[base] > 25;
+                    }
+                reveal_quality &= old_red_pixels == 0;
+            }
+            if (phase == 3) {
+                const auto versus_current = pixels_over_error(
+                    image, current, width, door_edge, 8);
+                const auto versus_steady = pixels_over_error(
+                    image, steady_background, width, door_edge, 8);
+                const auto mean_steady = mean_rgb_error(
+                    image, steady_background, width, height, door_edge);
+                std::cerr << "Door edge >8: current-only=" << versus_current
+                          << " steady-background=" << versus_steady
+                          << " mean=" << mean_steady << '\n';
+                // The remaining difference must be confined to a small AA edge,
+                // not a colored image of the old door in the exposed center.
+                reveal_quality &= versus_steady <= 32 && mean_steady <= .75;
+            }
+        }
+        require(wire_quality,
+                "Temporal wire stabilization must retain coverage energy and contrast");
+        require(reveal_quality,
+                "The opened door must converge to an unobstructed temporal background");
+    }
+}
+
+void capture_quality_sequences(const std::filesystem::path& output) {
+    std::filesystem::create_directories(output / "captures");
+    std::ofstream csv(output / "frames.csv");
+    require(bool(csv), "Could not open temporal quality frame CSV");
+    csv << "sequence,mode,phase,width,height,internal_width,internal_height,device,"
+           "cpu_ms,gpu_ms,readback_cpu_ms,gpu_main_raster_ms,gpu_post_raster_ms,"
+           "gpu_temporal_resolve_ms,gpu_temporal_composite_ms,gpu_ui_ms,"
+           "gpu_allocated_bytes,history_valid,reset_reason,validation_errors,image\n";
+    constexpr std::uint32_t width = 160, height = 120;
+    struct Mode { const char* name; TemporalMode temporal; float scale; bool current_only; };
+    constexpr std::array modes{
+        Mode{"off", TemporalMode::Off, 1.f, false},
+        Mode{"current", TemporalMode::TAA, 1.f, true},
+        Mode{"taa", TemporalMode::TAA, 1.f, false},
+        Mode{"upscale-current", TemporalMode::Upscale, .67f, true},
+        Mode{"upscale", TemporalMode::Upscale, .67f, false}};
+    struct Sequence { const char* name; unsigned frames; };
+    constexpr std::array sequences{
+        Sequence{"wire-static", 16}, Sequence{"pan", 16},
+        Sequence{"moving-cube", 16}, Sequence{"door-background", 16},
+        Sequence{"door-open", 4},
+        Sequence{"cut", 2}, Sequence{"resize", 2},
+        Sequence{"ui-alpha", 2}};
+    for (const auto& mode : modes) {
+        auto config = headless_config(width, height, VisibilityMode::Direct);
+        config.temporal_mode = mode.temporal;
+        config.render_scale = mode.scale;
+        Renderer renderer(config);
+        for (const auto& sequence : sequences) {
+            for (unsigned phase = 0; phase < sequence.frames; ++phase) {
+                const bool resized = std::string(sequence.name) == "resize" && phase == 1;
+                const auto frame_width = resized ? 319u : width;
+                const auto frame_height = resized ? 241u : height;
+                if (renderer.width() != frame_width || renderer.height() != frame_height)
+                    renderer.resize(frame_width, frame_height);
+                auto frame = lit_scene(frame_width, frame_height);
+                frame.view_id = sequence.name;
+                frame.clear_color = {0, 0, 0, 1};
+                frame.camera_cut = mode.current_only;
+                const std::string name = sequence.name;
+                if (name == "wire-static" || name == "pan") {
+                    auto wire = cube({0, 0, 0}, {1, 1, 1, 1}, "wire");
+                    wire.model = transform({}, {0, 0, .35f}, {.025f, 1.4f, .05f});
+                    frame.draws.push_back(wire);
+                    if (name == "pan") {
+                        frame.eye[0] = float(phase) * .012f;
+                        frame.view_projection = multiply(
+                            frame.projection, look_at(frame.eye, {0, 0, 0}));
+                    }
+                } else if (name == "moving-cube") {
+                    frame.draws.push_back(cube(
+                        {-.5f + float(phase) * .065f, 0, 0},
+                        {.9f, .7f, .2f, 1}, "moving"));
+                    frame.draws.push_back(cube({0, 0, -2}, {.2f, .5f, .8f, 1},
+                                               "moving-background"));
+                } else if (name == "door-open" || name == "door-background") {
+                    frame.draws.push_back(cube({0, 0, -2}, {.1f, .9f, .2f, 1},
+                                               "door-background"));
+                    if (name == "door-open")
+                        frame.draws.push_back(cube(
+                            {phase < 2 ? 0.f : 3.f, 0, 1},
+                            {.9f, .1f, .1f, 1}, "door"));
+                } else {
+                    frame.draws.push_back(cube({0, 0, 0}, {.8f, .6f, .25f, 1},
+                                               "static-cube"));
+                    if (name == "cut" && phase == 1) {
+                        frame.camera_cut = true;
+                        frame.eye = {1, 0, 6};
+                        frame.view_projection = multiply(
+                            frame.projection, look_at(frame.eye, {0, 0, 0}));
+                    }
+                    if (name == "ui-alpha") {
+                        frame.draws.push_back(cube({.4f, 0, 1},
+                                                   {.2f, .6f, .9f, .45f}, "alpha"));
+                        frame.ui_quads.push_back({2, 2, 25, 12,
+                                                  {.8f, .7f, .25f, 1}});
+                    }
+                }
+                renderer.render(frame);
+                const auto& stats = renderer.stats();
+                require(stats.validation_errors == 0,
+                        "Temporal quality capture reported Vulkan validation errors");
+                std::ostringstream filename;
+                filename << sequence.name << '-' << mode.name << '-'
+                         << std::setfill('0') << std::setw(2) << phase << ".ppm";
+                const auto image = (std::filesystem::path("captures") /
+                                    filename.str()).generic_string();
+                renderer.capture(output / image);
+                csv << sequence.name << ',' << mode.name << ',' << phase << ','
+                    << frame_width << ',' << frame_height << ','
+                    << stats.temporal_internal_width << ','
+                    << stats.temporal_internal_height << ','
+                    << std::quoted(stats.device) << ','
+                    << stats.cpu_ms << ',' << stats.gpu_ms << ','
+                    << stats.readback_cpu_ms << ','
+                    << stats.gpu_main_raster_ms << ','
+                    << stats.gpu_post_raster_ms << ','
+                    << stats.gpu_temporal_resolve_ms << ','
+                    << stats.gpu_temporal_composite_ms << ','
+                    << stats.gpu_ui_ms << ','
+                    << stats.gpu_allocated_bytes << ','
+                    << int(stats.temporal_history_valid) << ','
+                    << int(stats.temporal_reset_reason) << ','
+                    << stats.validation_errors << ',' << image << '\n';
+            }
+        }
+    }
+}
+
+void profile_720p(const std::filesystem::path& output) {
+    std::ofstream csv(output);
+    require(bool(csv), "Could not open temporal 720p profile CSV");
+    csv << "mode,frame,width,height,internal_width,internal_height,device,"
+           "cpu_ms,gpu_ms,readback_cpu_ms,gpu_main_raster_ms,"
+           "gpu_temporal_resolve_ms,gpu_temporal_composite_ms,gpu_ui_ms,"
+           "gpu_allocated_bytes,validation_errors\n";
+    constexpr std::uint32_t width = 1280, height = 720;
+    constexpr std::array mode_names{"off", "taa", "upscale"};
+    std::array<std::unique_ptr<Renderer>, 3> renderers;
+    for (std::size_t i = 0; i < renderers.size(); ++i) {
+        auto config = headless_config(width, height, VisibilityMode::Direct);
+        config.temporal_mode = i == 0 ? TemporalMode::Off
+            : i == 1 ? TemporalMode::TAA : TemporalMode::Upscale;
+        config.render_scale = i == 2 ? .67f : 1.f;
+        renderers[i] = std::make_unique<Renderer>(config);
+    }
+    auto frame = lit_scene(width, height);
+    frame.view_id = "temporal-720p-fixed-scene";
+    frame.clear_color = {0, 0, 0, 1};
+    frame.draws.push_back(cube({0, 0, 0}, {.8f, .6f, .25f, 1}, "profile-cube"));
+    auto wire = cube({0, 0, -1}, {1, 1, 1, 1}, "profile-wire");
+    wire.model = transform({.9f, 0, -1}, {0, 0, .35f}, {.025f, 1.4f, .05f});
+    frame.draws.push_back(wire);
+    for (unsigned phase = 0; phase < 40; ++phase)
+        for (std::size_t sequence = 0; sequence < renderers.size(); ++sequence) {
+            const std::size_t i = (sequence + phase) % renderers.size();
+            renderers[i]->render(frame);
+            const auto& stats = renderers[i]->stats();
+            require(stats.validation_errors == 0,
+                    "720p temporal profile reported Vulkan validation errors");
+            if (phase < 10)
+                continue;
+            csv << mode_names[i] << ',' << (phase - 10) << ','
+                << width << ',' << height << ','
+                << stats.temporal_internal_width << ','
+                << stats.temporal_internal_height << ','
+                << std::quoted(stats.device) << ','
+                << stats.cpu_ms << ',' << stats.gpu_ms << ','
+                << stats.readback_cpu_ms << ','
+                << stats.gpu_main_raster_ms << ','
+                << stats.gpu_temporal_resolve_ms << ','
+                << stats.gpu_temporal_composite_ms << ','
+                << stats.gpu_ui_ms << ','
+                << stats.gpu_allocated_bytes << ','
+                << stats.validation_errors << '\n';
+        }
+}
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--profile-720p") {
+        profile_720p(argv[2]);
+        return 0;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--capture-quality") {
+        capture_quality_sequences(argv[2]);
+        return 0;
+    }
+    require(argc == 1,
+            "Usage: temporal acceptance [--capture-quality DIR|--profile-720p CSV]");
     moving_reveal_and_camera_resets(VisibilityMode::Direct);
     moving_reveal_and_camera_resets(VisibilityMode::GpuFrustum);
     moving_reveal_and_camera_resets(VisibilityMode::GpuOcclusion);
@@ -282,4 +596,5 @@ int main() {
     temporal_tiled_lighting_uses_scene_raster_extent();
     tile_membership_tracks_raster_jitter();
     occlusion_upscale_hzb_debug_uses_internal_extent();
+    preserve_thin_wire_contrast_without_reveal_halo();
 }
