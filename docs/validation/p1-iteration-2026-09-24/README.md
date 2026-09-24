@@ -83,10 +83,20 @@ budgets: frame 2.684/2.732 ms versus ≤4; GPU 0.579/0.600 ms versus ≤1; readb
 0.633/0.608 ms versus ≤1; simulation 0.258/0.300 ms and snapshot 0.215/0.257 ms
 versus ≤0.5 each. Explicit allocations were about 15.02/15.06 MiB versus
 ≤20 MiB; first-frame startup from `main()` was 265.5/260.8 ms versus ≤500 ms.
-That baseline was an evolving working tree in September, not a fresh Release
-measurement of `6c2e8fa`; its numbers are **historical** and are not compared with
-this Debug workflow's timing. A current-revision, quiet-host Release rerun remains
-needed before claiming the budgets again.
+That baseline was an evolving earlier working tree. Its values are **historical**
+and are not compared with this Debug workflow's timing.
+
+The [fresh clean combined P1/P3 Release reference](final-release/README.md) at
+`4a3453e` repeats these exact scenes on the same physical RTX 2080 Ti, now with
+120-frame source-hidden relocation checks for C++ 2D/3D and Lua-only, plus
+sequential 240-frame C++ 2D/3D profiles. The frame, GPU, readback, simulation,
+snapshot and startup tracking budgets all pass. Explicit allocations instead
+reach **43.022/43.118 MiB**, above the former ≤20 MiB budget because the new
+renderer eagerly retains a 16 MiB sun atlas and a 16 MiB local atlas in both
+scenes. The 2D sample casts no sun shadows and neither sample uses local shadow
+faces. This is a measured tracking-budget miss, not a failed export or a reason
+to redefine the counter silently. The linked dossier retains exact values,
+atlas breakdown, raw profiles and source/toolchain provenance.
 
 The [Lua-only Linux Release dossier](../lua-release-2026-09-24/README.md) separately
 records a relocated package that validated and rendered 120 frames after hiding
@@ -104,19 +114,22 @@ checksums; [integration results](windows-4ac02ee/integration-result-2.json),
 evidence. The parallel [native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35937433211)
 passed on Linux and Windows. This is **software** Vulkan; Windows did not have an
 active Khronos validation layer (`validation_enabled: false`), and no physical
-Windows GPU/driver performance claim follows. A later CI run must cover the
-`d7a7a7c` real diagnostic-navigation assertion added after this export run.
+Windows GPU/driver performance claim follows. The later [combined P1/P3 Windows
+graphics CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35942307579)
+at `87230f3` passed 74/74 CTests, including real diagnostic navigation, real
+Release export integration and all three relocated games. The physical-GPU
+Linux reference above had active validation.
 
 ## P1 acceptance record
 
 | Area | Evidence and current limit |
 | --- | --- |
-| Lua | Linux native and Release [relocated Lua result](../lua-release-2026-09-24/README.md); Windows CPU/SwiftShader 61-test suite and [relocated Lua-only Release report](windows-4ac02ee/playable-report.json), 120 completed frames. |
+| Lua | Linux native and Release [relocated Lua result](../lua-release-2026-09-24/README.md), repeated in the [clean combined three-game Release reference](final-release/README.md); Windows CPU/SwiftShader [combined 74-test suite](https://github.com/emil28092005/Faset_Engine/actions/runs/35942307579) and [relocated Lua-only Release report](windows-4ac02ee/playable-report.json), 120 completed frames. |
 | Cache and rollback | [Five verified hits](report.json), `build_cache` and `build_schema_publication` contracts for headers, toolchain, schema/shader corruption and source races; the raw failed/recovered build retains the previous pointer. |
 | Diagnostics | `build_diagnostics` fixtures cover Clang, clang-cl, Lua, Unicode and unparseable output. The raw real failure above found a staged-source mapping gap; [the replay](diagnostic-replay.json), parser case, warning-flood case and real BuildService integration assertion cover the correction. |
 | Starters/navigation | [Four runnable C++/Lua × 2D/3D starters](../p1-starters-linux-2026-09-24.md) plus launcher/CLI and source-open tests. |
 | Autosave | `editor_session_settings`, UI tests and [workspace behavior](../../manual/editor/workspace.md#create-and-save-a-scene): idle coalescing, unnamed Save As, external/revision conflicts, Undo and recovery. |
-| Iteration | This report, 179 raw files, 3,000-frame and seeded larger-scene profiles; no CI timing gates. |
+| Iteration | This Debug report, 179 raw files, 3,000-frame and seeded larger-scene profiles, plus the [clean combined Release reference](final-release/README.md) with three relocated games and exact 2D/3D budgets. The allocation budget miss is recorded; no CI timing gates. |
 | Documentation | The English Manual describes build/reload, templates, navigation, autosave and profile interpretation; strict MkDocs and full platform test totals are recorded in the implementation journal. |
 
 The [profiling guide](../../manual/editor/profiling.md#measure-editor-c-and-lua-iteration)
