@@ -1,13 +1,15 @@
 # P3 temporal reconstruction: image quality and cost, 2026-09-24
 
 This record covers Faset's first-generation, opt-in TAA and temporal upscaler.
-The temporal shader source under test is
+The 370-frame Direct captures and 720p cost profile below were executed from
 `1a1f69f7e88b3ea69986931dfcf6baf9b43a431c` on
-`feat/p3-temporal-integration`; the combined integration source revision is
-`4a3453e`. Final CI results are tracked with that integration branch. The
-physical Vulkan device was an
-NVIDIA GeForce RTX 2080 Ti with proprietary driver 595.84 on Linux. Both
-fixtures requested Vulkan validation and every recorded frame reported zero
+`feat/p3-temporal-integration`. The later [three-path quality matrix](matrix/README.md)
+was executed from `fe3a589174f8fe8e35ee231fe74fe938f4dd3cbd` before the
+pixel-diagnostics shader merge. The combined P1+P3 performance sweep at
+`4a3453e` is a different run, not the source of these images. The physical
+Vulkan device was an NVIDIA GeForce RTX 2080 Ti with proprietary driver 595.84
+on Linux. Both original Direct fixtures requested Vulkan validation and every
+recorded frame reported zero
 validation errors. These observations do not establish physical Windows GPU
 behavior or high-end reconstruction quality.
 
@@ -31,7 +33,8 @@ behavior or high-end reconstruction quality.
   is the same-jitter unobstructed reference.
   `tools/analyze_temporal_quality.py` converts the raw PPM output of
   `faset_render_temporal_acceptance_tests --capture-quality DIR` to PNG
-  losslessly and computes the metrics. It needs Python with NumPy and Pillow.
+  losslessly and computes the metrics. It needs the pinned NumPy and Pillow
+  versions in `tools/requirements-temporal-quality.txt`.
 - [720p raw profile](profile-720p-debug.csv) contains 30 measured frames per
   Off/TAA/Upscale mode after 10 warm-up frames, with rotating mode order.
   `faset_render_temporal_acceptance_tests --profile-720p CSV` reproduces this
