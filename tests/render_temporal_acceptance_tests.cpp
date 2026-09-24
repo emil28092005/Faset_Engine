@@ -1,6 +1,7 @@
 #include "render_temporal_fixtures.hpp"
 #include <faset/render/temporal.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -164,6 +165,112 @@ void static_edge_reduces_jitter_variation() {
                 spatial.stats().validation_errors == 0,
             "Static-edge temporal sequence must not raise Vulkan validation errors");
 }
+
+void temporal_tiled_lighting_uses_scene_raster_extent() {
+    constexpr std::uint32_t width = 319, height = 241;
+    for (const auto temporal_mode : {TemporalMode::TAA, TemporalMode::Upscale}) {
+        for (const auto visibility : {VisibilityMode::Direct,
+                                      VisibilityMode::GpuFrustum,
+                                      VisibilityMode::GpuOcclusion}) {
+            auto config = headless_config(width, height, visibility);
+            config.temporal_mode = temporal_mode;
+            config.render_scale = temporal_mode == TemporalMode::Upscale ? .5f : 1.f;
+            config.lighting_mode = LightingMode::Forward;
+            Renderer forward(config);
+            config.lighting_mode = LightingMode::Tiled;
+            Renderer tiled(config);
+            auto frame = lit_scene(width, height);
+            frame.scene_rect = {11, 9, 297, 223};
+            frame.draws.push_back(cube({0, 0, 0}, {.8f, .8f, .8f, 1}, "tile-receiver"));
+            for (int i = -3; i <= 3; ++i) {
+                LocalLight light;
+                light.stable_id = "tile-light-" + std::to_string(i);
+                light.position = {float(i) * .32f, .12f, 1.2f};
+                light.range = .65f;
+                light.intensity = 30.f;
+                light.casts_shadow = false;
+                frame.local_lights.push_back(light);
+            }
+            const auto expected_tiles = temporal_mode == TemporalMode::Upscale
+                ? 10u * 8u : 20u * 16u;
+            for (unsigned phase = 0; phase < 8; ++phase) {
+                forward.render(frame);
+                tiled.render(frame);
+                const auto& stats = tiled.stats();
+                require(stats.effective_lighting_path == "tiled" &&
+                            stats.light_tile_count == expected_tiles,
+                        "Temporal tiled lighting must build the grid at scene raster resolution");
+                require(stats.validation_errors == 0 &&
+                            forward.stats().validation_errors == 0,
+                        "Temporal tiled/forward lighting must pass Vulkan validation");
+                const double error = mean_rgb_error(tiled.pixels(), forward.pixels(),
+                                                    width, height, {11, 9, 297, 223});
+                require(error <= 1.0,
+                        "Jittered Direct/P2 tiled lighting must match forward shading near tile boundaries");
+            }
+        }
+    }
+}
+
+void tile_membership_tracks_raster_jitter() {
+    auto config = headless_config(160, 128, VisibilityMode::Direct);
+    config.temporal_mode = TemporalMode::TAA;
+    config.lighting_mode = LightingMode::Tiled;
+    config.visibility_diagnostics = true;
+    Renderer tiled(config);
+    Snapshot frame;
+    frame.view_id = "jittered-light-tile-membership";
+    frame.eye = {0, 0, 6};
+    frame.projection = orthographic(-2, 2, -1.6f, 1.6f, .1f, 20.f);
+    frame.view_projection = multiply(frame.projection,
+                                     look_at(frame.eye, {0, 0, 0}));
+    frame.authored_lights_present = true;
+    LocalLight edge_light;
+    edge_light.stable_id = "boundary-light";
+    edge_light.position = {-.2f, .37f, 0};
+    edge_light.range = .2f;
+    edge_light.intensity = 20;
+    edge_light.casts_shadow = false;
+    frame.local_lights.push_back(edge_light);
+    std::vector<std::uint32_t> memberships;
+    for (unsigned phase = 0; phase < 16; ++phase) {
+        tiled.render(frame);
+        const auto& stats = tiled.stats();
+        require(stats.effective_lighting_path == "tiled" &&
+                    stats.light_tile_counts_valid &&
+                    stats.validation_errors == 0,
+                "Jittered tile membership fixture requires diagnostic tile readback");
+        memberships.push_back(stats.light_tile_candidate_count);
+    }
+    require(*std::min_element(memberships.begin(), memberships.end()) <
+                *std::max_element(memberships.begin(), memberships.end()),
+            "A light grazing a tile edge must follow the scene raster jitter");
+}
+
+void occlusion_upscale_hzb_debug_uses_internal_extent() {
+    constexpr std::uint32_t width = 319, height = 241;
+    auto config = headless_config(width, height, VisibilityMode::GpuOcclusion);
+    config.temporal_mode = TemporalMode::Upscale;
+    config.render_scale = .5f;
+    Renderer renderer(config);
+    auto frame = lit_scene(width, height);
+    frame.draws.push_back(cube({0, 0, 0}, {.8f, .6f, .2f, 1}, "hzb-cube"));
+    renderer.render(frame);
+    require(renderer.stats().effective_visibility_mode == VisibilityMode::GpuOcclusion &&
+                renderer.stats().temporal_internal_width == 160 &&
+                renderer.stats().temporal_internal_height == 121,
+            "HZB debug regression requires active occlusion and an odd internal extent");
+    const auto mip0 = renderer.hzb_debug_image(0);
+    const auto mip1 = renderer.hzb_debug_image(1);
+    require(mip0 && mip0->width == 256 && mip0->height == 128 &&
+                mip0->rgba.size() == std::size_t(256) * 128 * 4 &&
+                mip1 && mip1->width == 128 && mip1->height == 64 &&
+                mip1->rgba.size() == std::size_t(128) * 64 * 4,
+            "HZB debug readback must copy the allocated internal pyramid extent per mip");
+    renderer.render(frame);
+    require(renderer.stats().validation_errors == 0,
+            "HZB debug readback followed by occlusion render must pass Vulkan validation");
+}
 } // namespace
 
 int main() {
@@ -172,4 +279,7 @@ int main() {
     moving_reveal_and_camera_resets(VisibilityMode::GpuOcclusion);
     lower_resolution_scene_and_output_ui();
     static_edge_reduces_jitter_variation();
+    temporal_tiled_lighting_uses_scene_raster_extent();
+    tile_membership_tracks_raster_jitter();
+    occlusion_upscale_hzb_debug_uses_internal_extent();
 }
