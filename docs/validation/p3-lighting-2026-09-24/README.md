@@ -1,11 +1,11 @@
 # P3 lighting and shadows — acceptance record
 
 This record tracks P3 lighting separately from temporal reconstruction. The
-implementation checkpoint is source revision
-`b191ae0bed77a1544a49504b9a3f07e9a3c691f2` on `feat/p3-lighting`. The
-Manual/record edit itself is documentation-only. A later Forward+ change and
-its measurements require a new revision and validation entry before the lighting
-slice can be called complete. Temporal reconstruction has its own acceptance.
+implementation and measured Forward+ checkpoint is source revision
+`a0a4e29d480ed3344f19bd3565d48668ca913fed` on `feat/p3-lighting`.
+The earlier shadow/benchmark integration checkpoint was `b191ae0`. The
+lighting slice has Linux functional and reference-GPU evidence; Windows CI for
+the new tiled revision is pending. Temporal reconstruction has its own acceptance.
 
 ## Implemented at the checkpoint
 
@@ -31,18 +31,26 @@ slice can be called complete. Temporal reconstruction has its own acceptance.
   requested/effective views, drop reasons, atlas bytes, caster draws, GPU shadow
   durations, and the effective lighting path. Shadow tiles are redrawn every
   frame; no persistent depth cache is claimed.
+- An explicit 16×16 depth-free tiled Forward+ path uses at most 64 light indices
+  per tile and evaluates the complete submitted list on overflow. The compute
+  entry has checked reflection and is included in game builds. `Auto` uses
+  forward: three-run Release measurements found tile build + raster slower on
+  the dense fixed scene. The [paired study](../../studies/23-p3-forward-plus-2026-09-24.md)
+  retains a separate localized-light win and exact binary/shader provenance.
 
 ## Acceptance matrix
 
 | Case | Automated evidence | Current status |
 | --- | --- | --- |
-| Empty, disabled, local-only, multiple sun; schema bounds | `scene_view`, `render_lighting_policy`, `render_offscreen` | Covered by Debug tests at the implementation checkpoint; re-run on final revision |
-| Four cascades, split bounds, subtexel stabilization, offscreen/source-LOD0 caster | `render_lighting_policy`, `render_lighting_sun` | Covered by CPU policy and Linux Vulkan image tests; final-revision runs pending |
-| Spot cone, six point faces and seam, dropped whole point shadow | `render_lighting_local`, `render_lighting_policy` | Covered by Linux Vulkan image and CPU tests; final-revision runs pending |
+| Empty, disabled, local-only, multiple sun; schema bounds | `scene_view`, `render_lighting_policy`, `render_offscreen` | Linux Debug green at `a0a4e29`; integrated revision pending |
+| Four cascades, split bounds, subtexel stabilization, offscreen/source-LOD0 caster | `render_lighting_policy`, `render_lighting_sun` | Linux GPU and pinned SwiftShader P3 green at `a0a4e29` |
+| Spot cone, six point faces and seam, dropped whole point shadow | `render_lighting_local`, `render_lighting_policy` | Linux GPU and pinned SwiftShader P3 green at `a0a4e29` |
 | 128-light/16-face/4096-draw limits, unsupported-atlas fallback | `render_lighting_policy`, `render_offscreen`, `render_lighting_local` | CPU and supported-atlas GPU paths covered; actual unsupported Vulkan device not tested |
-| Direct/GPU frustum/GPU occlusion image parity, P2 reload and 2D/UI independence | `render_lighting_sun`, `render_lighting_local`, `render_shader_reload`, `render_offscreen` | Linux supported-driver paths covered; final-revision runs pending |
-| Driver, profile, real 64×64 benchmark smoke | `render_lighting_benchmark_schema`, `render_lighting_benchmark_smoke`, `player_shutdown_diagnostics` | Focused integration tests passed on `b191ae0`; full raw log pending |
-| 1920×1080 0/4/16/32/64/128 Release sweep, three repeats, both shadow states | `tools/benchmark_p3_lighting.py --sweep` | Baseline measured on Linux physical GPU; raw CSV and post-Forward+ comparison pending publication |
+| Direct/GPU frustum/GPU occlusion image parity, P2 reload and 2D/UI independence | `render_lighting_sun`, `render_lighting_local`, `render_shader_reload`, `render_offscreen` | Linux Debug green at `a0a4e29`; integrated revision pending |
+| Forward+/forward parity, near plane, resize, overflow, and shader reload | `render_lighting_tiled`, `render_shader_reload`, `render_shader_reflection`, `build_schema_publication` | Linux Debug and pinned SwiftShader P3 green at `a0a4e29`; 128-light localized Release captures match exactly |
+| Driver, profile, real 64×64 benchmark smoke | `render_lighting_benchmark_schema`, `render_lighting_benchmark_smoke`, `player_shutdown_diagnostics` | Full Linux Debug green at `a0a4e29` |
+| 1920×1080 0/4/16/32/64/128 Release sweep, three repeats, both shadow states | `tools/benchmark_p3_lighting.py --sweep` | Forward baseline measured; its separate raw study is being integrated |
+| 1920×1080 paired paths, 32/64/128 dense and localized lights | `faset_p3_lighting_benchmark --lighting forward|tiled` | Raw 1080 frames and six diagnostic samples retained in study 23; dense slower, localized faster by build+raster |
 | Windows native build, pinned SwiftShader GPU tests, relocated Release 2D/3D Players | `windows-graphics.yml`, `ci.yml` | New P3 revision has not yet completed Windows CI |
 
 The supported-atlas GPU tests create a renderer with validation requested and
@@ -56,11 +64,12 @@ reference-GPU results cannot establish physical Windows performance.
 
 The P3 CTest registrations are `render_lighting_policy` and
 `render_lighting_benchmark_schema` (CPU), plus `render_lighting_sun`,
-`render_lighting_local`, and `render_lighting_benchmark_smoke` (labelled
-`gpu;p3`). Use `ctest --test-dir build/linux-debug -N -L p3` to confirm those
-five cases exist before running them; an empty test selection is not a pass.
+`render_lighting_local`, `render_lighting_tiled`, and
+`render_lighting_benchmark_smoke` (labelled `gpu;p3`). Use
+`ctest --test-dir build/linux-debug -N -L p3` to confirm those six cases exist
+before running them; an empty test selection is not a pass.
 The Windows full graphics job runs all registered tests, while the native
-Windows CPU job uses `-LE gpu` and therefore excludes the three Vulkan cases.
+Windows CPU job uses `-LE gpu` and therefore excludes the four Vulkan cases.
 
 On the Linux host at `b191ae0`, the [CTest inventory](linux-debug-p3-inventory.txt)
 listed all five cases. The [CPU-only P3 run](linux-debug-cpu-ctest.txt) passed
@@ -70,6 +79,22 @@ changes. This run deliberately excluded Vulkan tests while the 1920×1080
 physical-GPU baseline was being measured, so it is not a final GPU acceptance
 result. The local host was Linux x86_64, kernel 7.0.0-31-generic; the source
 checkout had documentation changes only during these checks.
+
+At `a0a4e29`, the [full Linux Debug run](linux-debug-tiled-ctest.txt) had
+63 registered cases: 62 passed, no failures, and the compositor-dependent
+window lifecycle case skipped. The [pinned Linux SwiftShader P3 run](linux-swiftshader-tiled-p3-ctest.txt)
+passed all six P3 cases without a skip. The Vulkan image cases requested
+validation and asserted zero reported errors. The RTX 2080 Ti A/B used NVIDIA
+driver 595.84.0.0; study 23 records the executable and shader bundle hashes,
+all raw per-frame timings, tile overflow counts, and exact image equality for
+the localized 128-light capture. Its first dense 32-light forward run was an
+outlier, so the decision uses the median of three process medians rather than
+the apparent win in one paired run.
+
+At the earlier `b191ae0` checkpoint, [GitHub native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35935899512)
+and [Windows graphics/SwiftShader CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35935899505)
+passed. These jobs did **not** include the new tile shader; Windows CI for
+`a0a4e29` is still required.
 
 ```sh
 cmake --build --preset linux-debug --parallel 2
@@ -83,15 +108,16 @@ The benchmark wrapper retains one raw CSV per run, a merged CSV, and a summary.
 It rejects visibility fallback, missing GPU timestamps, missing lights, duplicate
 frames, and validation errors. An offscreen capture's `cpu_ms` includes GPU wait
 and readback; it is not thread CPU time. The exact Release benchmark revision,
-driver, CSV paths, before/after Forward+ gate, Linux SwiftShader results, final
-Debug/Release CTest logs, and Windows Actions links will be added after those
-checks run. Do not use this provisional record as a P3 completion claim.
+driver and paired path data are retained in study 23. Release full CTest,
+final integrated Windows Actions and relocated Player checks still need to be
+added before this is a complete P3 lighting acceptance record.
 
 ## Limits carried forward
 
-The current checkpoint scans all submitted lights in each mesh fragment; the
-measured Forward+ threshold was reached on the Linux reference GPU, so a bounded
-tiled path is in progress. Transparent/game UI and sprites keep their existing
+The default path scans all submitted lights in each mesh fragment; the
+measured Forward+ threshold prompted a bounded tiled implementation. `Auto`
+still uses forward because this dense fixed workload was slower after tile
+construction. Transparent/game UI and sprites keep their existing
 ordering and unlit behavior. The atlas caps are fixed budgets, not adaptive
 quality settings, and shadow depth is redrawn each frame. The renderer still
 performs synchronous framebuffer readback. No broad scene/driver matrix or

@@ -27,10 +27,16 @@ When GPU timestamps are available, the panel shows sun and local shadow pass
 durations. A zero duration after a disabled sun or sprite-only frame confirms
 that no sun shadow raster ran. The lighting path names the algorithm actually
 used, so compare it with a benchmark's requested mode before interpreting costs.
+For an explicitly tiled frame, the overlay also reports the 16×16 grid size,
+its compute GPU duration, the number of stored light candidates, and how many
+tiles overflowed their 64-index list and scanned all lights. Candidate and
+overflow counts require the diagnostics readback; **unavailable** is distinct
+from a measured zero. The diagnostic copy itself adds work, so close the panel
+before measuring performance.
 See [Lighting](lighting.md) for the 128-light and 16-tile limits.
 
 The Vulkan backend emits `VK_EXT_debug_utils` labels for `SunShadowAtlas`,
-`LocalShadowAtlas`, `ForwardAndUI`, `Readback`, and, when presenting,
+`LocalShadowAtlas`, `LightTileBuild` when tiled, `ForwardAndUI`, `Readback`, and, when presenting,
 `Presentation`. A fallback frame can have no shadow-raster label. A graphics
 capture tool that supports this extension can identify the command-buffer
 regions. Labels remain available without the Khronos validation layer when

@@ -508,6 +508,24 @@ repeats, ten warm-up and thirty measured frames per configuration. It reached
 the agreed Forward+ gate: main-raster overhead at 32 lights was about 0.50 ms
 relative to the matching zero-light case, roughly 30% of that GPU frame;
 64 and 128 lights added about 1.02 and 2.03 ms. Its raw CSV/report are being
-published separately with the exact benchmark revision and driver. A 16×16
-tiled Forward+ path, image parity and before/after build+raster measurement are
-therefore pending. Temporal reconstruction is developed and accepted separately.
+published separately with the exact benchmark revision and driver.
+
+Revision `a0a4e29` adds an explicit depth-free 16×16 tiled Forward+ path. One
+compute invocation tests every submitted point/spot range sphere against a
+tile's four screen-space planes and writes at most 64 stable-order indices.
+An overflowing tile scans the entire submitted list in the fragment shader;
+there is no dropped light. The tile shader has exact reflection validation,
+package/build integration, GPU timing, optional occupancy readback, and
+reload rollback. Direct, GPU frustum and GPU occlusion image tests cover a
+cropped viewport, resize, near-plane light/shadow, and overflow. A 128-light
+localized 1920×1080 forward/tiled capture matched byte for byte.
+
+The [paired Release study](studies/23-p3-forward-plus-2026-09-24.md) measured
+tile build **plus** raster on the same RTX 2080 Ti source revision and shader
+bundle. At 32/64/128 broad overlapping lights it was 0.064/0.122/0.222 ms
+slower; all 8160 tiles overflowed at 128. A separate localized-range scene
+was 0.103/0.214/0.440 ms faster at those counts, with no overflows. There is
+no robust scene/device runtime predictor yet, so `Auto` remains forward and
+`Tiled` is explicit. Linux Debug passed 62 CTests with one window skip;
+pinned Linux SwiftShader passed all six P3 cases. Windows CI on this new
+revision and P3 temporal reconstruction are separate acceptance work.

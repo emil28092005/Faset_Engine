@@ -72,6 +72,25 @@ cleared and redrawn each frame; there is no persistent shadow cache yet.
 Sprite-only scenes, a missing sun, and a sun with `casts_shadow: false` skip sun
 shadow raster work.
 
+## Local-light rendering path
+
+The normal `Auto` setting uses the measured forward light scan. It is the
+current default for Editor and Player. A C++ renderer integration can explicitly
+set `RendererConfig::lighting_mode = LightingMode::Tiled` to build depth-free
+16×16 screen-tile lists on a capable Vulkan device. Each tile stores at most
+64 light indices in stable order. If more lights touch a tile, its fragment
+shader scans the complete submitted list, so an overflow never removes
+illumination. The path falls back to forward when no local lights are present
+or the compute/buffer requirements are unavailable. Sprites and UI stay unlit.
+
+This explicit path can help when light ranges occupy small parts of the screen;
+it costs extra work when nearly every light covers nearly every tile. The
+fixed dense benchmark was slower after including tile construction, so there
+is no automatic scene-dependent switch yet. The Player profile reports
+`effective_lighting_path`, tile GPU time and grid size; optional Editor
+diagnostics also report stored candidates and overflowing tiles. See
+[Profiling](profiling.md) and the [measured Forward+ study](https://github.com/emil28092005/Faset_Engine/blob/main/docs/studies/23-p3-forward-plus-2026-09-24.md).
+
 ## Add a point light through MCP
 
 MCP edits the **Editor document**, not entities in a running game. Use

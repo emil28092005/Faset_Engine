@@ -1,0 +1,33 @@
+{
+  "commit": "a0a4e29d480ed3344f19bd3565d48668ca913fed",
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "driver": "NVIDIA 595.84.0.0",
+  "build": "Linux Clang Release",
+  "executable_sha256": "db151a07eeaee04871920f8617f5bcf4c8ac7cb11abf4e36e5595cc526440a36",
+  "shader_bundle_sha256": "60d2abf2f43557f72f39de7a50f4bc92816eb7859c613b2797c0410e72dbaeed",
+  "shader_bundle_hash_method": "SHA256 of UTF-8 canonical JSON mapping sorted shader filenames to per-file SHA256",
+  "shader_files": {
+    "vertexMain.spv": "1ad2631c35d654f48166321ae43d4165043e1b919b14f1dc61caf97b1ada0898",
+    "vertexMain.reflection.json": "b3bdff863d53a0b385e06a36701a83a6ecafe9a93e97281a732cce8ff862c0db",
+    "fragmentMain.spv": "eb65edf62a4ead573f740903dbbd1a61565fe97d234fbe8a09934ce6415bec92",
+    "fragmentMain.reflection.json": "6b62a42ea448d9ae253d78b6b326dfe0d761532ce695b49263689ec649ede36c",
+    "shadowMain.spv": "7643b4d688492b5ee923b9606f0b0e70343ca05fa67673838206119a6f86d8d8",
+    "shadowMain.reflection.json": "d39e2f83c797589296eac9dce139b9ad836a895d6685bc40f79dd2609d687fee",
+    "lightTileMain.spv": "92850edcc5ee5b586a90ce84ee69a98075a6fff3c13db4a57528d9431afe8b68",
+    "lightTileMain.reflection.json": "bf6a9256aaa6d6edacfa1e1c265d7c8ce2c1e4ea4036e0bea078c22fd4b536ca",
+    "gpuVertexMain.spv": "fc9770f304976875f8dd1f6acbe380c77cb06c13276f5596554b3f0b396b31bd",
+    "gpuVertexMain.reflection.json": "09166d80fba7ab4167e97f85125a7c58ab92ea447c1a6a2ab5084e657401dae9",
+    "gpuShadowMain.spv": "2da7e7f96bc7de4e9c8ac365fe0a63f608c7bb26ab3e7bfebfcf88b32e86c71d",
+    "gpuShadowMain.reflection.json": "c9dd844aefb3840f29caad5dfc53986cacc2220f886eda5ad345ebdbb9ff5b1c",
+    "gpuCullMain.spv": "7691360ec55f41d40d43652f506b051cef8b3a3ddcdcc7db61a7d4d97f9e87d8",
+    "gpuCullMain.reflection.json": "996fe5c7e31c6b8f316d8f290b3be0ae7063eb46c500a661e8715e9b822a2598",
+    "gpuHzbMain.spv": "08682362ee2120ed19d260e613285071747c3e436bb09bb6238e46f9cedc2308",
+    "gpuHzbMain.reflection.json": "589818f670881c64f3aba726ee3bc82fe4b9d835a347f99134e0e157dc4a112e",
+    "gpuPostCullMain.spv": "62cb72e356346e1511c6d640a3cecb4a6e5283795338299b357edae5f7f52be4",
+    "gpuPostCullMain.reflection.json": "eed140bbe09c7d14935b688c770261ac0e81677c0974aa811c88ed67ea779b95"
+  },
+  "matrix": "Direct, shadows off, 1920x1080, dense or localized, 32/64/128 lights, 3 repeats, 10 warmup + 30 measured frames; alternating A/B order",
+  "raw_rows": 1080,
+  "localized_128_capture_sha256": "2aa5d408867f7193b7fd83984f2333b188623bda4d083512ede6b8318f11b45c",
+  "localized_128_capture_exact_equal": true
+}

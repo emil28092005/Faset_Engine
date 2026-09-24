@@ -199,16 +199,19 @@ GPU instance record содержит стабильные slot/generation; пл�
 
 ### P3. Освещение, тени и temporal reconstruction
 
-**Освещение и тени реализованы до измеренного выбора пути; приёмка этапа ещё
+**Освещение, тени и измеренный выбор пути реализованы; приёмка всего P3 ещё
 открыта.** Есть authored directional/point/spot lights, общий shader ABI для
 Direct и P2, четыре каскада солнца, отдельный 16-face atlas для point/spot,
 видимость каскадеров из shadow views и общий бюджет 4096 caster draws.
 Ранжирование 128 local lights, атомарный отказ от шести point faces и
 unshadowed fallback доступны с диагностикой. На Linux reference GPU Release
-1920×1080 измеренный рост стоимости main raster уже превысил порог для
-Forward+, поэтому depth-free tiled путь 16×16 и повторные измерения входят в
-оставшуюся работу. [Протокол проверки](docs/validation/p3-lighting-2026-09-24/README.md)
-отделяет текущий checkpoint от финальной Linux/Windows приёмки.
+1920×1080 измеренный рост стоимости main raster превысил порог для проверки
+Forward+. Depth-free tiled путь 16×16 прошёл image parity, но полный build +
+raster на плотной контрольной сцене оказался медленнее; `Auto` оставлен на
+forward, явный tiled доступен для локализованных источников и выиграл в
+отдельном сценарии. [Исследование](docs/studies/23-p3-forward-plus-2026-09-24.md)
+и [протокол проверки](docs/validation/p3-lighting-2026-09-24/README.md)
+отделяют этот Linux checkpoint от финальной Windows/temporal приёмки.
 
 Затем: previous transforms, motion vectors, jitter, history rejection и TAA; temporal upscaling — после устойчивого TAA. Проверять тонкую геометрию, движение, disocclusion, camera cut и смену разрешения, сравнивать с режимом без temporal. У cache/pass видны затраты и причины обновления.
 
