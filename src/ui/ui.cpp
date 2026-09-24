@@ -989,6 +989,20 @@ bool Context::handle(const render::Event& event) {
         p.hovered = hit ? hit->id : "";
         p.hover_started = std::chrono::steady_clock::now();
     }
+    if (event.type == Type::MouseDown && event.button == 3) {
+        auto* target = p.hit(p.root, event.x, event.y);
+        if (!target)
+            return false;
+        if (!target->enabled || !p.captured.empty())
+            return true;
+        for (auto* widget = target; widget; widget = widget->parent)
+            if (widget->on_context) {
+                auto callback = widget->on_context;
+                callback(*widget, event.x, event.y);
+                return true;
+            }
+        return false;
+    }
     if (event.type == Type::Wheel) {
         auto* w = p.hit(p.root, p.mouse_x, p.mouse_y);
         for (; w; w = w->parent)

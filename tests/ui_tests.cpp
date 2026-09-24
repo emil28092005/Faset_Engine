@@ -215,11 +215,71 @@ void keyboard_scroll_contract() {
               outer.scroll_y == old_outer && inner.scroll_y == old_inner,
           "Rejected numeric commit retains focus and scroll instead of hiding the error");
 }
+void right_click_context_contract() {
+    ui::Context context(path_from_utf8(FASET_TEST_FONT));
+    auto& surface = context.root().add(ui::Kind::Column, "context-surface");
+    surface.layout.width = 180;
+    surface.layout.height = 96;
+    surface.layout.gap = 0;
+    auto& direct = surface.add(ui::Kind::Button, "context-direct", "Direct");
+    direct.layout.height = 24;
+    auto& nested = surface.add(ui::Kind::Label, "context-nested", "Nested");
+    nested.layout.height = 24;
+    auto& disabled = surface.add(ui::Kind::Button, "context-disabled", "Disabled");
+    disabled.layout.height = 24;
+    disabled.enabled = false;
+    auto& clipped = surface.add(ui::Kind::Button, "context-clipped", "Clipped");
+    clipped.layout.absolute = true;
+    clipped.layout.y = 120;
+    clipped.layout.height = 24;
+
+    int direct_context = 0, parent_context = 0, disabled_context = 0, clipped_context = 0;
+    int ordinary_clicks = 0;
+    float delivered_x = -1, delivered_y = -1;
+    surface.on_context = [&](ui::Widget& target, float, float) {
+        check(&target == &surface, "Context action must identify the ancestor that handles it");
+        ++parent_context;
+    };
+    direct.on_context = [&](ui::Widget& target, float x, float y) {
+        check(&target == &direct, "Context action must identify the nearest handler");
+        ++direct_context;
+        delivered_x = x;
+        delivered_y = y;
+    };
+    direct.on_click = [&](ui::Widget&) { ++ordinary_clicks; };
+    disabled.on_context = [&](ui::Widget&, float, float) { ++disabled_context; };
+    disabled.on_click = [&](ui::Widget&) { ++ordinary_clicks; };
+    clipped.on_context = [&](ui::Widget&, float, float) { ++clipped_context; };
+    context.layout(240, 180);
+
+    auto right_down = [&](const ui::Widget& widget) {
+        auto event = mouse(render::Event::Type::MouseDown, widget.rect.x + 7,
+                           widget.rect.y + 9);
+        event.button = 3;
+        return context.handle(event);
+    };
+    check(right_down(direct) && direct_context == 1 && parent_context == 0 &&
+              delivered_x == direct.rect.x + 7 && delivered_y == direct.rect.y + 9,
+          "Right click dispatches nearest handler with drawable coordinates");
+    context.handle(mouse(render::Event::Type::MouseUp, direct.rect.x + 7, direct.rect.y + 9));
+    check(ordinary_clicks == 0, "Right click must not start a left-button capture or click");
+
+    check(right_down(nested) && parent_context == 1 && direct_context == 1,
+          "Right click bubbles to the nearest ancestor with a context handler");
+    right_down(disabled);
+    check(disabled_context == 0 && parent_context == 1 && ordinary_clicks == 0,
+          "Disabled widgets must not dispatch context actions");
+    check(clipped.clip.height == 0, "Clipped context fixture must be outside its parent");
+    right_down(clipped);
+    check(clipped_context == 0 && parent_context == 1,
+          "Clipped widgets must not receive context actions");
+}
 } // namespace
 int main() {
     try {
         display_scale_contract();
         keyboard_scroll_contract();
+        right_click_context_contract();
         ui::TextBuffer buffer("Привет");
         check(buffer.backspace() && buffer.text() == "Приве", "UTF-8 backspace split codepoint");
         check(buffer.undo() && buffer.text() == "Привет", "text undo");

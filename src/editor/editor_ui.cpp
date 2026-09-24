@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <faset/core/io.hpp>
@@ -166,7 +167,7 @@ struct EditorUI::Impl {
     std::string picks_key, resolved_stamp, last_document;
     std::set<std::string> seen_view_diagnostics;
     Json instance_selection = Json::array(), template_conflicts = Json::array();
-    std::string document, selected, source_file, asset_filter,
+    std::string document, selected, source_file, selected_asset, asset_filter,
         active_bottom = "assets", menu, command_name = "faset_documents", status = "Ready",
         gizmo_mode = "Move", expanded_job_log;
     Json current, resolved, files = Json::array(), assets = Json::array(), schemas = Json::object(),
@@ -195,6 +196,8 @@ struct EditorUI::Impl {
           last_y = 0;
     Vec3 target{};
     int camera_drag = 0, gizmo_axis = -1;
+    float right_down_x = 0, right_down_y = 0;
+    bool right_dragged = false;
     float gizmo_down_x = 0, gizmo_down_y = 0;
     Json gizmo_original;
     std::uint64_t gizmo_revision = 0;
@@ -382,9 +385,9 @@ struct EditorUI::Impl {
         b.on_click = [action = std::move(action)](Widget&) { action(); };
         return b;
     }
-    void create_object(const std::string& type) {
+    void create_object(const std::string& type, const std::string& parent = {}) {
         const auto id = new_id();
-        Json object = authoring::make_entity(session.authoring().schemas(), type);
+        Json object = authoring::make_entity(session.authoring().schemas(), type, parent);
         object["id"] = id;
         if (type == "Cube" || type == "Plane")
             object["components"].push_back({{"id", new_id()},
@@ -495,6 +498,10 @@ struct EditorUI::Impl {
             if (payload.value("kind", std::string()) == "entity")
                 reparent(payload.at("id"), "");
         };
+        tree.on_context = [this](Widget&, float x, float y) {
+            select("");
+            open_scene_context(x, y);
+        };
         auto& inspector = *ui.find("inspector_panel");
         inspector.add(Kind::Tab, "inspector-tab", "Inspector").selected = true;
         auto& body = inspector.add(Kind::Column, "properties");
@@ -510,6 +517,7 @@ struct EditorUI::Impl {
         tool_surface.layout.width = 352;
         tool_surface.layout.height = 36;
         tool_surface.layout.padding = 4;
+        tool_surface.on_context = [](Widget&, float, float) {};
         auto& vptools = tool_surface.add(Kind::Row, "viewport-tools");
         vptools.layout.height = 28;
         vptools.layout.gap = 4;
@@ -582,6 +590,14 @@ struct EditorUI::Impl {
         items.layout.flex = 1;
         items.layout.scroll = true;
         items.layout.gap = 0;
+        items.on_context = [this](Widget&, float x, float y) {
+            show_context("Assets", x, y,
+                         {{"context-refresh", "Refresh files", [this] {
+                               assets_dirty = true;
+                               view.clearCache();
+                               picks_key.clear();
+                           }}});
+        };
         auto& console = bottom.add(Kind::Column, "console-items");
         console.layout.flex = 1;
         console.layout.scroll = true;
@@ -839,6 +855,177 @@ struct EditorUI::Impl {
             85);
         label(project, "project-settings-error", "");
         label(project, "project-settings-reload-note", "Reload saved discards this form's edits.");
+        auto& context = ui.root().add(Kind::Panel, "context-popup");
+        context.layout.absolute = true;
+        context.layout.width = 248;
+        context.layout.padding = 6;
+        context.layout.gap = 2;
+        context.visible = false;
+        context.on_context = [](Widget&, float, float) {};
+    }
+    struct ContextAction {
+        std::string id;
+        std::string text;
+        std::function<void()> run;
+    };
+    void close_context() {
+        if (ui.focused_id().starts_with("context-"))
+            ui.clear_focus(false);
+        ui.find("context-popup")->visible = false;
+    }
+    void show_context(const std::string& title, float x, float y,
+                      std::vector<ContextAction> actions) {
+        auto& popup = *ui.find("context-popup");
+        popup.children.clear();
+        if (actions.empty()) {
+            close_context();
+            return;
+        }
+        auto& heading = popup.add(Kind::Label, "context-title", title);
+        heading.layout.height = 23;
+        heading.font_size = 12;
+        heading.enabled = false;
+        for (auto& action : actions) {
+            auto& row = button(popup, action.id, action.text,
+                               [this, run = std::move(action.run)] {
+                                   close_context();
+                                   run();
+                               });
+            row.layout.height = 27;
+            row.appearance = ui::Appearance::Quiet;
+        }
+        popup.layout.height = std::min(12 + 23 + float(actions.size()) * 27 +
+                                           float(actions.size()) * popup.layout.gap,
+                                       std::max(0.f, logical_height() - 8));
+        popup.layout.scroll = true;
+        popup.layout.x = std::clamp(x / ui_scale, 0.f,
+                                    std::max(0.f, logical_width() - popup.layout.width - 4));
+        popup.layout.y = std::clamp(y / ui_scale, 0.f,
+                                    std::max(0.f, logical_height() - popup.layout.height - 4));
+        popup.visible = true;
+        menu.clear();
+    }
+    void open_scene_context(float x, float y) {
+        show_context("Scene", x, y,
+                     {{"context-create-object", "Create object", [this] { create_object("Object"); }},
+                      {"context-create-cube", "Create cube", [this] { create_object("Cube"); }},
+                      {"context-create-plane", "Create plane", [this] { create_object("Plane"); }},
+                      {"context-create-sprite", "Create sprite", [this] { create_object("Sprite"); }}});
+    }
+    void open_entity_context(const std::string& id, float x, float y) {
+        const auto* object = entity(resolved, id);
+        if (!object)
+            return;
+        select(id);
+        std::vector<ContextAction> actions{
+            {"context-frame", "Frame selection", [this] { frame_selection(); }}};
+        if (inherited(*object)) {
+            const auto path = object->at("origin").at("path");
+            const auto source_id = object->at("origin").at("object").get<std::string>();
+            if (!owned_addition(*object))
+                actions.push_back({"context-open-source", "Open template source",
+                                   [this, path, source_id] {
+                                       open_template_source(path, source_id);
+                                   }});
+            if (path.size() == 1)
+                actions.push_back({"context-add-child", "Add local child",
+                                   [this, path, source_id] {
+                                       add_instance_child(path, source_id);
+                                   }});
+            actions.push_back({"context-delete", "Hide in this scene",
+                               [this] { delete_selected(); }});
+        } else {
+            actions.push_back({"context-rename", "Rename", [this] {
+                                   ui.focus("object-name");
+                               }});
+            actions.push_back({"context-add-child", "Add child object",
+                               [this, id] { create_object("Object", id); }});
+            actions.push_back({"context-duplicate", "Duplicate", [this, id] {
+                                   transaction(Json::array(
+                                       {{{"op", "entity.duplicate"}, {"entity", id}}}));
+                               }});
+            actions.push_back({"context-delete", "Delete", [this] { delete_selected(); }});
+        }
+        show_context("Object", x, y, std::move(actions));
+    }
+    void open_instance_context(const Json& path, float x, float y) {
+        select_instance(path);
+        std::vector<ContextAction> actions{
+            {"context-open-source", "Open template source",
+             [this, path] { open_template_source(path); }}};
+        if (path.size() == 1) {
+            actions.push_back({"context-add-child", "Add local object",
+                               [this, path] { add_instance_child(path); }});
+            actions.push_back({"context-delete", "Remove instance",
+                               [this] { delete_selected(); }});
+        }
+        show_context("Scene instance", x, y, std::move(actions));
+    }
+    void open_file_context(const std::string& path, float x, float y) {
+        source_file = path;
+        selected_asset.clear();
+        assets_dirty = true;
+        auto lower_path = path;
+        std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const auto extension = path_to_utf8(path_from_utf8(lower_path).extension());
+        const bool scene = lower_path.ends_with(".scene.json") || extension == ".fscene";
+        const bool script = extension == ".lua";
+        const bool importable = extension == ".gltf" || extension == ".glb" ||
+                                extension == ".png" || extension == ".jpg" ||
+                                extension == ".jpeg" || lower_path.ends_with("/manifest.json");
+        std::vector<ContextAction> actions;
+        if (script || scene)
+            actions.push_back({"context-open-file", script ? "Open script" : "Open scene",
+                               [this, path] {
+                                   source_file = path;
+                                   open_source();
+                               }});
+        if (importable)
+            actions.push_back({"context-import", "Import / Reimport",
+                               [this, path] { call("faset_import", {{"path", path}}); }});
+        actions.push_back({"context-copy-path", "Copy project path",
+                           [this, path] { renderer.set_clipboard(path); }});
+        show_context(path_to_utf8(path_from_utf8(path).filename()), x, y, std::move(actions));
+    }
+    std::string asset_source(const Json& asset) const {
+        if (!asset.contains("manifest"))
+            return {};
+        try {
+            const auto source = generic_path_to_utf8(std::filesystem::relative(
+                path_from_utf8(asset.at("manifest").at("source").get<std::string>()),
+                session.config().project_root));
+            if (source.empty() ||
+                !std::filesystem::is_regular_file(
+                    project_path(session.config().project_root, path_from_utf8(source))))
+                return {};
+            return source;
+        } catch (const std::exception&) {
+            return {};
+        }
+    }
+    void open_asset_context(const Json& asset, float x, float y) {
+        const auto id = asset.at("id").get<std::string>();
+        selected_asset = id;
+        source_file = asset_source(asset);
+        assets_dirty = true;
+        std::vector<ContextAction> actions{
+            {"context-copy-id", "Copy asset ID",
+             [this, id] { renderer.set_clipboard(id); }}};
+        if (asset.contains("manifest") &&
+            asset.value("freshness", Json::object()).value("state", std::string("unavailable")) !=
+                "unavailable")
+            actions.push_back({"context-instantiate", "Place in scene",
+                               [this, id] { instantiate_asset(id); }});
+        if (!source_file.empty())
+            actions.push_back({"context-import", "Reimport source",
+                               [this, source = source_file] {
+                                   call("faset_import", {{"path", source}});
+                               }});
+        const auto state = asset.value("freshness", Json::object())
+                               .value("state", std::string("unavailable"));
+        show_context(state == "unavailable" ? "Unavailable asset" : "Imported asset",
+                     x, y, std::move(actions));
     }
     void new_scene(int dimension) {
         auto result =
@@ -850,6 +1037,7 @@ struct EditorUI::Impl {
     void choose_document(std::string id) {
         if (document != id)
             last_document = document;
+        close_context();
         instance_selection = Json::array();
         ui.clear_focus(false);
         document = id;
@@ -1341,6 +1529,10 @@ struct EditorUI::Impl {
         root.tooltip = full_scene_name;
         root.selected = selected.empty() && instance_selection.empty();
         root.on_click = [this](Widget&) { select(""); };
+        root.on_context = [this](Widget&, float x, float y) {
+            select("");
+            open_scene_context(x, y);
+        };
         touch(root);
         std::vector<Json> groups;
         for (const auto& instance : current.at("scene").value("instances", Json::array()))
@@ -1382,6 +1574,9 @@ struct EditorUI::Impl {
                 row.selected = selected == id;
                 row.drag_payload = {{"kind", "entity"}, {"id", id}, {"label", object.at("name")}};
                 row.on_click = [this, id](Widget&) { select(id); };
+                row.on_context = [this, id](Widget&, float x, float y) {
+                    open_entity_context(id, x, y);
+                };
                 row.on_drop = [this, id](Widget&, const Json& payload) {
                     if (payload.value("kind", std::string()) == "entity")
                         reparent(payload.at("id"), id);
@@ -1398,6 +1593,9 @@ struct EditorUI::Impl {
             row.indent = depth;
             row.selected = instance_selection == path;
             row.on_click = [this, path](Widget&) { select_instance(path); };
+            row.on_context = [this, path](Widget&, float x, float y) {
+                open_instance_context(path, x, y);
+            };
             touch(row);
             objects(path, "", depth + 1);
             for (const auto& candidate : groups) {
@@ -1826,11 +2024,20 @@ struct EditorUI::Impl {
             assets = result.at("assets");
         }
         auto& list = *ui.find("asset-items");
-        const bool script = path_from_utf8(source_file).extension() == ".lua";
+        auto lower_source = source_file;
+        std::transform(lower_source.begin(), lower_source.end(), lower_source.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const auto extension = path_to_utf8(path_from_utf8(lower_source).extension());
+        const bool script = extension == ".lua";
+        const bool scene = lower_source.ends_with(".scene.json") || extension == ".fscene";
+        const bool importable = extension == ".gltf" || extension == ".glb" ||
+                                extension == ".png" || extension == ".jpg" ||
+                                extension == ".jpeg" || lower_source.ends_with("/manifest.json");
         ui.find("asset-open")->text = script ? "Open Script" : "Open Scene";
         ui.find("asset-open")->tooltip =
             script ? "Open Lua source in your external editor" : "Open a project scene";
-        ui.find("asset-import")->enabled = !script;
+        ui.find("asset-open")->enabled = script || scene;
+        ui.find("asset-import")->enabled = importable;
         std::set<std::string> keep;
         for (const auto& file : files) {
             const auto path = file.get<std::string>();
@@ -1849,10 +2056,14 @@ struct EditorUI::Impl {
             row.layout.height = 25;
             row.indent = 1;
             row.tooltip = path;
-            row.selected = source_file == path;
+            row.selected = selected_asset.empty() && source_file == path;
             row.on_click = [this, path](Widget&) {
                 source_file = path;
+                selected_asset.clear();
                 assets_dirty = true;
+            };
+            row.on_context = [this, path](Widget&, float x, float y) {
+                open_file_context(path, x, y);
             };
             keep.insert(row.id);
         }
@@ -1871,19 +2082,22 @@ struct EditorUI::Impl {
                 list.add(Kind::TreeRow, "asset-" + id, std::string(prefix) + "   /   " + name);
             row.layout.height = 25;
             row.indent = 1;
+            row.selected = selected_asset == id;
             row.tooltip = "Asset " + id + " — " + state;
             row.drag_payload = {{"kind", "asset"}, {"id", id}, {"label", name}};
+            row.on_context = [this, asset](Widget&, float x, float y) {
+                open_asset_context(asset, x, y);
+            };
             row.on_click = [this, id, asset, freshness, state](Widget&) {
+                selected_asset = id;
+                source_file = asset_source(asset);
+                assets_dirty = true;
                 renderer.set_clipboard(id);
-                if (asset.contains("manifest")) {
-                    source_file = generic_path_to_utf8(std::filesystem::relative(
-                        path_from_utf8(asset.at("manifest").at("source").get<std::string>()),
-                        session.config().project_root));
-                    assets_dirty = true;
-                }
                 status = state == "current"
                              ? "Asset ID copied; drag to viewport or an asset field"
-                             : "Reimport required; select Import to refresh the selected source";
+                             : source_file.empty()
+                                   ? "Asset source unavailable; restore it, then Refresh"
+                                   : "Reimport required; select Import to refresh the selected source";
                 for (const auto& reason : freshness.value("reasons", Json::array()))
                     report(reason.value("message", "Input changed") + ": " +
                            reason.value("path", ""));
@@ -2238,6 +2452,8 @@ struct EditorUI::Impl {
         refresh_project_settings();
         const bool modal = palette || !recovery.empty() || simulation_open ||
                            project_switch_warning || project_settings_open;
+        if (modal)
+            close_context();
         for (const auto* id : {"menubar", "toolbar", "workspace", "bottom_panel", "statusbar"})
             ui.find(id)->enabled = !modal;
         const bool file = menu == "File" || menu == "Faset",
@@ -2739,6 +2955,8 @@ struct EditorUI::Impl {
         using Type = render::Event::Type;
         if (event.type == Type::FocusLost) {
             camera_drag = 0;
+            right_dragged = false;
+            close_context();
             gizmo_axis = -1;
             preview_fields.clear();
             return false;
@@ -2754,6 +2972,12 @@ struct EditorUI::Impl {
                 return true;
             }
             if (camera_drag) {
+                if (camera_drag == 3 && !right_dragged) {
+                    right_dragged = std::hypot(event.x - right_down_x,
+                                               event.y - right_down_y) >= 5 * ui_scale;
+                    if (!right_dragged)
+                        return true;
+                }
                 const bool is2d = current.at("scene").value("dimension", 3) == 2;
                 if (camera_drag == 3 && !is2d) {
                     yaw -= dx / ui_scale * .008f;
@@ -2774,6 +2998,11 @@ struct EditorUI::Impl {
             last_y = event.y;
             if (event.button == 2 || event.button == 3) {
                 camera_drag = event.button;
+                if (event.button == 3) {
+                    right_down_x = event.x;
+                    right_down_y = event.y;
+                    right_dragged = false;
+                }
                 return true;
             }
             if (event.button == 1) {
@@ -2785,6 +3014,15 @@ struct EditorUI::Impl {
         if (event.type == Type::MouseUp) {
             if (event.button == camera_drag) {
                 camera_drag = 0;
+                if (event.button == 3 && !right_dragged &&
+                    viewport.contains(event.x, event.y)) {
+                    pick(event.x, event.y);
+                    if (selected.empty())
+                        open_scene_context(event.x, event.y);
+                    else
+                        open_entity_context(selected, event.x, event.y);
+                }
+                right_dragged = false;
                 return true;
             }
             if (event.button == 1 && gizmo_axis >= 0) {
@@ -2813,6 +3051,10 @@ struct EditorUI::Impl {
         using Type = render::Event::Type;
         for (const auto& event : input) {
             if (event.type == Type::KeyDown && event.key == "Escape") {
+                if (ui.find("context-popup")->visible) {
+                    close_context();
+                    continue;
+                }
                 if (project_settings_open) {
                     project_settings_open = false;
                     ui.clear_focus(false);
@@ -2843,6 +3085,9 @@ struct EditorUI::Impl {
             if (event.type == Type::MouseDown && !menu.empty() &&
                 !ui.find("menu-popup")->rect.contains(event.x, event.y) && event.y > 36 * ui_scale)
                 menu.clear();
+            if (event.type == Type::MouseDown && ui.find("context-popup")->visible &&
+                !ui.find("context-popup")->rect.contains(event.x, event.y))
+                close_context();
             if (event.type == Type::MouseMove || event.type == Type::MouseDown) {
                 mouse_x = event.x;
                 mouse_y = event.y;
@@ -2904,8 +3149,11 @@ struct EditorUI::Impl {
         const auto next_scale = std::clamp(renderer.display_scale(), .5f, 4.f);
         const bool geometry_changed = next_scale != ui_scale || layout_width != renderer.width() ||
                                       layout_height != renderer.height();
+        if (geometry_changed)
+            close_context();
         if (next_scale != ui_scale) {
             camera_drag = 0;
+            right_dragged = false;
             if (gizmo_axis >= 0) {
                 const auto field = gizmo_mode == "Move"     ? "position"
                                    : gizmo_mode == "Rotate" ? "rotation"

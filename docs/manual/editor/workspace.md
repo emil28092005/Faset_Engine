@@ -94,6 +94,42 @@ These shortcuts apply when a text or numeric editor is not consuming the key.
 The viewport camera is an editing camera; navigating it does not rewrite a scene
 camera component.
 
+## Right-click context menus
+
+Right-click a Scene-tree row to act on that row. Right-click the scene root or
+empty space in the tree to **Create object**, **Create cube**, **Create plane**,
+or **Create sprite**. An ordinary local object offers **Frame selection**,
+**Rename**, **Add child object**, **Duplicate**, and **Delete**. Duplicate and
+Delete are single authoring actions; use **Undo** to reverse either one.
+Add child creates an object parented to the
+selected row. Right-clicking also selects the target, so an action applies to the
+row under the pointer rather than a previously selected object.
+
+Template content keeps its ownership rules. An inherited object offers
+**Frame selection**, **Open template source**, **Add local child**, and
+**Hide in this scene**. Locally added objects have no corresponding source
+object, so they omit **Open template source**. Open an inherited object's source
+scene to rename or change its inherited structure; suppression hides it only in
+the containing instance. A top-level instance group offers **Open template source**,
+**Add local object**, and **Remove instance**. Nested instance groups direct
+structural changes to their source. See [Scene templates](templates.md) for
+restoring suppressed objects and the difference between source and local edits.
+
+In **Assets**, right-click a project file to select it and show actions appropriate
+to its type: **Open script** or **Open scene**, **Import / Reimport** for a
+supported source asset, and **Copy project path**. An imported-asset row offers
+**Copy asset ID**, **Place in scene** when the cooked asset is available, and
+**Reimport source** when it still has a source file. Import and Reimport start jobs;
+check **Jobs** or **Console** for the result.
+See [Assets and Blender](assets.md) for supported formats and reimport behavior.
+
+A short right-click in the viewport opens the menu for the object under the
+pointer, or creation actions when the pointer is over empty space. Moving while
+holding the right button past the drag threshold keeps the existing camera
+gesture: orbit in 3D or pan in 2D, with no menu on release. Press **Escape** or
+click outside a menu to close it. These menus edit the scene through the same
+authoring commands as the toolbar and MCP; they do not affect the running Player.
+
 ## Edit components and undo
 
 The Inspector uses the registered component schema to show numbers, vectors,

@@ -128,6 +128,9 @@ struct Widget {
     Json drag_payload;
     std::string dock_area, dock_panel;
     std::function<void(Widget&)> on_click, on_preview, on_commit, on_cancel;
+    // Called on right-button down for the nearest enabled hit widget or ancestor.
+    // Coordinates are drawable pixels, matching render::Event.
+    std::function<void(Widget&, float, float)> on_context;
     std::function<void(Widget&, const Json&)> on_drop;
     std::vector<std::unique_ptr<Widget>> children;
     Widget* parent = nullptr;
