@@ -1,0 +1,111 @@
+{
+  "format": "faset.p1-release-toolchain-provenance",
+  "version": 1,
+  "source_revision": "4a3453e2b1868555d833f578d43f48b8bc47d41a",
+  "source_clean_at_verifier_start": true,
+  "build_preset": "linux-release",
+  "configuration": "Release",
+  "host": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+    "machine": "x86_64",
+    "processor": "",
+    "logical_cpus": 16,
+    "cpu_model": "AMD Ryzen 7 1700 Eight-Core Processor",
+    "mem_total": "32784216 kB"
+  },
+  "report_sha256": "63da692b605621acc1cace00d4a3c9cf35de13abfd4351aea6653a88c870e03f",
+  "reference_summary_sha256": "f8297f3cb0578addee56c0b3cb9439b37ae37707b02d433d662b534620f329e9",
+  "editor_sha256": "73702e9f0fe015ef932db694400a0501048be2d602ab521ecc48c51767275d23",
+  "verifier_tool_sha256": "21485df78b81c22bce1f6dfc810997f3ac0505cacd8bc647786ce9d90a7c67e1",
+  "profile_helper_sha256": "5d69428a1202c1e144779074c0ab88360c459e2dd99b22c1fcf8929dbeab2618",
+  "selected_tools": {
+    "cmake": {
+      "selected": "/usr/bin/cmake",
+      "resolved": "/usr/bin/cmake",
+      "sha256": "6e1dccda39845415d68eabb934c598998949c99ec4668625d571aee1827b05c7",
+      "version_exit_code": 0,
+      "version_output": "cmake version 4.2.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+      "version_flag": "--version"
+    },
+    "ninja": {
+      "selected": "/usr/bin/ninja",
+      "resolved": "/usr/bin/ninja",
+      "sha256": "91e9548850cda2799facfdaa7abe33f9e978832f85e98212255708a7bbe437f2",
+      "version_exit_code": 0,
+      "version_output": "1.13.2",
+      "version_flag": "--version"
+    },
+    "c_compiler": {
+      "selected": "clang",
+      "resolved": "/usr/lib/llvm-21/bin/clang",
+      "sha256": "412bbe8c60571a1eb06f48fde89635033621caeb01a9b4ee76d46711bae8e932",
+      "version_exit_code": 0,
+      "version_output": "Ubuntu clang version 21.1.8 (6ubuntu1)\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/lib/llvm-21/bin",
+      "version_flag": "--version"
+    },
+    "cxx_compiler": {
+      "selected": "clang++",
+      "resolved": "/usr/lib/llvm-21/bin/clang",
+      "sha256": "412bbe8c60571a1eb06f48fde89635033621caeb01a9b4ee76d46711bae8e932",
+      "version_exit_code": 0,
+      "version_output": "Ubuntu clang version 21.1.8 (6ubuntu1)\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/lib/llvm-21/bin",
+      "version_flag": "--version"
+    },
+    "slangc": {
+      "selected": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3-integration/.cache/slang/bin/slangc",
+      "resolved": "/home/emil/Desktop/Faset_Engine/.cache/slang/bin/slangc",
+      "sha256": "ff47ad16a3110e43f96a45e90720e6f894371d27f5e47715b298159e395b75e8",
+      "version_exit_code": 0,
+      "version_output": "2026.18",
+      "version_flag": "-version"
+    }
+  },
+  "gpu": [
+    {
+      "project": "collect-2d",
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "device_class": "physical",
+      "driver": {
+        "apiVersion": "1.4.329",
+        "driverVersion": "595.84.0.0",
+        "deviceName": "NVIDIA GeForce RTX 2080 Ti",
+        "driverID": "DRIVER_ID_NVIDIA_PROPRIETARY",
+        "driverName": "NVIDIA",
+        "driverInfo": "595.84"
+      },
+      "validation_enabled": true,
+      "validation_errors": 0
+    },
+    {
+      "project": "collect-3d",
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "device_class": "physical",
+      "driver": {
+        "apiVersion": "1.4.329",
+        "driverVersion": "595.84.0.0",
+        "deviceName": "NVIDIA GeForce RTX 2080 Ti",
+        "driverID": "DRIVER_ID_NVIDIA_PROPRIETARY",
+        "driverName": "NVIDIA",
+        "driverInfo": "595.84"
+      },
+      "validation_enabled": true,
+      "validation_errors": 0
+    },
+    {
+      "project": "lua",
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "device_class": "physical",
+      "driver": {
+        "apiVersion": "1.4.329",
+        "driverVersion": "595.84.0.0",
+        "deviceName": "NVIDIA GeForce RTX 2080 Ti",
+        "driverID": "DRIVER_ID_NVIDIA_PROPRIETARY",
+        "driverName": "NVIDIA",
+        "driverInfo": "595.84"
+      },
+      "validation_enabled": true,
+      "validation_errors": 0
+    }
+  ],
+  "supplement_created_utc": "2026-09-24T02:15:34.021841+00:00"
+}

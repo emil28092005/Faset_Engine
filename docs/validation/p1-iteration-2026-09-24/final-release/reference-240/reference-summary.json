@@ -1,0 +1,237 @@
+{
+  "format": "faset.p1-release-reference",
+  "version": 1,
+  "source_revision": "4a3453e2b1868555d833f578d43f48b8bc47d41a",
+  "editor_sha256": "73702e9f0fe015ef932db694400a0501048be2d602ab521ecc48c51767275d23",
+  "verification_sha256": "63da692b605621acc1cace00d4a3c9cf35de13abfd4351aea6653a88c870e03f",
+  "host": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+    "machine": "x86_64",
+    "processor": ""
+  },
+  "method": "sequential relocated Release Player, default direct/temporal-off, offscreen 1280x720, 240 completed frames including first; nearest-rank p95, validation/readback enabled",
+  "projects": [
+    {
+      "name": "collect-2d",
+      "dimension": 2,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "player_sha256": "5936d8a1ceae9250c69f1b8ebccbadebc40b13e812bebeb9752da3d14d202a4a",
+      "manifest_sha256": "5f8de3eb000dc7207b256265f0fa20a29efe194dd1347ab4c3bf670cfdcfb2b0",
+      "profile_sha256": "65858b1de2334d304ad3a0907180aaf4f79ead3da63762500e50b7298d922bfa",
+      "requested_frames": 240,
+      "completed_frames": 240,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.585248,
+          "min": 0.552064,
+          "p50": 0.557184,
+          "p95": 0.573056,
+          "samples": 240
+        },
+        "render_call": {
+          "max": 6.04885,
+          "min": 1.470684,
+          "p50": 1.795998,
+          "p95": 2.305238,
+          "samples": 240
+        },
+        "renderer_cpu": {
+          "max": 6.043249,
+          "min": 1.466045,
+          "p50": 1.79204,
+          "p95": 2.300209,
+          "samples": 240
+        },
+        "renderer_readback_cpu": {
+          "max": 2.620153,
+          "min": 0.398713,
+          "p50": 0.462312,
+          "p95": 0.559205,
+          "samples": 240
+        },
+        "simulation": {
+          "max": 0.357284,
+          "min": 0.130406,
+          "p50": 0.168848,
+          "p95": 0.242057,
+          "samples": 240
+        },
+        "snapshot": {
+          "max": 0.338358,
+          "min": 0.124996,
+          "p50": 0.157076,
+          "p95": 0.197363,
+          "samples": 240
+        },
+        "wall": {
+          "max": 6.47329,
+          "min": 1.746054,
+          "p50": 2.137342,
+          "p95": 2.693952,
+          "samples": 240
+        }
+      },
+      "startup_ms": {
+        "main_to_first_frame": 295.436243,
+        "renderer_initialization": 284.655357,
+        "scene_read": 0.410555,
+        "world_initialization": 0.64129
+      },
+      "effective_lighting_path": "forward",
+      "gpu_allocated_bytes_max": 45112032,
+      "sun_shadow_atlas_bytes_max": 16777216,
+      "local_shadow_atlas_bytes_max": 16777216,
+      "gpu_allocated_excluding_shadow_atlases_bytes_max": 11557600,
+      "effective_sun_cascades_max": 0,
+      "local_shadow_faces_max": 0,
+      "budget_checks": {
+        "wall": {
+          "observed_ms": 2.693952,
+          "limit_ms": 4.0,
+          "met": true
+        },
+        "gpu": {
+          "observed_ms": 0.573056,
+          "limit_ms": 1.0,
+          "met": true
+        },
+        "renderer_readback_cpu": {
+          "observed_ms": 0.559205,
+          "limit_ms": 1.0,
+          "met": true
+        },
+        "simulation": {
+          "observed_ms": 0.242057,
+          "limit_ms": 0.5,
+          "met": true
+        },
+        "snapshot": {
+          "observed_ms": 0.197363,
+          "limit_ms": 0.5,
+          "met": true
+        },
+        "explicit_allocation": {
+          "observed_bytes": 45112032,
+          "limit_bytes": 20971520,
+          "met": false
+        },
+        "startup": {
+          "observed_ms": 295.436243,
+          "limit_ms": 500.0,
+          "met": true
+        }
+      }
+    },
+    {
+      "name": "collect-3d",
+      "dimension": 3,
+      "device": "NVIDIA GeForce RTX 2080 Ti",
+      "player_sha256": "52fbe0067fc2be3807e60ffa5a77e819838dc50a4b723af51f16379b4a487e7c",
+      "manifest_sha256": "484eda90411c48277385a2f679561cfa6304965a7a7be6ec065bfbd9dace1722",
+      "profile_sha256": "b0c4c6b4020b1ded792917fff1f36510b76bb30864d89bd4e6e250b5693c5fe8",
+      "requested_frames": 240,
+      "completed_frames": 240,
+      "summary_ms": {
+        "gpu": {
+          "max": 0.628288,
+          "min": 0.590144,
+          "p50": 0.592224,
+          "p95": 0.616512,
+          "samples": 240
+        },
+        "render_call": {
+          "max": 5.902553,
+          "min": 1.958014,
+          "p50": 2.192415,
+          "p95": 2.551243,
+          "samples": 240
+        },
+        "renderer_cpu": {
+          "max": 5.89525,
+          "min": 1.949527,
+          "p50": 2.184501,
+          "p95": 2.543007,
+          "samples": 240
+        },
+        "renderer_readback_cpu": {
+          "max": 2.581069,
+          "min": 0.350231,
+          "p50": 0.454097,
+          "p95": 0.560908,
+          "samples": 240
+        },
+        "simulation": {
+          "max": 0.432225,
+          "min": 0.170772,
+          "p50": 0.191732,
+          "p95": 0.299776,
+          "samples": 240
+        },
+        "snapshot": {
+          "max": 0.745236,
+          "min": 0.171273,
+          "p50": 0.188084,
+          "p95": 0.287632,
+          "samples": 240
+        },
+        "wall": {
+          "max": 7.001186,
+          "min": 2.330556,
+          "p50": 2.605595,
+          "p95": 3.036327,
+          "samples": 240
+        }
+      },
+      "startup_ms": {
+        "main_to_first_frame": 248.272928,
+        "renderer_initialization": 237.578356,
+        "scene_read": 0.506575,
+        "world_initialization": 0.62037
+      },
+      "effective_lighting_path": "forward",
+      "gpu_allocated_bytes_max": 45212272,
+      "sun_shadow_atlas_bytes_max": 16777216,
+      "local_shadow_atlas_bytes_max": 16777216,
+      "gpu_allocated_excluding_shadow_atlases_bytes_max": 11657840,
+      "effective_sun_cascades_max": 4,
+      "local_shadow_faces_max": 0,
+      "budget_checks": {
+        "wall": {
+          "observed_ms": 3.036327,
+          "limit_ms": 4.0,
+          "met": true
+        },
+        "gpu": {
+          "observed_ms": 0.616512,
+          "limit_ms": 1.0,
+          "met": true
+        },
+        "renderer_readback_cpu": {
+          "observed_ms": 0.560908,
+          "limit_ms": 1.0,
+          "met": true
+        },
+        "simulation": {
+          "observed_ms": 0.299776,
+          "limit_ms": 0.5,
+          "met": true
+        },
+        "snapshot": {
+          "observed_ms": 0.287632,
+          "limit_ms": 0.5,
+          "met": true
+        },
+        "explicit_allocation": {
+          "observed_bytes": 45212272,
+          "limit_bytes": 20971520,
+          "met": false
+        },
+        "startup": {
+          "observed_ms": 248.272928,
+          "limit_ms": 500.0,
+          "met": true
+        }
+      }
+    }
+  ]
+}

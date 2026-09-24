@@ -1,0 +1,12 @@
+{
+  "arguments": [
+    "/tmp/faset-p1-final-packages-4a3453e/Faset Café 世界/lua/faset_player",
+    "--validate"
+  ],
+  "cwd": "/tmp/faset-p1-final-packages-4a3453e/empty-working-directory",
+  "seconds": 0.009439726010896266,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"dimension\":2,\"validated\":true}\n",
+  "stderr": ""
+}

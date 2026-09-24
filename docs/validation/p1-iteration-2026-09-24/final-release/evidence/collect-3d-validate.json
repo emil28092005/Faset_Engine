@@ -1,0 +1,12 @@
+{
+  "arguments": [
+    "/tmp/faset-p1-final-packages-4a3453e/Faset Café 世界/collect-3d/faset_player",
+    "--validate"
+  ],
+  "cwd": "/tmp/faset-p1-final-packages-4a3453e/empty-working-directory",
+  "seconds": 0.00796160800382495,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\"dimension\":3,\"validated\":true}\n",
+  "stderr": "warning: material material-bb63b094febbf90bb7049c9bcf7587bc has features beyond the initial base-color/PBR renderer\n"
+}
