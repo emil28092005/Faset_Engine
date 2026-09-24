@@ -1,9 +1,11 @@
 #include <faset/authoring/service.hpp>
 #include <faset/core/hash.hpp>
 #include <faset/core/io.hpp>
+#include <faset/editor/build_cache.hpp>
 #include <faset/editor/build_service.hpp>
 #include <faset/editor/commands.hpp>
 #include <faset/scripting/project.hpp>
+#include <algorithm>
 #include <iostream>
 #include <limits>
 
@@ -202,19 +204,39 @@ int test_main(int argc, char** argv) {
                   read_text(config.project_root / "schema-export-count.txt") == "2",
               "Corrupt schema cannot be a cache hit");
         atomic_write(path_from_utf8(first.result.at("directory").get<std::string>()) /
-                         "shaders/vertexMain.spv",
+                         "shaders/temporalResolveMain.spv",
                      "corrupt");
         first = builds.wait(builds.start_build());
         check(first.state == "succeeded" && first.result.at("schema_cache_hit") == false &&
                   read_text(config.project_root / "schema-export-count.txt") == "3",
-              "Corrupt shader cannot be a cache hit");
+              "Corrupt temporal shader cannot be a cache hit");
         const auto directory = path_from_utf8(first.result.at("directory").get<std::string>());
         for (const auto* entry : {"lightTileMain", "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
-                                  "gpuHzbMain", "gpuPostCullMain"})
+                                  "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
+                                  "temporalCompositeVertexMain", "temporalCompositeFragmentMain",
+                                  "temporalVertexMain", "temporalFragmentMain",
+                                  "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"})
                 check(fs::is_regular_file(directory / "shaders" /
                                           (std::string(entry) + extension)),
-                      "Published Player contains every checked P2 shader artifact");
+                      "Published Player contains every checked P2/P3 shader artifact");
+        const auto published_manifest = read_json(directory / "manifest.json");
+        const auto package_key = published_manifest.at("package_key").get<std::string>();
+        check(editor::validate_build_generation(directory, package_key),
+              "Complete P3 shader bundle validates as a reusable generation");
+        const auto missing_temporal = root / "missing-temporal-generation";
+        fs::copy(directory, missing_temporal, fs::copy_options::recursive);
+        fs::remove(missing_temporal / "shaders/temporalResolveMain.spv");
+        fs::remove(missing_temporal / "shaders/temporalResolveMain.reflection.json");
+        auto incomplete_manifest = read_json(missing_temporal / "manifest.json");
+        auto& listed_files = incomplete_manifest.at("files").get_ref<Json::array_t&>();
+        std::erase_if(listed_files, [](const Json& item) {
+            return item.at("path") == "shaders/temporalResolveMain.spv" ||
+                   item.at("path") == "shaders/temporalResolveMain.reflection.json";
+        });
+        atomic_write_json(missing_temporal / "manifest.json", incomplete_manifest);
+        check(!editor::validate_build_generation(missing_temporal, package_key),
+              "Generation missing temporal shaders cannot be reused even with matching hashes");
         const auto player = path_from_utf8(first.result.at("player").get<std::string>());
         const auto schema = path_from_utf8(first.result.at("schema").get<std::string>());
         const auto last_build = builds.config().cache_root / "last_build.json";

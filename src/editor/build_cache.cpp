@@ -375,7 +375,10 @@ bool validate_build_generation(const fs::path& directory, const std::string& pac
             return false;
         for (const auto* shader : {"vertexMain", "fragmentMain", "shadowMain",
                                    "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
-                                   "gpuHzbMain", "gpuPostCullMain"})
+                                   "gpuHzbMain", "gpuPostCullMain", "lightTileMain",
+                                   "temporalResolveMain", "temporalCompositeVertexMain",
+                                   "temporalCompositeFragmentMain", "temporalVertexMain",
+                                   "temporalFragmentMain", "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"})
                 if (!expected.contains("shaders/" + std::string(shader) + extension))
                     return false;

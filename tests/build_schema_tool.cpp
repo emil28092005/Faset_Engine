@@ -92,7 +92,10 @@ int tool_main(int argc, char** argv) {
                           fs::copy_options::overwrite_existing);
         for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
-                                  "gpuHzbMain", "gpuPostCullMain"})
+                                  "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
+                                  "temporalCompositeVertexMain", "temporalCompositeFragmentMain",
+                                  "temporalVertexMain", "temporalFragmentMain",
+                                  "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"})
                 atomic_write(build / "shaders" / (std::string(entry) + extension), "fixture\n");
         return 0;

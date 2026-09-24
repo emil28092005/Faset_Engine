@@ -310,8 +310,17 @@ int integration(const fs::path& root) {
         require(path_from_utf8(result.result.at("build_directory").get<std::string>()) ==
                     config.build_directory / "Release",
                 "Export has a separate CMake directory");
-        require(read_json(directory / "manifest.json").at("configuration") == "Release",
+        const auto export_manifest = read_json(directory / "manifest.json");
+        require(export_manifest.at("configuration") == "Release",
                 "Export manifest records the actual profile");
+        const auto& renderer_profile = export_manifest.at("renderer_profile");
+        require(!renderer_profile.contains("shadow_map") &&
+                    renderer_profile.at("shadow_atlases").at("sun_cascade_limit") == 4 &&
+                    renderer_profile.at("shadow_atlases").at("local_face_limit") == 16 &&
+                    renderer_profile.at("shadow_atlases").at("caster_draw_limit") == 4096 &&
+                    renderer_profile.at("shadow_atlases").at("preferred_resolution") == 2048 &&
+                    renderer_profile.at("shadow_atlases").at("fallback_resolution") == 1024,
+                "Export manifest describes the actual bounded P3 shadow-atlas policy");
         for (const auto* entry : {"temporalResolveMain", "temporalCompositeVertexMain",
                                   "temporalCompositeFragmentMain", "temporalVertexMain",
                                   "temporalFragmentMain", "gpuTemporalVertexMain"}) {

@@ -920,7 +920,12 @@ struct BuildService::Impl {
                 {"required_features", {"dynamicRendering", "synchronization2"}},
                 {"materials", {"base-color factor and texture", "metallic and roughness factors"}},
                 {"texture_sampling", "linear clamp, one mip level"},
-                {"shadow_map", {{"resolution", 1024}, {"world_extent", 40}}},
+                {"shadow_atlases", {{"sun_cascade_limit", 4},
+                                     {"local_face_limit", 16},
+                                     {"caster_draw_limit", 4096},
+                                     {"preferred_resolution", 2048},
+                                     {"fallback_resolution", 1024},
+                                     {"sampled_d32_required", true}}},
                 {"unsupported_material_features",
                  {"normal maps", "metallic-roughness maps", "emissive and occlusion maps",
                   "alpha mode selection", "unlit mode", "per-material face culling"}}};
