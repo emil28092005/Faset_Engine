@@ -466,3 +466,48 @@ rendered 120 frames in Direct mode. The corresponding
 [native/manual CI run](https://github.com/emil28092005/Faset_Engine/actions/runs/35922643004)
 passed on Linux and Windows. Unsupported-HZB integration and physical Windows
 GPU coverage remain untested.
+
+## P3 lighting checkpoint — authored lights and bounded shadow views
+
+At source revision `b191ae0`, the versioned `faset.light` schema and SceneView
+extract directional, point, and spot lights. Any authored Light, even disabled,
+suppresses the compatibility sun; scenes without a Light keep their previous
+appearance. The renderer validates all local records, then selects at most 128
+by priority, projected influence, and stable ID. A single typed lighting
+descriptor ABI serves Direct and P2 GPU graphics: materials remain set 0,
+lighting is set 1, GPU scene graphics data moves to set 2, and existing push
+constant sizes remain unchanged. Both paths shade the same sun/local PBR lights
+before tone mapping.
+
+A pure CPU shadow planner builds up to four texel-snapped sun cascades from an
+explicit camera frustum, ending at at most 80 world units; a low-level Snapshot
+without the frustum keeps one shadow view. Shadow caster bounds come from the
+source LOD-0 draw and are tested against the light view, independently of
+camera/P2 culling. The Vulkan backend renders the sun to its own D32 atlas and
+point/spot shadows to a separate 4×4 D32 atlas. A point light claims six faces
+atomically, a spot one. Both atlases try 2048² and then 1024² if required by
+capabilities or allocation. The combined frame budget is 4096 caster draws;
+scheduled tiles are cleared and redrawn each frame. Overflow, disabled shadow,
+or unavailable atlas leaves a submitted light illuminating without shadow.
+There is no hidden sun raster when the sun is absent, its shadow is disabled, or
+the scene only has sprites. Atlas ownership, dropout, submitted light counts,
+actual raster work and GPU timings are exposed in `FrameStats`, Player profiles
+and the optional Editor diagnostics overlay.
+
+The implementation's Linux Debug checkpoint at `a5fb216` built all targets and
+ran 60 CTests with no failures; the existing native window lifecycle test
+skipped under the compositor. The optional ImGui overlay passed its dedicated
+test in an enabled build. After benchmark integration at `b191ae0`, six focused
+tests passed, including the real Vulkan benchmark smoke. These are bounded
+checks, not a final P3 acceptance run. The [lighting validation record](validation/p3-lighting-2026-09-24/README.md)
+lists cases, exact revision, and remaining Windows/Release evidence.
+
+The fixed-scene Release reference-GPU sweep uses 1920×1080, 0/4/16/32/64/128
+lights, Direct/GPU frustum/GPU occlusion, shadows on/off, three independent
+repeats, ten warm-up and thirty measured frames per configuration. It reached
+the agreed Forward+ gate: main-raster overhead at 32 lights was about 0.50 ms
+relative to the matching zero-light case, roughly 30% of that GPU frame;
+64 and 128 lights added about 1.02 and 2.03 ms. Its raw CSV/report are being
+published separately with the exact benchmark revision and driver. A 16×16
+tiled Forward+ path, image parity and before/after build+raster measurement are
+therefore pending. Temporal reconstruction is developed and accepted separately.

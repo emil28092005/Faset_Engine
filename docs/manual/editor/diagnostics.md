@@ -16,7 +16,27 @@ The panel reports the previous completed frame: renderer wall time, GPU timestam
 
 In **GPU occlusion** mode, enable **Show HZB** to inspect the current grayscale depth pyramid. The **Mip** slider selects a pyramid level; the preview starts at mip 3 to keep its readback small. A larger mip number shows coarser depth. The preview reads the HZB only while the panel and toggle are open, and only once per completed frame or mip change. Switching it off or closing the panel releases the preview; its GPU texture retires when the next frame begins. Opening diagnostics also enables readback of GPU visibility counters, which is disabled again when the panel closes. Disable the HZB preview for performance comparisons: its diagnostic copy and texture upload add GPU and CPU work. **Freeze counters** does not freeze the HZB image.
 
-The Vulkan backend emits `VK_EXT_debug_utils` labels for `ShadowMap`, `ForwardAndUI`, `Readback`, and, when presenting, `Presentation`. A graphics capture tool that supports this extension can identify those command-buffer regions. Labels remain available without the Khronos validation layer when the extension is exposed; unsupported systems continue rendering and report labels unavailable. A submitted-label count confirms calls were emitted, not that an external capture tool was tested.
+The **Lighting and shadows** section reports the actual local lights submitted
+and omitted, requested/effective sun cascades, requested/rasterized local faces,
+allocated local tiles, and shadow caster draws against the 4096-draw limit.
+Dropped-face counters distinguish a full atlas, caster budget, and unavailable
+atlas; `point` counts faces dropped as a complete six-face group. A light whose
+shadow faces are dropped still illuminates without a shadow. Atlas memory is the
+live explicit Vulkan allocation size for the separate sun and local atlases.
+When GPU timestamps are available, the panel shows sun and local shadow pass
+durations. A zero duration after a disabled sun or sprite-only frame confirms
+that no sun shadow raster ran. The lighting path names the algorithm actually
+used, so compare it with a benchmark's requested mode before interpreting costs.
+See [Lighting](lighting.md) for the 128-light and 16-tile limits.
+
+The Vulkan backend emits `VK_EXT_debug_utils` labels for `SunShadowAtlas`,
+`LocalShadowAtlas`, `ForwardAndUI`, `Readback`, and, when presenting,
+`Presentation`. A fallback frame can have no shadow-raster label. A graphics
+capture tool that supports this extension can identify the command-buffer
+regions. Labels remain available without the Khronos validation layer when
+the extension is exposed; unsupported systems continue rendering and report
+labels unavailable. A submitted-label count confirms calls were emitted, not
+that an external capture tool was tested.
 
 This module is disabled by default and is linked only to the graphical Editor and its dedicated test when enabled. Player and exported games do not link ImGui. No overlay control changes authoring documents, gameplay state or export settings.
 
