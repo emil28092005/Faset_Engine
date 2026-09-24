@@ -5,6 +5,17 @@
 // asynchronous BuildService and publication code without compiling a game.
 namespace fs = std::filesystem;
 using namespace faset;
+namespace {
+fs::path configured_gameplay_scripts() {
+    for (const auto& argument : read_json("configure-fixture.json")) {
+        const auto text = argument.get<std::string>();
+        constexpr std::string_view prefix = "-DFASET_GAMEPLAY_SOURCE_DIR=";
+        if (text.starts_with(prefix))
+            return path_from_utf8(text.substr(prefix.size()));
+    }
+    throw std::runtime_error("Fixture has no configured gameplay source snapshot");
+}
+} // namespace
 int tool_main(int argc, char** argv) {
     try {
         if (argc >= 3 && std::string_view(argv[1]) == "--output") {
@@ -24,8 +35,9 @@ int tool_main(int argc, char** argv) {
                 if (fs::exists("mutate-lua-snapshot"))
                     atomic_write(snapshot / "Scripts/main.lua", "-- corrupt snapshot\n");
             }
-            if (fs::exists("mutate-cpp-header-during-build"))
-                atomic_write("Scripts/Extensions/BuildOnly.hpp", "#define BUILD_ONLY 2\n");
+            if (fs::exists("mutate-cpp-snapshot-during-schema-export"))
+                atomic_write(configured_gameplay_scripts() / "Extensions/BuildOnly.hpp",
+                             "#define BUILD_ONLY 2\n");
             atomic_write_json(path_from_utf8(argv[2]), read_json("schema-fixture.json"));
             return 0;
         }

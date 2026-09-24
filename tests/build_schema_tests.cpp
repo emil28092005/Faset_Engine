@@ -246,11 +246,12 @@ int test_main(int argc, char** argv) {
         fs::remove(config.project_root / "fail-unparseable-build");
         atomic_write(config.project_root / "Scripts/Extensions/BuildOnly.hpp",
                      "#define BUILD_ONLY 3\n");
-        atomic_write(config.project_root / "mutate-cpp-header-during-build", "fixture\n");
+        atomic_write(config.project_root / "mutate-cpp-snapshot-during-schema-export", "fixture\n");
         const auto raced_header = builds.wait(builds.start_build());
-        check(raced_header.state == "failed" && read_text(last_build) == previous_pointer,
-              "Header changed during schema export cannot publish a mixed build");
-        fs::remove(config.project_root / "mutate-cpp-header-during-build");
+        check(raced_header.state == "failed" && read_text(last_build) == previous_pointer &&
+                  raced_header.error.find("snapshot") != std::string::npos,
+              "A mutated staged C++ header cannot publish a falsely keyed binary");
+        fs::remove(config.project_root / "mutate-cpp-snapshot-during-schema-export");
         atomic_write(config.project_root / "Scripts/Extensions/BuildOnly.hpp",
                      "#define BUILD_ONLY 1\n");
         check(!first.result.at("lua_enabled").get<bool>() &&
