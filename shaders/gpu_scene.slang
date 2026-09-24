@@ -26,8 +26,9 @@ struct InstanceRecord {
     float4 currentExtent;         // 160..175: world AABB half extents
     float4 previousCenter;        // 176..191
     float4 previousExtent;        // 192..207
-    uint4 metadata;               // 208..223: x=previousValid, y=stableSlot,
+    uint4 metadata;               // 208..223: x bits 0=HZB, 1=temporal prior valid; y=stableSlot,
                                   // z=generation low 32, w=generation high 32 (zero = untracked)
+    column_major float4x4 previousModel; // 224..287
 };
 struct ViewRecord {
     column_major float4x4 currentViewProjection;  // 0..63
@@ -69,6 +70,42 @@ GpuSceneOutput gpuVertexMain(GpuSceneVertex vertex, uint drawInstance : SV_Vulka
     float4 world = mul(instance.model, float4(vertex.position, 1));
     GpuSceneOutput output;
     output.position = mul(gfxViews[0].currentViewProjection, world);
+    output.world = world.xyz;
+    float3 normal = float3(dot(instance.normalRow0.xyz, vertex.normal),
+                           dot(instance.normalRow1.xyz, vertex.normal),
+                           dot(instance.normalRow2.xyz, vertex.normal));
+    float normalLength = length(normal);
+    output.normal = normalLength > 1e-8 ? normal / normalLength : float3(0, 0, 0);
+    output.color = vertex.color * instance.color;
+    output.material = instance.material.xy;
+    output.uv = vertex.uv;
+    return output;
+}
+
+struct GpuSceneTemporalOutput {
+    float4 position : SV_Position;
+    float3 world : TEXCOORD0;
+    float3 normal : NORMAL;
+    float4 color : COLOR0;
+    float2 material : TEXCOORD1;
+    float2 uv : TEXCOORD2;
+    float4 previousClip : TEXCOORD3;
+    float4 currentClip : TEXCOORD4;
+    float motionValid : TEXCOORD5;
+};
+[shader("vertex")]
+GpuSceneTemporalOutput gpuTemporalVertexMain(GpuSceneVertex vertex,
+                                              uint drawInstance : SV_VulkanInstanceID) {
+    InstanceRecord instance = gfxInstances[gfxVisibleIds[gpuFrame.drawInfo.x + drawInstance]];
+    ViewRecord view = gfxViews[0];
+    float4 local = float4(vertex.position, 1);
+    float4 world = mul(instance.model, local);
+    GpuSceneTemporalOutput output;
+    output.position = mul(view.currentViewProjection, world);
+    output.currentClip = output.position;
+    output.previousClip = mul(view.previousViewProjection,
+                              mul(instance.previousModel, local));
+    output.motionValid = (instance.metadata.x & 2u) != 0u ? 1.0 : 0.0;
     output.world = world.xyz;
     float3 normal = float3(dot(instance.normalRow0.xyz, vertex.normal),
                            dot(instance.normalRow1.xyz, vertex.normal),
@@ -200,7 +237,7 @@ void gpuCullMain(uint3 dispatchId : SV_DispatchThreadID) {
     ViewRecord view = cullViews[0];
     if (!inFrustum(instance.currentCenter, instance.currentExtent,
                    view.currentViewProjection)) return;
-    bool guessedHidden = view.flags.x != 0 && instance.metadata.x != 0 &&
+    bool guessedHidden = view.flags.x != 0 && (instance.metadata.x & 1u) != 0 &&
         occluded(instance.previousCenter, instance.previousExtent,
                  view.previousViewProjection, view.previousViewport,
                  view.previousHzbSize, previousHzb);

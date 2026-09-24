@@ -28,6 +28,42 @@ const char* visibility_label(render::VisibilityMode mode) {
     }
     return "Unknown";
 }
+const char* temporal_label(render::TemporalMode mode) {
+    switch (mode) {
+    case render::TemporalMode::Off: return "Off";
+    case render::TemporalMode::TAA: return "TAA";
+    case render::TemporalMode::Upscale: return "Upscale";
+    }
+    return "Unknown";
+}
+const char* temporal_fallback_label(render::TemporalFallbackReason reason) {
+    using Reason = render::TemporalFallbackReason;
+    switch (reason) {
+    case Reason::None: return "none";
+    case Reason::ComputeUnavailable: return "compute unavailable";
+    case Reason::FormatUnavailable: return "format unavailable";
+    case Reason::ExtentUnsupported: return "extent unsupported";
+    }
+    return "unknown";
+}
+const char* temporal_reset_label(render::TemporalResetReason reason) {
+    using Reason = render::TemporalResetReason;
+    switch (reason) {
+    case Reason::None: return "none";
+    case Reason::FirstFrame: return "first frame";
+    case Reason::CameraCut: return "camera cut";
+    case Reason::CameraDiscontinuity: return "camera discontinuity";
+    case Reason::ViewChanged: return "view changed";
+    case Reason::ViewportChanged: return "viewport changed";
+    case Reason::ProjectionChanged: return "projection changed";
+    case Reason::Resize: return "resize";
+    case Reason::ModeChanged: return "mode changed";
+    case Reason::ScaleChanged: return "scale changed";
+    case Reason::ShaderReload: return "shader reload";
+    case Reason::Unsupported: return "unsupported";
+    }
+    return "unknown";
+}
 ImGuiKey key(std::string_view name) {
     if (name.size() == 1 && name[0] >= 'A' && name[0] <= 'Z')
         return static_cast<ImGuiKey>(ImGuiKey_A + name[0] - 'A');
@@ -58,6 +94,7 @@ struct DebugOverlay::Impl {
     std::uint32_t overlay_buttons{}, editor_buttons{};
     std::array<float, 2> pointer{-1, -1};
     float scale{};
+    float last_upscale_scale{.67f};
     std::array<float, 4> window_rect{};
     render::FrameStats displayed;
     std::shared_ptr<render::Texture> atlas;
@@ -266,6 +303,38 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
             }
             const auto selected_mode = renderer.visibility_mode();
             ImGui::TextDisabled("Renderer mode; no scene or export changes");
+            ImGui::TextUnformatted("Temporal");
+            const auto current_temporal = renderer.temporal_mode();
+            if (current_temporal == render::TemporalMode::Upscale)
+                state.last_upscale_scale = renderer.render_scale();
+            const struct {
+                const char* label;
+                render::TemporalMode value;
+            } temporal_modes[] = {{"Off", render::TemporalMode::Off},
+                                  {"TAA", render::TemporalMode::TAA},
+                                  {"Upscale", render::TemporalMode::Upscale}};
+            for (int i = 0; i < 3; ++i) {
+                if (i)
+                    ImGui::SameLine();
+                const bool selected = current_temporal == temporal_modes[i].value;
+                if (selected)
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{.35f, .33f, .43f, 1.f});
+                if (ImGui::Button(temporal_modes[i].label, {button_width, 0}))
+                    renderer.set_temporal_mode(temporal_modes[i].value,
+                                               temporal_modes[i].value == render::TemporalMode::Upscale
+                                                   ? state.last_upscale_scale : 1.f);
+                if (selected)
+                    ImGui::PopStyleColor();
+            }
+            if (renderer.temporal_mode() == render::TemporalMode::Upscale) {
+                int percent = static_cast<int>(std::lround(renderer.render_scale() * 100.f));
+                if (ImGui::SliderInt("Render scale", &percent, 50, 99, "%d%%")) {
+                    state.last_upscale_scale = float(percent) / 100.f;
+                    renderer.set_temporal_mode(render::TemporalMode::Upscale,
+                                               state.last_upscale_scale);
+                }
+            }
+            ImGui::TextDisabled("Viewport only; exported Player settings are separate");
             ImGui::Separator();
             ImGui::TextUnformatted("Previous completed frame");
             ImGui::SameLine();
@@ -381,8 +450,36 @@ void DebugOverlay::append(render::Snapshot& output, render::Renderer& renderer, 
             ImGui::Text("Prepared LOD: %u / %u / %u / %u+", stats.lod_counts[0],
                         stats.lod_counts[1], stats.lod_counts[2], stats.lod_counts[3]);
             ImGui::Separator();
+            ImGui::TextUnformatted("Temporal reconstruction");
+            ImGui::Text("Requested: %s   Effective: %s",
+                        temporal_label(stats.requested_temporal_mode),
+                        temporal_label(stats.effective_temporal_mode));
+            if (stats.requested_temporal_mode != stats.effective_temporal_mode)
+                ImGui::TextDisabled("Fallback: %s",
+                                    temporal_fallback_label(stats.temporal_fallback_reason));
+            if (stats.effective_temporal_mode != render::TemporalMode::Off) {
+                ImGui::Text("Internal: %u x %u   Output: %u x %u",
+                            stats.temporal_internal_width, stats.temporal_internal_height,
+                            renderer.width(), renderer.height());
+                ImGui::Text("History: %s   Reset: %s",
+                            stats.temporal_history_valid ? "valid" : "invalid",
+                            temporal_reset_label(stats.temporal_reset_reason));
+                if (stats.gpu_ms > 0)
+                    ImGui::Text("GPU: resolve %.2f  composite %.2f  UI %.2f ms",
+                                stats.gpu_temporal_resolve_ms,
+                                stats.gpu_temporal_composite_ms, stats.gpu_ui_ms);
+            }
+            ImGui::Separator();
             ImGui::TextUnformatted("Lighting and shadows");
             ImGui::Text("Lighting path: %s", stats.effective_lighting_path.c_str());
+            ImGui::Text("Light tiles: %u; GPU build %.2f ms",
+                        stats.light_tile_count, stats.gpu_light_tiles_ms);
+            if (stats.light_tile_counts_valid)
+                ImGui::Text("Tile entries: %u; overflow tiles: %u",
+                            stats.light_tile_candidate_count,
+                            stats.light_tile_overflow_count);
+            else if (stats.light_tile_count)
+                ImGui::TextDisabled("Tile entry counts unavailable until diagnostics readback");
             ImGui::Text("Local lights: %u submitted, %u omitted",
                         stats.submitted_local_lights, stats.omitted_local_lights);
             ImGui::Text("Sun cascades: %u / %u effective",

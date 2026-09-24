@@ -37,11 +37,19 @@ struct InstanceUpdate {
     bool previous_valid{};
 };
 
-// GPU instance metadata: history valid, stable slot, then generation low/high.
+// GPU instance metadata: x bits 0/1 separately mark previous HZB bounds and
+// previous temporal transform; the other lanes carry stable slot/generation.
 // A zero generation identifies an anonymous, untracked draw.
+inline constexpr std::uint32_t gpu_hzb_history_bit = 1U;
+inline constexpr std::uint32_t gpu_temporal_history_bit = 2U;
 constexpr std::array<std::uint32_t, 4>
-gpu_instance_metadata(const InstanceUpdate& update, bool history_compatible) noexcept {
-    return {update.previous_valid && history_compatible ? 1U : 0U, update.slot,
+gpu_instance_metadata(const InstanceUpdate& update, bool hzb_compatible,
+                      bool temporal_compatible = false) noexcept {
+    return {update.previous_valid
+                ? (hzb_compatible ? gpu_hzb_history_bit : 0U) |
+                      (temporal_compatible ? gpu_temporal_history_bit : 0U)
+                : 0U,
+            update.slot,
             static_cast<std::uint32_t>(update.generation),
             static_cast<std::uint32_t>(update.generation >> 32)};
 }

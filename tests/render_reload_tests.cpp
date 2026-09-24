@@ -46,9 +46,12 @@ int main() {
     try {
         const auto bundle = temporary / "shaders";
         fs::create_directories(bundle);
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
-                                  "gpuHzbMain", "gpuPostCullMain"})
+                                  "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
+                                  "temporalCompositeVertexMain", "temporalCompositeFragmentMain",
+                                  "temporalVertexMain", "temporalFragmentMain",
+                                  "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 fs::copy_file(path_from_utf8(FASET_TEST_SHADER_DIRECTORY) / name, bundle / name);
@@ -88,7 +91,10 @@ int main() {
         render::Renderer renderer(configuration);
         const auto baseline_only = temporary / "baseline-only";
         fs::create_directories(baseline_only);
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
+                                  "temporalResolveMain", "temporalCompositeVertexMain",
+                                  "temporalCompositeFragmentMain", "temporalVertexMain",
+                                  "temporalFragmentMain", "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 fs::copy_file(bundle / name, baseline_only / name);
@@ -124,8 +130,49 @@ int main() {
         opaque_cube.instance_key = "shader-reload-cube";
         opaque_cube.cast_shadow = false;
         opaque_scene.draws.push_back(opaque_cube);
+        auto temporal_configuration = configuration;
+        temporal_configuration.temporal_mode = render::TemporalMode::TAA;
+        render::Renderer temporal_renderer(temporal_configuration);
+        temporal_renderer.render(opaque_scene);
+        temporal_renderer.render(opaque_scene);
+        require(temporal_renderer.stats().temporal_history_valid,
+                "Temporal reload fixture has a completed color history");
         gpu_renderer.render(opaque_scene);
         const auto gpu_expected = gpu_renderer.pixels();
+        auto tiled_configuration = configuration;
+        tiled_configuration.lighting_mode = render::LightingMode::Tiled;
+        render::Renderer tiled_renderer(tiled_configuration);
+        auto lit_scene = opaque_scene;
+        render::LocalLight point;
+        point.stable_id = "reload-point";
+        point.position = {1, 1, 3};
+        point.intensity = 5;
+        point.range = 8;
+        point.casts_shadow = false;
+        lit_scene.local_lights.push_back(point);
+        tiled_renderer.render(lit_scene);
+        require(tiled_renderer.stats().effective_lighting_path == "tiled" &&
+                    tiled_renderer.stats().validation_errors == 0,
+                "Tiled lighting is active before shader reload");
+        const auto tiled_expected = tiled_renderer.pixels();
+        const auto original_tile_spirv = read_text(bundle / "lightTileMain.spv");
+        atomic_write(bundle / "lightTileMain.spv", "damaged tile bytecode");
+        std::string tile_error;
+        require(!tiled_renderer.reload_shaders(tile_error) && !tile_error.empty(),
+                "Rejected light tile shader preserves the working pipeline");
+        tiled_renderer.render(lit_scene);
+        require(tiled_renderer.stats().effective_lighting_path == "tiled" &&
+                    tiled_renderer.pixels() == tiled_expected &&
+                    tiled_renderer.stats().validation_errors == 0,
+                "Rejected light tile shader retains tiled lighting and pixels");
+        atomic_write(bundle / "lightTileMain.spv", original_tile_spirv);
+        require(tiled_renderer.reload_shaders(tile_error),
+                "Compatible light tile shader reloads successfully");
+        tiled_renderer.render(lit_scene);
+        require(tiled_renderer.stats().effective_lighting_path == "tiled" &&
+                    tiled_renderer.pixels() == tiled_expected &&
+                    tiled_renderer.stats().validation_errors == 0,
+                "Compatible light tile reload preserves tiled pixels");
         render::Snapshot scene;
         scene.ui_quads.push_back({0, 0, 32, 64, {1, .8f, .4f, 1}});
         scene.sprites.push_back({{.5f, 0, .5f}, {1, 2}, {.2f, 1, .4f, 1}});
@@ -139,9 +186,12 @@ int main() {
         require(deep_bundle.native().size() > 300,
                 "Shader file fixture must exceed the legacy Windows path limit");
         fs::create_directories(native_io_path(deep_bundle));
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
-                                  "gpuHzbMain", "gpuPostCullMain"})
+                                  "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
+                                  "temporalCompositeVertexMain", "temporalCompositeFragmentMain",
+                                  "temporalVertexMain", "temporalFragmentMain",
+                                  "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 atomic_write(deep_bundle / name, read_text(bundle / name));
@@ -179,6 +229,17 @@ int main() {
             require(renderer.stats().validation_errors == 0,
                     "Rejected bytecode must not reach Vulkan validation");
         };
+        const auto temporal_resolve = read_text(bundle / "temporalResolveMain.spv");
+        fs::remove(native_io_path(bundle / "temporalResolveMain.spv"));
+        std::string temporal_error;
+        require(!temporal_renderer.reload_shaders(temporal_error) && !temporal_error.empty(),
+                "A partial temporal package must reject reload atomically");
+        temporal_renderer.render(opaque_scene);
+        require(temporal_renderer.stats().effective_temporal_mode == render::TemporalMode::TAA &&
+                    temporal_renderer.stats().temporal_history_valid &&
+                    temporal_renderer.stats().validation_errors == 0,
+                "Rejected temporal reload retains active mode, pixels and history");
+        atomic_write(bundle / "temporalResolveMain.spv", temporal_resolve);
         atomic_write(bundle / "fragmentMain.spv", "damaged bytecode");
         retained();
         restore();
@@ -236,6 +297,13 @@ int main() {
         require(renderer.reload_shaders(error), "Compatible shader edit reloads successfully");
         require(gpu_renderer.reload_shaders(error),
                 "Compatible fragment edit reloads GPU scene pipeline");
+        require(temporal_renderer.reload_shaders(error),
+                "Complete compatible package reloads temporal pipelines");
+        temporal_renderer.render(opaque_scene);
+        require(!temporal_renderer.stats().temporal_history_valid &&
+                    temporal_renderer.stats().temporal_reset_reason ==
+                        render::TemporalResetReason::ShaderReload,
+                "Successful temporal shader reload rejects stale color history");
         gpu_renderer.render(opaque_scene);
         const auto gpu_changed = gpu_renderer.pixels();
         require(gpu_changed != gpu_expected,

@@ -1,0 +1,12 @@
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p3-lighting/build/linux-debug
+    Start  9: render_lighting_policy
+1/2 Test  #9: render_lighting_policy .............   Passed    0.04 sec
+    Start 17: render_lighting_benchmark_schema
+2/2 Test #17: render_lighting_benchmark_schema ...   Passed    4.95 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+p3    =   4.99 sec*proc (2 tests)
+
+Total Test time (real) =   5.00 sec

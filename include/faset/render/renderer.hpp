@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <faset/render/temporal.hpp>
 
 namespace faset::render {
 using Vec2 = std::array<float, 2>;
@@ -136,6 +137,7 @@ struct Snapshot {
     std::optional<CameraFrustum> camera_frustum{};
 };
 enum class VisibilityMode { Direct, GpuFrustum, GpuOcclusion };
+enum class LightingMode { Auto, Forward, Tiled };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.
 void validate_shader_bundle(const std::filesystem::path& directory);
 void validate_gpu_shader_bundle(const std::filesystem::path& directory);
@@ -146,6 +148,11 @@ struct RendererConfig {
     bool headless{false};
     bool validation{true};
     VisibilityMode visibility_mode{VisibilityMode::Direct};
+    TemporalMode temporal_mode{TemporalMode::Off};
+    float render_scale{1.f};
+    // Auto uses measured Forward on the reference workload. Tiled can be forced
+    // for comparison and falls back to Forward if its device path is unavailable.
+    LightingMode lighting_mode{LightingMode::Auto};
     // GPU counter readback is diagnostic-only; normal visibility uses no CPU feedback.
     bool visibility_diagnostics{false};
     // Optional isolated shader bundle, useful for editor preview and shader reload tests.
@@ -204,6 +211,21 @@ struct FrameStats {
     double gpu_main_cull_ms{}, gpu_main_raster_ms{}, gpu_hzb_ms{};
     double gpu_post_cull_ms{}, gpu_post_raster_ms{};
     double gpu_sun_shadow_ms{}, gpu_local_shadow_ms{};
+    TemporalMode requested_temporal_mode{TemporalMode::Off};
+    TemporalMode effective_temporal_mode{TemporalMode::Off};
+    TemporalFallbackReason temporal_fallback_reason{TemporalFallbackReason::None};
+    TemporalResetReason temporal_reset_reason{TemporalResetReason::FirstFrame};
+    bool temporal_history_valid{};
+    std::uint32_t temporal_valid_motion_instances{};
+    std::uint32_t temporal_internal_width{}, temporal_internal_height{};
+    std::array<float, 2> temporal_jitter{};
+    double gpu_temporal_resolve_ms{}, gpu_temporal_composite_ms{}, gpu_ui_ms{};
+    std::vector<std::string> graph_passes;
+    double gpu_light_tiles_ms{};
+    std::uint32_t light_tile_count{};
+    // Optional tile-list readback, valid only when visibility diagnostics are on.
+    bool light_tile_counts_valid{};
+    std::uint32_t light_tile_candidate_count{}, light_tile_overflow_count{};
     std::string effective_lighting_path{"forward"};
     std::string device;
 };
@@ -224,6 +246,9 @@ class Renderer {
     void resize(std::uint32_t width, std::uint32_t height);
     void set_visibility_mode(VisibilityMode);
     VisibilityMode visibility_mode() const;
+    void set_temporal_mode(TemporalMode mode, float render_scale = 1.f);
+    TemporalMode temporal_mode() const;
+    float render_scale() const;
     void set_visibility_diagnostics(bool enabled);
     // Reads the most recently completed HZB mip for editor diagnostics only.
     // Normal visibility decisions remain entirely on the GPU.

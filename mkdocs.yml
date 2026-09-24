@@ -46,6 +46,7 @@ nav:
       - Assets and Blender: editor/assets.md
       - Lighting: editor/lighting.md
       - GPU visibility and mesh LOD: editor/visibility-lod.md
+      - Temporal rendering: editor/temporal.md
       - Build, Play, and export: editor/export.md
       - Profiling and measurements: editor/profiling.md
       - Optional developer diagnostics: editor/diagnostics.md

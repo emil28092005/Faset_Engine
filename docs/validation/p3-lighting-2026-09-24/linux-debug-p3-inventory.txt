@@ -1,0 +1,8 @@
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p3-lighting/build/linux-debug
+  Test  #7: render_lighting_sun
+  Test  #8: render_lighting_local
+  Test  #9: render_lighting_policy
+  Test #17: render_lighting_benchmark_schema
+  Test #18: render_lighting_benchmark_smoke
+
+Total Tests: 5

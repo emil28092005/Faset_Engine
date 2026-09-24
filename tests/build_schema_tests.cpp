@@ -209,7 +209,7 @@ int test_main(int argc, char** argv) {
                   read_text(config.project_root / "schema-export-count.txt") == "3",
               "Corrupt shader cannot be a cache hit");
         const auto directory = path_from_utf8(first.result.at("directory").get<std::string>());
-        for (const auto* entry : {"gpuVertexMain", "gpuShadowMain", "gpuCullMain",
+        for (const auto* entry : {"lightTileMain", "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
                                   "gpuHzbMain", "gpuPostCullMain"})
             for (const auto* extension : {".spv", ".reflection.json"})
                 check(fs::is_regular_file(directory / "shaders" /

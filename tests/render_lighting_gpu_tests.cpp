@@ -21,13 +21,14 @@ Frame capture(Renderer& renderer, const Snapshot& scene) {
     renderer.render(scene);
     return {renderer.pixels(), renderer.stats()};
 }
-Renderer make_renderer(VisibilityMode mode) {
+Renderer make_renderer(VisibilityMode mode, LightingMode lighting = LightingMode::Auto) {
     RendererConfig config;
     config.width = 320;
     config.height = 240;
     config.headless = true;
     config.validation = true;
     config.visibility_mode = mode;
+    config.lighting_mode = lighting;
     config.visibility_diagnostics = true;
     return Renderer(config);
 }
@@ -286,17 +287,114 @@ void local() {
     require(brightened > 20,
             "Point light with dropped atlas faces still illuminates unshadowed");
 }
+void tiled() {
+    for (auto visibility : {VisibilityMode::Direct, VisibilityMode::GpuFrustum,
+                            VisibilityMode::GpuOcclusion}) {
+        auto forward = make_renderer(visibility, LightingMode::Forward);
+        auto tiles = make_renderer(visibility, LightingMode::Tiled);
+        auto fixture = local_scene(LocalLight::Kind::Point, false);
+        auto no_lights = fixture;
+        no_lights.local_lights.clear();
+        const auto empty_tiled = capture(tiles, no_lights);
+        require(empty_tiled.stats.effective_lighting_path == "forward" &&
+                    empty_tiled.stats.light_tile_count == 0,
+                "Forced tiles correctly fall back when no local lights are submitted");
+        fixture.scene_rect = {32, 24, 256, 192};
+        fixture.local_lights.front().casts_shadow = false;
+        auto spot = fixture.local_lights.front();
+        spot.kind = LocalLight::Kind::Spot;
+        spot.stable_id = "second-spot";
+        spot.position = {1.5f, 2, 0};
+        spot.direction = {0, -1, 0};
+        spot.intensity = 7;
+        spot.range = 4;
+        fixture.local_lights.push_back(spot);
+        auto outside = spot;
+        outside.stable_id = "offscreen-light";
+        outside.position = {100, 100, 100};
+        outside.range = 2;
+        fixture.local_lights.push_back(outside);
+        const auto expected = capture(forward, fixture);
+        const auto actual = capture(tiles, fixture);
+        require(expected.stats.effective_lighting_path == "forward" &&
+                    actual.stats.effective_lighting_path == "tiled" &&
+                    actual.stats.gpu_light_tiles_ms > 0 &&
+                    actual.stats.light_tile_count > 0,
+                "Forced 16x16 tile construction reports its actual GPU work");
+        require(actual.stats.validation_errors == 0,
+                "Forward+ tile build and fragment reads pass Vulkan validation");
+        require(actual.stats.light_tile_overflow_count == 0 &&
+                    actual.stats.light_tile_candidate_count <
+                        actual.stats.light_tile_count * 3,
+                "Depth-free tile lists exclude an offscreen light without overflow");
+        compare_frames(expected, actual);
+
+        auto near_plane = local_scene(LocalLight::Kind::Point, true);
+        near_plane.local_lights.front().position = {0, 5, 7.95f};
+        near_plane.local_lights.front().range = 15;
+        const auto near_forward = capture(forward, near_plane);
+        const auto near_tiled = capture(tiles, near_plane);
+        require(near_tiled.stats.effective_lighting_path == "tiled" &&
+                    near_tiled.stats.light_tile_counts_valid,
+                "Near-plane crossing light and its shadow use actual tile lists");
+        compare_frames(near_forward, near_tiled);
+
+        forward.resize(336, 256);
+        tiles.resize(336, 256);
+        fixture.scene_rect = {40, 32, 248, 176};
+        const auto resized_forward = capture(forward, fixture);
+        const auto resized_tiled = capture(tiles, fixture);
+        require(resized_tiled.stats.light_tile_count == 21 * 16,
+                "Forward+ rebuilds its grid after a drawable resize");
+        compare_frames(resized_forward, resized_tiled);
+
+        // Eighty coincident lights cover the same central tiles. A 64-index tile
+        // must evaluate the entire submitted list instead of losing late lights.
+        fixture.local_lights.clear();
+        for (int i = 0; i < 80; ++i) {
+            auto light = point_face_scene({0, 0, 1}, false).local_lights.front();
+            light.stable_id = "overflow-" + std::to_string(i);
+            light.position = {0, 3, 0};
+            light.intensity = .45f;
+            light.range = 8;
+            light.casts_shadow = false;
+            fixture.local_lights.push_back(light);
+        }
+        const auto all_forward = capture(forward, fixture);
+        const auto all_tiled = capture(tiles, fixture);
+        auto automatic = make_renderer(visibility, LightingMode::Auto);
+        const auto dense_auto = capture(automatic, fixture);
+        require(dense_auto.stats.effective_lighting_path == "forward" &&
+                    dense_auto.stats.light_tile_count == 0,
+                "Auto avoids tile construction for unmeasured dense overlap");
+        require(all_tiled.stats.submitted_local_lights == 80 &&
+                    all_tiled.stats.effective_lighting_path == "tiled" &&
+                    all_tiled.stats.light_tile_overflow_count > 0,
+                "Overflow fixture submits all eighty lights through Forward+");
+        compare_frames(all_forward, all_tiled);
+        fixture.local_lights.resize(64);
+        const auto first_sixty_four = capture(forward, fixture);
+        std::size_t extra_light_pixels{};
+        for (std::size_t i = 0; i < all_forward.pixels.size(); i += 4)
+            extra_light_pixels += int(all_forward.pixels[i]) >
+                                  int(first_sixty_four.pixels[i]) + 2;
+        require(extra_light_pixels > 20,
+                "Overflow fixture visibly depends on lights past index 63");
+    }
+}
 } // namespace
 int main(int argc, char** argv) {
     try {
         if (argc != 2)
-            throw std::invalid_argument("Expected --sun or --local");
+            throw std::invalid_argument("Expected --sun, --local, or --tiled");
         if (std::string(argv[1]) == "--sun")
             sun();
         else if (std::string(argv[1]) == "--local")
             local();
+        else if (std::string(argv[1]) == "--tiled")
+            tiled();
         else
-            throw std::invalid_argument("Expected --sun or --local");
+            throw std::invalid_argument("Expected --sun, --local, or --tiled");
         std::cout << "Shadow atlas and Direct/GPU lighting parity passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

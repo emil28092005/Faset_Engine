@@ -44,6 +44,21 @@ int main(int argc, char** argv) {
         overlay.append(scene, renderer, 1.f / 60.f);
         require(renderer.visibility_mode() == render::VisibilityMode::GpuFrustum,
                 "Clicking GPU frustum switches the live renderer");
+        render::Event temporal_click = mode_click;
+        temporal_click.x = 205;
+        temporal_click.y = 154;
+        temporal_click.type = render::Event::Type::MouseDown;
+        require(overlay.process_events(std::span(&temporal_click, 1)).empty(),
+                "Temporal mode button captures pointer down");
+        scene.ui_triangles.clear();
+        overlay.append(scene, renderer, 1.f / 60.f);
+        temporal_click.type = render::Event::Type::MouseUp;
+        require(overlay.process_events(std::span(&temporal_click, 1)).empty(),
+                "Temporal mode button captures pointer up");
+        scene.ui_triangles.clear();
+        overlay.append(scene, renderer, 1.f / 60.f);
+        require(renderer.temporal_mode() == render::TemporalMode::TAA,
+                "Clicking TAA switches the live Editor renderer");
         scene.ui_triangles.clear();
         overlay.append(scene, renderer, 1.f / 60.f);
         renderer.render(scene);
@@ -125,7 +140,7 @@ int main(int argc, char** argv) {
         render::Event preview_click;
         preview_click.button = 1;
         preview_click.x = 34;
-        preview_click.y = 405;
+        preview_click.y = 463;
         const auto click_preview = [&] {
             preview_click.type = render::Event::Type::MouseDown;
             require(hzb_overlay.process_events(std::span(&preview_click, 1)).empty(),

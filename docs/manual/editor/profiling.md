@@ -147,6 +147,32 @@ and reads back the full image, so `cpu_ms` is wall time including waits, not CPU
 utilization. An open scene can run slower with HZB; visibility correctness and
 full-frame speed are separate findings.
 
+## Compare temporal modes
+
+Use one scene, output resolution, camera sequence, visibility path, binary and GPU
+for Off, TAA and Upscale. Run enough frames to include both the first-frame reset
+and steady-state accumulation. Keep the raw captures as well as timing samples:
+
+```sh
+./faset_player --headless --frames 240 --profile off.json --temporal off
+./faset_player --headless --frames 240 --profile taa.json --temporal taa
+./faset_player --headless --frames 240 --profile upscale.json \
+  --temporal upscale --render-scale 0.67
+```
+
+The profile records requested and effective temporal modes, fallback and history
+reset reason, internal/output extent, jitter, and valid previous-transform count
+per completed frame. `gpu_temporal_resolve_ms`, `gpu_temporal_composite_ms`, and
+`gpu_ui_ms` are separate submitted GPU pass times when timestamp queries work;
+otherwise they are `null`. `gpu_allocated_bytes` includes live temporal targets
+and histories, subject to the allocation limits described above. Compare full
+frame GPU and renderer wall time too: scene raster savings can be offset by
+resolve, memory and synchronous readback. A valid frame-level history flag says
+the previous frame may be sampled, not that every pixel accepted it. For image
+quality, inspect a still thin edge, a slow pan and a newly uncovered surface, and
+compare the same frame against Off. See [Temporal rendering](temporal.md) for
+mode controls and native C++ configuration.
+
 ## Measure P3 lighting and shadows
 
 A Player `--profile` sample includes `effective_lighting_path`, local lights
@@ -216,9 +242,11 @@ raw frames, shader hashes, and the decision.
 
 The accepted MVP path uses direct draws and CPU culling; P2 adds optional GPU
 visibility for opaque static meshes, with prepared LODs supplied by the project.
-Both paths currently use one graphics queue and synchronous full-image
-capture/readback. Use measurements to find the next bottleneck before introducing
-parallel jobs or expanding GPU-driven rendering. Neither an offscreen capture
-benchmark nor a tiny demo is a promise of a production frame budget. Observed
-measurements and follow-up targets belong in the implementation acceptance report
-with their source revision and method.
+P3 adds local lights and bounded sun/local shadow atlases. The benchmark's
+`lighting_path` and a Player profile's `effective_lighting_path` identify the
+algorithm actually used. Both paths currently use one graphics queue and
+synchronous full-image capture/readback. Use measurements to find the next
+bottleneck before introducing parallel jobs or expanding GPU-driven rendering.
+Neither an offscreen capture benchmark nor a tiny demo is a promise of a
+production frame budget. Observed measurements and follow-up targets belong in
+the implementation acceptance report with their source revision and method.

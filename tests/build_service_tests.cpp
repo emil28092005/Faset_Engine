@@ -14,6 +14,7 @@
 #include <faset/scripting/project.hpp>
 #include <iostream>
 #include <thread>
+#include <utility>
 #ifndef _WIN32
 #include <csignal>
 #endif
@@ -311,6 +312,14 @@ int integration(const fs::path& root) {
                 "Export has a separate CMake directory");
         require(read_json(directory / "manifest.json").at("configuration") == "Release",
                 "Export manifest records the actual profile");
+        for (const auto* entry : {"temporalResolveMain", "temporalCompositeVertexMain",
+                                  "temporalCompositeFragmentMain", "temporalVertexMain",
+                                  "temporalFragmentMain", "gpuTemporalVertexMain"}) {
+            for (const auto* suffix : {".spv", ".reflection.json"})
+                require(fs::is_regular_file(directory / "shaders" /
+                                            (std::string(entry) + suffix)),
+                        "Export contains compiled and reflected temporal shader");
+        }
         Process player(
             {{result.result.at("executable").get<std::string>(), "--headless", "--frames", "3",
               "--capture", path_to_utf8(directory / "verification.ppm")},
@@ -319,6 +328,22 @@ int integration(const fs::path& root) {
         std::cout << collect(player);
         require(fs::file_size(directory / "verification.ppm") > 1000,
                 "Exported game rendered a frame");
+        for (const auto& [mode, scale] :
+             {std::pair{"taa", "1.0"}, std::pair{"upscale", "0.67"}}) {
+            const auto profile = directory / (std::string("profile-") + mode + ".json");
+            Process temporalPlayer(
+                {{result.result.at("executable").get<std::string>(), "--headless", "--frames",
+                  "2", "--temporal", mode, "--render-scale", scale, "--profile",
+                  path_to_utf8(profile)},
+                 directory,
+                 {}});
+            std::cout << collect(temporalPlayer);
+            const auto report = read_json(profile);
+            require(report.at("temporal_mode") == mode &&
+                        report.at("effective_temporal_mode") == mode &&
+                        report.at("samples").size() == 2,
+                    "Relocated Player selects and profiles temporal rendering");
+        }
         atomic_write_json(root / ("result-" + std::to_string(dimension) + ".json"), result.result);
     }
     auto source = read_text(config.project_root / "Scripts" / "Gameplay.cpp");

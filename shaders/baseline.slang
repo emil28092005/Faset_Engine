@@ -50,6 +50,9 @@ struct ShadowViewGpu {
 [[vk::binding(1,1)]] StructuredBuffer<LocalLightGpu> localLights;
 [[vk::binding(2,1)]] StructuredBuffer<ShadowViewGpu> shadowViews;
 [[vk::binding(3,1)]] Texture2D<float> localShadowAtlas;
+// 4-word header, then 66 words per 16x16 tile: count, overflow, 64 indices.
+// An overflowing tile evaluates the full submitted list instead of losing light.
+[[vk::binding(4,1)]] StructuredBuffer<uint> lightTileWords;
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput v) {
     VertexOutput o;
@@ -122,8 +125,7 @@ float3 directBRDF(float3 base, float rough, float metal, float3 n, float3 view, 
     float3 spec=d*g*fresnel/max(4.0*nv*nl,0.001);
     return ((1.0-fresnel)*(1.0-metal)*base/pi+spec)*nl;
 }
-[shader("fragment")]
-float4 fragmentMain(VertexOutput v) : SV_Target {
+float4 shadeScene(VertexOutput v) {
     float4 sampled = colorMap.Sample(colorSampler, v.uv);
     if (dot(v.normal,v.normal) < 1e-12) {
         // UI/sprite tint is in display space; sRGB textures were decoded by Vulkan.
@@ -171,7 +173,20 @@ float4 fragmentMain(VertexOutput v) : SV_Target {
         linear += directBRDF(base.rgb, rough, metal, n, view, l) *
                   lighting.sunColor.rgb * (lighting.sunDirectionIntensity.w * 3.0 * visibility);
     }
-    for (uint i=0; i<lighting.counts.x; ++i) {
+    uint candidateCount = lighting.counts.x;
+    uint tileBase = 0;
+    bool tileList = false;
+    if (lightTileWords[1] != 0 && lightTileWords[0] != 0 && lightTileWords[2] != 0) {
+        uint tileX = min(uint(v.position.x) / 16u, lightTileWords[0] - 1u);
+        uint tileY = min(uint(v.position.y) / 16u, lightTileWords[2] - 1u);
+        tileBase = 4u + (tileY * lightTileWords[0] + tileX) * 66u;
+        if (lightTileWords[tileBase + 1u] == 0) {
+            candidateCount = min(lightTileWords[tileBase], lighting.counts.x);
+            tileList = true;
+        }
+    }
+    for (uint candidate=0; candidate<candidateCount; ++candidate) {
+        uint i = tileList ? lightTileWords[tileBase + 2u + candidate] : candidate;
         LocalLightGpu light=localLights[i];
         float3 delta=light.positionRange.xyz-v.world;
         float distanceSquared=max(dot(delta,delta),1e-6);
@@ -201,4 +216,58 @@ float4 fragmentMain(VertexOutput v) : SV_Target {
     }
     linear=linear/(1.0+linear);
     return float4(pow(max(linear,0),float3(1.0/2.2)),base.a);
+}
+[shader("fragment")]
+float4 fragmentMain(VertexOutput v) : SV_Target { return shadeScene(v); }
+
+struct TemporalVertexInput {
+    float4 clip : POSITION;
+    float3 world : TEXCOORD0;
+    float3 normal : NORMAL;
+    float4 color : COLOR0;
+    float2 material : TEXCOORD1;
+    float2 uv : TEXCOORD2;
+    float4 previousClip : TEXCOORD3;
+    float motionValid : TEXCOORD4;
+};
+struct TemporalVertexOutput {
+    float4 position : SV_Position;
+    float3 world : TEXCOORD0;
+    float3 normal : NORMAL;
+    float4 color : COLOR0;
+    float2 material : TEXCOORD1;
+    float2 uv : TEXCOORD2;
+    float4 previousClip : TEXCOORD3;
+    float4 currentClip : TEXCOORD4;
+    float motionValid : TEXCOORD5;
+};
+[shader("vertex")]
+TemporalVertexOutput temporalVertexMain(TemporalVertexInput v) {
+    TemporalVertexOutput o;
+    o.position=v.clip; o.world=v.world; o.normal=v.normal; o.color=v.color;
+    o.material=v.material; o.uv=v.uv; o.previousClip=v.previousClip;
+    o.currentClip=v.clip; o.motionValid=v.motionValid;
+    return o;
+}
+struct TemporalFragmentOutput {
+    float4 color : SV_Target0;
+    float4 velocity : SV_Target1;
+};
+[shader("fragment")]
+TemporalFragmentOutput temporalFragmentMain(TemporalVertexOutput v) {
+    VertexOutput shading;
+    shading.position=v.position; shading.world=v.world; shading.normal=v.normal;
+    shading.color=v.color; shading.material=v.material; shading.uv=v.uv;
+    TemporalFragmentOutput result;
+    result.color=shadeScene(shading);
+    result.velocity=float4(0);
+    if (v.motionValid > .5 && result.color.a >= .999 &&
+        all(isfinite(v.currentClip)) && all(isfinite(v.previousClip)) &&
+        v.currentClip.w > 0 && v.previousClip.w > 0) {
+        result.velocity.xy=(v.currentClip.xy / v.currentClip.w -
+                            v.previousClip.xy / v.previousClip.w) * .5;
+        result.velocity.z=v.previousClip.z / v.previousClip.w;
+        result.velocity.w=1;
+    }
+    return result;
 }

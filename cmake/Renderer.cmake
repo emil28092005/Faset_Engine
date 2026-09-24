@@ -17,6 +17,32 @@ foreach(FASET_ENTRY vertexMain fragmentMain shadowMain)
     DEPENDS "${PROJECT_SOURCE_DIR}/shaders/baseline.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
   list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
 endforeach()
+foreach(FASET_ENTRY temporalVertexMain temporalFragmentMain)
+  set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.spv")
+  add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json"
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+            --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/baseline.slang"
+            --entry "${FASET_ENTRY}" --output "${FASET_SHADER_DIRECTORY}"
+    BYPRODUCTS "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.slang-reflection.json"
+    DEPENDS "${PROJECT_SOURCE_DIR}/shaders/baseline.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+  list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
+endforeach()
+set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.spv")
+add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.reflection.json"
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+          --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang"
+          --entry gpuTemporalVertexMain --define FASET_GPU_GRAPHICS=1 --output "${FASET_SHADER_DIRECTORY}"
+  BYPRODUCTS "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.slang-reflection.json"
+  DEPENDS "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.reflection.json")
+set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/lightTileMain.spv")
+add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/lightTileMain.reflection.json"
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+          --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/light_tiles.slang"
+          --entry lightTileMain --output "${FASET_SHADER_DIRECTORY}"
+  BYPRODUCTS "${FASET_SHADER_DIRECTORY}/lightTileMain.slang-reflection.json"
+  DEPENDS "${PROJECT_SOURCE_DIR}/shaders/light_tiles.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/lightTileMain.reflection.json")
 foreach(FASET_ENTRY gpuVertexMain gpuShadowMain gpuCullMain gpuHzbMain gpuPostCullMain)
   if(FASET_ENTRY STREQUAL "gpuVertexMain" OR FASET_ENTRY STREQUAL "gpuShadowMain")
     set(FASET_GPU_DEFINE FASET_GPU_GRAPHICS=1)
@@ -34,13 +60,28 @@ foreach(FASET_ENTRY gpuVertexMain gpuShadowMain gpuCullMain gpuHzbMain gpuPostCu
     DEPENDS "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
   list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
 endforeach()
+foreach(FASET_ENTRY temporalResolveMain temporalCompositeVertexMain temporalCompositeFragmentMain)
+  if(FASET_ENTRY STREQUAL "temporalResolveMain")
+    set(FASET_TEMPORAL_DEFINE FASET_TEMPORAL_RESOLVE=1)
+  else()
+    set(FASET_TEMPORAL_DEFINE FASET_TEMPORAL_COMPOSITE=1)
+  endif()
+  set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.spv")
+  add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json"
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+            --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/temporal.slang"
+            --entry "${FASET_ENTRY}" --define "${FASET_TEMPORAL_DEFINE}" --output "${FASET_SHADER_DIRECTORY}"
+    BYPRODUCTS "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.slang-reflection.json"
+    DEPENDS "${PROJECT_SOURCE_DIR}/shaders/temporal.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+  list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/${FASET_ENTRY}.reflection.json")
+endforeach()
 add_custom_command(OUTPUT "${FASET_SHADER_DIRECTORY}/compatibility.spv"
   COMMAND "${SLANGC_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/shaders/compatibility.hlsl"
           -entry compatibilityMain -stage compute -target spirv -profile spirv_1_6
           -o "${FASET_SHADER_DIRECTORY}/compatibility.spv"
   DEPENDS "${PROJECT_SOURCE_DIR}/shaders/compatibility.hlsl" VERBATIM)
 add_custom_target(faset_shaders DEPENDS ${FASET_SHADER_OUTPUTS} "${FASET_SHADER_DIRECTORY}/compatibility.spv")
-add_library(faset_render "${PROJECT_SOURCE_DIR}/src/render/renderer.cpp" "${PROJECT_SOURCE_DIR}/src/render/math.cpp" "${PROJECT_SOURCE_DIR}/src/render/render_graph.cpp" "${PROJECT_SOURCE_DIR}/src/render/shader_contract.cpp" "${PROJECT_SOURCE_DIR}/src/render/lighting.cpp")
+add_library(faset_render "${PROJECT_SOURCE_DIR}/src/render/renderer.cpp" "${PROJECT_SOURCE_DIR}/src/render/math.cpp" "${PROJECT_SOURCE_DIR}/src/render/render_graph.cpp" "${PROJECT_SOURCE_DIR}/src/render/shader_contract.cpp" "${PROJECT_SOURCE_DIR}/src/render/lighting.cpp" "${PROJECT_SOURCE_DIR}/src/render/temporal.cpp" "${PROJECT_SOURCE_DIR}/src/render/temporal_reference.cpp")
 target_include_directories(faset_render PUBLIC "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(faset_render PUBLIC cxx_std_20)
 target_link_libraries(faset_render PRIVATE Vulkan::Vulkan SDL3::SDL3 faset_core)
@@ -53,10 +94,38 @@ if(BUILD_TESTING)
   set_tests_properties(render_lighting_sun PROPERTIES LABELS "gpu;p3")
   add_test(NAME render_lighting_local COMMAND faset_render_lighting_gpu_tests --local)
   set_tests_properties(render_lighting_local PROPERTIES LABELS "gpu;p3")
+  add_test(NAME render_lighting_tiled COMMAND faset_render_lighting_gpu_tests --tiled)
+  set_tests_properties(render_lighting_tiled PROPERTIES LABELS "gpu;p3")
   add_executable(faset_render_lighting_policy_tests "${PROJECT_SOURCE_DIR}/tests/render_lighting_policy_tests.cpp")
   target_link_libraries(faset_render_lighting_policy_tests PRIVATE faset_render)
   add_test(NAME render_lighting_policy COMMAND faset_render_lighting_policy_tests)
   set_tests_properties(render_lighting_policy PROPERTIES LABELS "p3")
+  add_executable(faset_render_temporal_graph_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_graph_tests.cpp")
+  target_link_libraries(faset_render_temporal_graph_tests PRIVATE faset_render)
+  add_test(NAME render_temporal_graph COMMAND faset_render_temporal_graph_tests)
+  set_tests_properties(render_temporal_graph PROPERTIES LABELS "gpu")
+  add_executable(faset_render_temporal_acceptance_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_acceptance_tests.cpp")
+  target_link_libraries(faset_render_temporal_acceptance_tests PRIVATE faset_render)
+  add_test(NAME render_temporal_acceptance COMMAND faset_render_temporal_acceptance_tests)
+  set_tests_properties(render_temporal_acceptance PROPERTIES LABELS "gpu")
+  add_executable(faset_render_temporal_shader_contract_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_shader_contract_tests.cpp")
+  target_include_directories(faset_render_temporal_shader_contract_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/render")
+  target_link_libraries(faset_render_temporal_shader_contract_tests PRIVATE faset_render faset_core)
+  target_compile_definitions(faset_render_temporal_shader_contract_tests PRIVATE FASET_TEST_SHADER_DIRECTORY="${FASET_SHADER_DIRECTORY}")
+  add_test(NAME render_temporal_shader_contract COMMAND faset_render_temporal_shader_contract_tests)
+  add_executable(faset_render_temporal_reference_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_reference_tests.cpp")
+  target_link_libraries(faset_render_temporal_reference_tests PRIVATE faset_render)
+  add_test(NAME render_temporal_reference COMMAND faset_render_temporal_reference_tests)
+  add_executable(faset_render_temporal_lifecycle_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_lifecycle_tests.cpp")
+  target_link_libraries(faset_render_temporal_lifecycle_tests PRIVATE faset_render)
+  add_test(NAME render_temporal_lifecycle COMMAND faset_render_temporal_lifecycle_tests)
+  set_tests_properties(render_temporal_lifecycle PROPERTIES LABELS "gpu")
+  add_executable(faset_render_temporal_motion_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_motion_tests.cpp")
+  target_link_libraries(faset_render_temporal_motion_tests PRIVATE faset_render)
+  add_test(NAME render_temporal_motion COMMAND faset_render_temporal_motion_tests)
+  add_executable(faset_render_temporal_policy_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_policy_tests.cpp")
+  target_link_libraries(faset_render_temporal_policy_tests PRIVATE faset_render)
+  add_test(NAME render_temporal_policy COMMAND faset_render_temporal_policy_tests)
   add_executable(faset_render_tests "${PROJECT_SOURCE_DIR}/tests/render_tests.cpp")
   target_link_libraries(faset_render_tests PRIVATE faset_render SDL3::SDL3)
   add_test(NAME render_graph COMMAND faset_render_tests --unit)

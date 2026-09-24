@@ -30,15 +30,56 @@ void locations(const Json& fields, std::initializer_list<const char*> types, con
         ++index;
     }
 }
+void validate_tile_layout(const Json& layout) {
+    require(layout.at("stage") == "compute", "light tile shader stage changed");
+    const auto& descriptors = layout.at("descriptors");
+    require(descriptors.is_array() && descriptors.size() == 2,
+            "light tile descriptor count changed");
+    for (std::size_t i = 0; i < 2; ++i)
+        require(descriptors[i].at("set") == 0 && descriptors[i].at("binding") == i &&
+                    descriptors[i].at("count") == 1 &&
+                    descriptors[i].at("type") == "storage_buffer" &&
+                    descriptors[i].at("element_stride") == (i == 0 ? 80 : 4),
+                "light tile descriptor ABI changed");
+    const auto& constants = layout.at("push_constants");
+    require(constants.is_array() && constants.size() == 1 &&
+                constants[0].at("offset") == 0 && constants[0].at("size") == 96,
+            "light tile push size changed");
+    const auto& members = constants[0].at("members");
+    require(members.is_array() && members.size() == 3,
+            "light tile push members changed");
+    const int offsets[] = {0, 64, 80};
+    const char* types[] = {"float32x4x4", "float32x4", "uint32x4"};
+    for (std::size_t i = 0; i < 3; ++i)
+        require(members[i].at("offset") == offsets[i] &&
+                    members[i].at("size") == (i == 0 ? 64 : 16) &&
+                    members[i].at("type") == types[i],
+                "light tile push field changed");
+    const auto& blocks = layout.at("spirv_push_constants");
+    require(blocks.is_array() && blocks.size() == 1 &&
+                blocks[0].at("members").size() == 3,
+            "light tile SPIR-V push block changed");
+    const auto& actual = blocks[0].at("members");
+    for (std::size_t i = 0; i < 3; ++i)
+        require(actual[i].at("member") == i && actual[i].at("offset") == offsets[i],
+                "light tile SPIR-V push offset changed");
+    require(actual[0].at("matrix_layout") == "row-major" &&
+                actual[0].at("matrix_stride") == 16,
+            "light tile SPIR-V matrix storage convention changed");
+    locations(layout.at("inputs"), {}, "light tile inputs");
+    locations(layout.at("outputs"), {}, "light tile outputs");
+}
 void validate_layout(const Json& layout, std::string_view entry) {
-    const bool fragment = entry == "fragmentMain";
+    const bool fragment = entry == "fragmentMain" || entry == "temporalFragmentMain";
+    const bool temporal = entry == "temporalVertexMain" ||
+                          entry == "temporalFragmentMain";
     require(layout.at("stage") == (fragment ? "fragment" : "vertex"), "shader stage changed");
     const auto& descriptors = layout.at("descriptors");
-    require(descriptors.is_array() && descriptors.size() == 8, "descriptor count changed");
+    require(descriptors.is_array() && descriptors.size() == 9, "descriptor count changed");
     for (std::size_t i = 0; i < descriptors.size(); ++i) {
         const auto& binding = descriptors[i];
         const auto set = i < 4 ? 0 : 1;
-        const auto slot = i % 4;
+        const auto slot = set == 0 ? i : i - 4;
         require(binding.at("set") == set && binding.at("binding") == slot &&
                     binding.at("count") == 1,
                 "descriptor set, binding or array count changed");
@@ -46,8 +87,8 @@ void validate_layout(const Json& layout, std::string_view entry) {
                                     : slot == 3 ? "sampled_image_2d" : "storage_buffer";
         require(binding.at("type") == expected_type,
                 "descriptor type changed");
-        if (set == 1 && slot < 3)
-            require(binding.at("element_stride") == (slot == 2 ? 112 : 80),
+        if (set == 1 && slot != 3)
+            require(binding.at("element_stride") == (slot == 4 ? 4 : slot == 2 ? 112 : 80),
                     "lighting storage record stride changed");
         require(fragment || !binding.at("used").get<bool>(),
                 "vertex texture bindings are unsupported");
@@ -77,24 +118,42 @@ void validate_layout(const Json& layout, std::string_view entry) {
                 "SPIR-V matrix storage convention changed");
     }
     if (fragment) {
-        locations(layout.at("inputs"),
-                  {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
-                  "fragment inputs");
-        locations(layout.at("outputs"), {"float32x4"}, "fragment outputs");
+        if (temporal) {
+            locations(layout.at("inputs"),
+                      {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2",
+                       "float32x4", "float32x4", "float32"}, "temporal fragment inputs");
+            locations(layout.at("outputs"), {"float32x4", "float32x4"},
+                      "temporal fragment outputs");
+        } else {
+            locations(layout.at("inputs"),
+                      {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
+                      "fragment inputs");
+            locations(layout.at("outputs"), {"float32x4"}, "fragment outputs");
+        }
     } else {
-        locations(layout.at("inputs"),
-                  {"float32x4", "float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
-                  "vertex inputs");
+        if (temporal) {
+            locations(layout.at("inputs"),
+                      {"float32x4", "float32x3", "float32x3", "float32x4", "float32x2",
+                       "float32x2", "float32x4", "float32"}, "temporal vertex inputs");
+            locations(layout.at("outputs"),
+                      {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2",
+                       "float32x4", "float32x4", "float32"}, "temporal vertex outputs");
+        } else {
+            locations(layout.at("inputs"),
+                      {"float32x4", "float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
+                      "vertex inputs");
         if (entry == "vertexMain")
             locations(layout.at("outputs"),
                       {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
                       "vertex outputs");
         else
             locations(layout.at("outputs"), {}, "shadow outputs");
+        }
     }
 }
 void validate_gpu_layout(const Json& layout, std::string_view entry) {
-    const bool graphics = entry == "gpuVertexMain" || entry == "gpuShadowMain";
+    const bool graphics = entry == "gpuVertexMain" || entry == "gpuShadowMain" ||
+                          entry == "gpuTemporalVertexMain";
     const bool hzb = entry == "gpuHzbMain";
     const bool compute = !graphics;
     require(layout.at("stage") == (compute ? "compute" : "vertex"), "GPU shader stage changed");
@@ -102,8 +161,8 @@ void validate_gpu_layout(const Json& layout, std::string_view entry) {
     const std::size_t expected_count = graphics ? 3 : hzb ? 2 : 10;
     require(descriptors.is_array() && descriptors.size() == expected_count,
             "GPU descriptor count changed");
-    const std::array<int, 10> compute_strides{224, 16, 16, 4, 16, 4, 4, 0, 0, 208};
-    const std::array<int, 3> graphics_strides{224, 4, 208};
+    const std::array<int, 10> compute_strides{288, 16, 16, 4, 16, 4, 4, 0, 0, 208};
+    const std::array<int, 3> graphics_strides{288, 4, 208};
     for (std::size_t i = 0; i < expected_count; ++i) {
         const auto& binding = descriptors[i];
         require(binding.at("set") == (graphics ? 2 : 0) && binding.at("binding") == i &&
@@ -147,7 +206,13 @@ void validate_gpu_layout(const Json& layout, std::string_view entry) {
         locations(layout.at("inputs"),
                   {"float32x3", "float32x3", "float32x4", "float32x2"},
                   "GPU vertex inputs");
-        if (entry == "gpuVertexMain")
+        if (entry == "gpuVertexMain" || entry == "gpuTemporalVertexMain")
+            if (entry == "gpuTemporalVertexMain")
+                locations(layout.at("outputs"),
+                          {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2",
+                           "float32x4", "float32x4", "float32"},
+                          "GPU temporal vertex outputs");
+            else
             locations(layout.at("outputs"),
                       {"float32x3", "float32x3", "float32x4", "float32x2", "float32x2"},
                       "GPU vertex outputs");
@@ -157,6 +222,78 @@ void validate_gpu_layout(const Json& layout, std::string_view entry) {
         locations(layout.at("inputs"), {}, "GPU compute inputs");
         locations(layout.at("outputs"), {}, "GPU compute outputs");
     }
+}
+void validate_temporal_layout(const Json& layout, std::string_view entry) {
+    const bool resolve = entry == "temporalResolveMain";
+    const bool vertex = entry == "temporalCompositeVertexMain";
+    require(resolve || vertex || entry == "temporalCompositeFragmentMain",
+            "unknown temporal shader entry");
+    require(layout.at("stage") == (resolve ? "compute" : vertex ? "vertex" : "fragment"),
+            "temporal shader stage changed");
+    const auto& descriptors = layout.at("descriptors");
+    require(descriptors.is_array() && descriptors.size() == (resolve ? 7u : 1u),
+            "temporal descriptor count changed");
+    for (std::size_t i = 0; i < descriptors.size(); ++i) {
+        const auto& descriptor = descriptors[i];
+        require(descriptor.at("set") == 0 && descriptor.at("binding") == i &&
+                    descriptor.at("count") == 1,
+                "temporal descriptor set, binding or count changed");
+        require(descriptor.at("type") ==
+                    (resolve && i >= 5 ? "storage_image_2d" : "sampled_image_2d"),
+                "temporal image descriptor type changed");
+        require(descriptor.at("used") == (resolve || !vertex),
+                "temporal entry uses an unexpected image binding");
+    }
+    const auto& constants = layout.at("push_constants");
+    const auto& spirv_constants = layout.at("spirv_push_constants");
+    require(constants.is_array() && spirv_constants.is_array(),
+            "temporal push constants are malformed");
+    if (resolve) {
+        require(constants.size() == 1 && constants[0].at("offset") == 0 &&
+                    constants[0].at("size") == 80 && spirv_constants.size() == 1,
+                "temporal resolve push block changed");
+        const auto& members = constants[0].at("members");
+        const auto& spirv_members = spirv_constants[0].at("members");
+        require(members.size() == 5 && spirv_members.size() == 5,
+                "temporal resolve push members changed");
+        const char* types[] = {"uint32x4", "float32x4", "float32x4", "uint32x4",
+                               "float32x4"};
+        for (std::size_t i = 0; i < 5; ++i)
+            require(members[i].at("offset") == 16 * i &&
+                        members[i].at("size") == 16 && members[i].at("type") == types[i] &&
+                        spirv_members[i].at("member") == i &&
+                        spirv_members[i].at("offset") == 16 * i,
+                    "temporal resolve push member ABI changed");
+    } else
+        require(constants.empty() && spirv_constants.empty(),
+                "temporal composite unexpectedly uses push constants");
+    if (resolve) {
+        locations(layout.at("inputs"), {}, "temporal resolve inputs");
+        locations(layout.at("outputs"), {}, "temporal resolve outputs");
+    } else if (vertex) {
+        locations(layout.at("inputs"), {"float32x4"}, "temporal composite vertex inputs");
+        locations(layout.at("outputs"), {}, "temporal composite vertex outputs");
+    } else {
+        locations(layout.at("inputs"), {}, "temporal composite fragment inputs");
+        locations(layout.at("outputs"), {"float32x4"},
+                  "temporal composite fragment outputs");
+    }
+    const auto& input_builtins = layout.at("input_builtins");
+    require(input_builtins.is_array() && input_builtins.size() == (vertex ? 0u : 1u),
+            "temporal entry input builtin count changed");
+    if (!vertex)
+        require(input_builtins[0].at("semantic") ==
+                    (resolve ? "SV_DISPATCHTHREADID" : "SV_POSITION") &&
+                    input_builtins[0].at("type") ==
+                    (resolve ? "uint32x3" : "float32x4"),
+                "temporal entry input builtin changed");
+    const auto& output_builtins = layout.at("output_builtins");
+    require(output_builtins.is_array() && output_builtins.size() == (vertex ? 1u : 0u),
+            "temporal entry output builtin count changed");
+    if (vertex)
+        require(output_builtins[0].at("semantic") == "SV_POSITION" &&
+                    output_builtins[0].at("type") == "float32x4",
+                "temporal composite vertex position changed");
 }
 void validate_spirv(const std::vector<std::uint32_t>& words, std::uint32_t execution_model) {
     require(words.size() >= 5 && words[0] == 0x07230203 && words[1] >= 0x00010000 &&
@@ -183,7 +320,7 @@ void validate_spirv(const std::vector<std::uint32_t>& words, std::uint32_t execu
     require(entry_found, "SPIR-V main entry point missing");
 }
 detail::ShaderCode load(const std::filesystem::path& directory, const char* entry,
-                        bool gpu = false) {
+                        bool gpu = false, bool temporal = false) {
     const auto bytes = read_bounded(directory / (std::string(entry) + ".spv"), 16 * 1024 * 1024);
     require(bytes.size() >= 20 && bytes.size() % 4 == 0, "invalid SPIR-V byte length");
     const auto metadata = Json::parse(
@@ -196,24 +333,34 @@ detail::ShaderCode load(const std::filesystem::path& directory, const char* entr
     const auto& layout = metadata.at("layout");
     const auto fingerprint = faset::sha256(layout.dump());
     require(metadata.at("layout_fingerprint") == fingerprint, "layout fingerprint mismatch");
-    if (gpu)
+    if (temporal)
+        validate_temporal_layout(layout, entry);
+    else if (gpu)
         validate_gpu_layout(layout, entry);
+    else if (std::string_view(entry) == "lightTileMain")
+        validate_tile_layout(layout);
     else
         validate_layout(layout, entry);
     detail::ShaderCode result;
     result.layout_fingerprint = fingerprint;
     result.words.resize(bytes.size() / 4);
     std::memcpy(result.words.data(), bytes.data(), bytes.size());
-    validate_spirv(result.words, gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
-                                           std::string_view(entry) == "gpuShadowMain") ? 0u : 5u)
-                                     : (std::string_view(entry) == "fragmentMain" ? 4u : 0u));
+    const auto stage = std::string_view(entry) == "lightTileMain" ? 5u : temporal
+        ? (std::string_view(entry) == "temporalResolveMain" ? 5u
+           : std::string_view(entry) == "temporalCompositeVertexMain" ? 0u : 4u)
+        : gpu ? ((std::string_view(entry) == "gpuVertexMain" ||
+                  std::string_view(entry) == "gpuShadowMain" ||
+                  std::string_view(entry) == "gpuTemporalVertexMain") ? 0u : 5u)
+              : ((std::string_view(entry) == "fragmentMain" ||
+                  std::string_view(entry) == "temporalFragmentMain") ? 4u : 0u);
+    validate_spirv(result.words, stage);
     return result;
 }
 } // namespace
-std::array<detail::ShaderCode, 3>
+std::array<detail::ShaderCode, 4>
 detail::load_shader_bundle(const std::filesystem::path& directory) {
     return {load(directory, "vertexMain"), load(directory, "fragmentMain"),
-            load(directory, "shadowMain")};
+            load(directory, "shadowMain"), load(directory, "lightTileMain")};
 }
 std::array<detail::ShaderCode, 5>
 detail::load_gpu_shader_bundle(const std::filesystem::path& directory) {
@@ -221,8 +368,22 @@ detail::load_gpu_shader_bundle(const std::filesystem::path& directory) {
             load(directory, "gpuCullMain", true), load(directory, "gpuHzbMain", true),
             load(directory, "gpuPostCullMain", true)};
 }
+std::array<detail::ShaderCode, 3>
+detail::load_temporal_shader_bundle(const std::filesystem::path& directory) {
+    return {load(directory, "temporalResolveMain", false, true),
+            load(directory, "temporalCompositeVertexMain", false, true),
+            load(directory, "temporalCompositeFragmentMain", false, true)};
+}
+std::array<detail::ShaderCode, 3>
+detail::load_temporal_scene_shader_bundle(const std::filesystem::path& directory) {
+    return {load(directory, "temporalVertexMain"),
+            load(directory, "temporalFragmentMain"),
+            load(directory, "gpuTemporalVertexMain", true)};
+}
 void validate_shader_bundle(const std::filesystem::path& directory) {
     (void)detail::load_shader_bundle(directory);
+    (void)detail::load_temporal_shader_bundle(directory);
+    (void)detail::load_temporal_scene_shader_bundle(directory);
 }
 void validate_gpu_shader_bundle(const std::filesystem::path& directory) {
     (void)detail::load_gpu_shader_bundle(directory);
