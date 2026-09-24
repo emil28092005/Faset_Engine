@@ -108,6 +108,10 @@ if(BUILD_TESTING)
   target_link_libraries(faset_render_temporal_acceptance_tests PRIVATE faset_render)
   add_test(NAME render_temporal_acceptance COMMAND faset_render_temporal_acceptance_tests)
   set_tests_properties(render_temporal_acceptance PROPERTIES LABELS "gpu")
+  add_test(NAME render_temporal_quality_matrix COMMAND
+    "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_temporal_quality_matrix.py"
+    "$<TARGET_FILE:faset_render_temporal_acceptance_tests>")
+  set_tests_properties(render_temporal_quality_matrix PROPERTIES LABELS "p3")
   add_executable(faset_render_temporal_shader_contract_tests "${PROJECT_SOURCE_DIR}/tests/render_temporal_shader_contract_tests.cpp")
   target_include_directories(faset_render_temporal_shader_contract_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/render")
   target_link_libraries(faset_render_temporal_shader_contract_tests PRIVATE faset_render faset_core)
