@@ -44,7 +44,8 @@ std::string lower_ascii(std::string value) {
         character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
     return value;
 }
-std::string project_source(std::string raw, const std::filesystem::path& project_root) {
+std::string project_source(std::string raw, const std::filesystem::path& project_root,
+                           const std::filesystem::path& snapshot_scripts) {
     if (raw.starts_with("lua: "))
         raw.erase(0, 5);
     std::replace(raw.begin(), raw.end(), '\\', '/');
@@ -52,19 +53,29 @@ std::string project_source(std::string raw, const std::filesystem::path& project
         if (component == "..")
             return {};
     const auto path = normalize_path(std::move(raw));
-    const auto root = normalize_path(path_to_utf8(project_root));
     std::string relative;
     if (!path.empty() && path[0] != '/' && !has_windows_drive(path))
         relative = path;
     else {
-        const auto windows = has_windows_drive(path) && has_windows_drive(root);
-        const auto comparable_path = windows ? lower_ascii(path) : path;
-        const auto comparable_root = windows ? lower_ascii(root) : root;
-        if (comparable_path.size() <= comparable_root.size() ||
-            !comparable_path.starts_with(comparable_root) ||
-            comparable_path[comparable_root.size()] != '/')
-            return {};
-        relative = path.substr(root.size() + 1);
+        const auto beneath = [&](const std::filesystem::path& directory) -> std::string {
+            if (directory.empty())
+                return {};
+            const auto root = normalize_path(path_to_utf8(directory));
+            const auto windows = has_windows_drive(path) && has_windows_drive(root);
+            const auto comparable_path = windows ? lower_ascii(path) : path;
+            const auto comparable_root = windows ? lower_ascii(root) : root;
+            if (comparable_path.size() <= comparable_root.size() ||
+                !comparable_path.starts_with(comparable_root) ||
+                comparable_path[comparable_root.size()] != '/')
+                return {};
+            return path.substr(root.size() + 1);
+        };
+        relative = beneath(project_root);
+        if (!relative.starts_with("Scripts/")) {
+            relative = beneath(snapshot_scripts);
+            if (!relative.empty())
+                relative = "Scripts/" + relative;
+        }
     }
     if (!relative.starts_with("Scripts/") || relative.size() <= 8)
         return {};
@@ -83,7 +94,8 @@ int positive_number(const std::string& text) {
 } // namespace
 
 Json parse_build_diagnostics(std::string_view raw_log, std::string_view phase,
-                             const std::filesystem::path& project_root) {
+                             const std::filesystem::path& project_root,
+                             const std::filesystem::path& snapshot_scripts) {
     static const std::regex msvc(
         R"(^(.+)\(([0-9]+)(?:,([0-9]+))?\)\s*:\s*(fatal error|error|warning|note)\s*([A-Za-z]+[0-9]+)?\s*:\s*(.*)$)");
     static const std::regex clang_column(
@@ -140,7 +152,8 @@ Json parse_build_diagnostics(std::string_view raw_log, std::string_view phase,
             diagnostic["column"] = column;
         if (!code.empty())
             diagnostic["code"] = code;
-        if (auto relative = project_source(file, project_root); !relative.empty())
+        if (auto relative = project_source(file, project_root, snapshot_scripts);
+            !relative.empty())
             diagnostic["file"] = std::move(relative);
         rows.push_back(std::move(diagnostic));
     }

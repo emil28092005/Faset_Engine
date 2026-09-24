@@ -295,15 +295,14 @@ struct BuildService::Impl {
         if (job.status.log.size() > max_log_bytes)
             job.status.log.erase(0, job.status.log.size() - max_log_bytes);
     }
-    std::string run(Job& job, std::vector<std::string> arguments, const fs::path& cwd) {
+    std::string run(Job& job, std::vector<std::string> arguments, const fs::path& cwd,
+                    const fs::path& snapshot_scripts = {}) {
         if (job.cancelled)
             throw Cancelled{};
         std::string phase;
-        std::size_t diagnostics_before;
         {
             std::lock_guard lock(job.mutex);
             phase = job.status.stage;
-            diagnostics_before = job.status.diagnostics.size();
         }
         std::string description = "$";
         for (const auto& argument : arguments)
@@ -313,30 +312,40 @@ struct BuildService::Impl {
         Process process({std::move(arguments), cwd, {}});
         std::string output;
         std::string pending;
+        bool saw_error = false;
+        const auto append_diagnostic = [&](const Json& row) {
+            const bool error = row.value("severity", "") == "error";
+            saw_error |= error;
+            std::lock_guard lock(job.mutex);
+            if (job.status.diagnostics.size() >= 200) {
+                if (!error)
+                    return;
+                auto previous = std::find_if(job.status.diagnostics.begin(),
+                                             job.status.diagnostics.end(), [](const Json& entry) {
+                                                 return entry.value("severity", "") != "error";
+                                             });
+                if (previous == job.status.diagnostics.end())
+                    previous = job.status.diagnostics.begin();
+                job.status.diagnostics.erase(previous);
+            }
+            job.status.diagnostics.push_back(row);
+        };
         const auto collect_diagnostics = [&](std::string_view chunk, bool final) {
             pending.append(chunk);
             std::size_t newline;
             while ((newline = pending.find('\n')) != std::string::npos) {
                 const auto line = pending.substr(0, newline + 1);
                 pending.erase(0, newline + 1);
-                const auto found = parse_build_diagnostics(line, phase, config.project_root);
-                if (found.empty())
-                    continue;
-                std::lock_guard lock(job.mutex);
-                for (const auto& row : found) {
-                    if (job.status.diagnostics.size() >= 200)
-                        break;
-                    job.status.diagnostics.push_back(row);
-                }
+                const auto found = parse_build_diagnostics(
+                    line, phase, config.project_root, snapshot_scripts);
+                for (const auto& row : found)
+                    append_diagnostic(row);
             }
             if (final && !pending.empty()) {
-                const auto found = parse_build_diagnostics(pending, phase, config.project_root);
-                std::lock_guard lock(job.mutex);
-                for (const auto& row : found) {
-                    if (job.status.diagnostics.size() >= 200)
-                        break;
-                    job.status.diagnostics.push_back(row);
-                }
+                const auto found = parse_build_diagnostics(
+                    pending, phase, config.project_root, snapshot_scripts);
+                for (const auto& row : found)
+                    append_diagnostic(row);
                 pending.clear();
             } else if (pending.size() > 8192)
                 pending.erase(0, pending.size() - 8192);
@@ -356,14 +365,8 @@ struct BuildService::Impl {
                 output.erase(0, output.size() - max_log_bytes);
             if (!poll.running) {
                 if (poll.exit_code.value_or(1) != 0) {
-                    std::lock_guard lock(job.mutex);
-                    bool has_error = false;
-                    for (std::size_t index = diagnostics_before;
-                         index < job.status.diagnostics.size(); ++index)
-                        if (job.status.diagnostics[index].value("severity", "") == "error")
-                            has_error = true;
-                    if (!has_error && job.status.diagnostics.size() < 200)
-                        job.status.diagnostics.push_back(
+                    if (!saw_error)
+                        append_diagnostic(
                             {{"severity", "error"},
                              {"phase", phase},
                              {"message", "Process exited with code " +
@@ -459,13 +462,13 @@ struct BuildService::Impl {
         // whether the packaged game has a Lua VM linked into it.
         arguments.push_back(std::string("-DFASET_ENABLE_LUA=") +
                             (job.lua.enabled() ? "ON" : "OFF"));
-        run(job, std::move(arguments), config.project_root);
+        run(job, std::move(arguments), config.project_root, staged_scripts);
         const auto configured = std::chrono::steady_clock::now();
         checkpoint(job, "Compiling and linking Player", .25);
         run(job,
             {config.cmake, "--build", path_to_utf8(native_directory), "--config", configuration,
              "--parallel", "4", "--target", "faset_player", "faset_schema_exporter"},
-            config.project_root);
+            config.project_root, staged_scripts);
         const auto compiled = std::chrono::steady_clock::now();
         auto player = build_executable(native_directory, configuration, "faset_player");
         auto exporter = build_executable(native_directory, configuration, "faset_schema_exporter");
@@ -532,7 +535,8 @@ struct BuildService::Impl {
                 export_arguments.insert(export_arguments.end(),
                                         {"--project", path_to_utf8(staging)});
             }
-            run(job, std::move(export_arguments), config.project_root);
+            run(job, std::move(export_arguments), config.project_root,
+                job.lua.enabled() ? staging / "Scripts" : staged_scripts);
             auto schema = read_json(schema_file);
             if (schema.value("format", "") != "faset.schema" || schema.value("version", 0) != 1 ||
                 !schema.contains("types") || !schema.at("types").is_array())
