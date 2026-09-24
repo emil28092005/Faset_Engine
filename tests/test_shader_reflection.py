@@ -36,6 +36,35 @@ def parameter(name: str, index: int, shape: str, access: str, stride: int | None
 
 
 class ReflectionTests(unittest.TestCase):
+    def test_graphics_lighting_abi(self):
+        compiler = os.environ["FASET_TEST_SLANGC"]
+        with tempfile.TemporaryDirectory(prefix="faset-lighting-abi-") as directory:
+            for source, entry, defines in (
+                ("baseline.slang", "fragmentMain", []),
+                ("gpu_scene.slang", "gpuVertexMain", ["--define", "FASET_GPU_GRAPHICS=1"]),
+            ):
+                process = subprocess.run(
+                    [sys.executable, str(SCRIPT), "--compiler", compiler, "--source",
+                     str(SCRIPT.parents[1] / "shaders" / source), "--entry", entry,
+                     *defines, "--output", directory],
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(process.returncode, 0, process.stderr)
+            fragment = json.loads((Path(directory) / "fragmentMain.reflection.json").read_text())
+            gpu_vertex = json.loads((Path(directory) / "gpuVertexMain.reflection.json").read_text())
+            lighting = {
+                (d["set"], d["binding"]): (d["type"], d.get("element_stride"))
+                for d in fragment["layout"]["descriptors"]
+            }
+            self.assertEqual([lighting[1, i] for i in range(4)],
+                             [("storage_buffer", 80), ("storage_buffer", 80),
+                              ("storage_buffer", 112), ("sampled_image_2d", None)])
+            graphics = {
+                (d["set"], d["binding"]): d["element_stride"]
+                for d in gpu_vertex["layout"]["descriptors"]
+            }
+            self.assertEqual([graphics[2, i] for i in range(3)], [224, 4, 208])
+
     def test_gpu_vertex_paths_do_not_require_shader_draw_parameters(self):
         # SV_InstanceID makes Slang subtract BaseInstance and emit DrawParameters.
         # Our indirect commands always use firstInstance=0, so the Vulkan instance

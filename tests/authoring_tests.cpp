@@ -2,6 +2,7 @@
 #include <faset/authoring/templates.hpp>
 #include <faset/authoring/transforms.hpp>
 #include <faset/core/io.hpp>
+#include <cstdint>
 #include <iostream>
 
 #define CHECK(x)                                                                                   \
@@ -25,6 +26,32 @@ int main() {
     const auto root = std::filesystem::temp_directory_path() / ("faset-authoring-" + new_id());
     try {
         auto schemas = builtin_schemas();
+        const auto light = schemas.schema("faset.light");
+        CHECK(light["version"] == 1);
+        const auto defaults = schemas.default_fields("faset.light");
+        CHECK(defaults["kind"] == "directional");
+        CHECK(defaults["enabled"] == true);
+        CHECK(defaults["range"] == 10.0);
+        CHECK(defaults["inner_angle"] < defaults["outer_angle"]);
+        CHECK(defaults["casts_shadow"] == true);
+        CHECK(defaults["shadow_priority"] == 0);
+        auto light_component = Json{{"type", "faset.light"}, {"version", 1}, {"fields", defaults}};
+        schemas.validate_component(light_component);
+        light_component["fields"]["kind"] = "area";
+        fails([&] { schemas.validate_component(light_component); }, "validation.enum");
+        light_component["fields"]["kind"] = "point";
+        light_component["fields"]["range"] = 0;
+        fails([&] { schemas.validate_component(light_component); }, "validation.minimum");
+        light_component["fields"]["range"] = 10;
+        light_component["fields"]["intensity"] = -1;
+        fails([&] { schemas.validate_component(light_component); }, "validation.minimum");
+        light_component["fields"] = {{"kind", "spot"}, {"inner_angle", 0.9}};
+        fails([&] { schemas.validate_component(light_component); }, "validation.light_cone");
+        light_component["fields"] = {{"kind", "spot"},
+                                      {"inner_angle", 0.2},
+                                      {"outer_angle", 0.5},
+                                      {"shadow_priority", std::int64_t{2147483648}}};
+        fails([&] { schemas.validate_component(light_component); }, "validation.maximum");
         AuthoringService service(root, schemas);
         auto created = service.create("Courtyard", 3);
         const std::string id = created["id"];

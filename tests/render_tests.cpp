@@ -134,6 +134,102 @@ int main(int argc, char** argv) {
         renderer.render(scene);
         pixels = renderer.pixels();
         require(pixels[index + 2] > 220, "Texture revision upload");
+        Snapshot two_lights;
+        two_lights.eye = {0, 0, 6};
+        two_lights.projection = perspective(.85f, 320.f / 240.f, .1f, 30.f);
+        two_lights.view_projection =
+            multiply(two_lights.projection, look_at(two_lights.eye, {0, 0, 0}));
+        two_lights.authored_lights_present = true;
+        two_lights.draws.push_back(
+            {cube_mesh(), transform({-1.4f, 0, 0}), {.5f, .5f, .5f, 1}, .6f, 0, false});
+        two_lights.draws.back().instance_key = "left-light-receiver";
+        two_lights.draws.push_back(
+            {cube_mesh(), transform({1.4f, 0, 0}), {.5f, .5f, .5f, 1}, .6f, 0, false});
+        two_lights.draws.back().instance_key = "right-light-receiver";
+        two_lights.ui_quads.push_back({8, 8, 40, 20, {.8f, .1f, .15f, 1}});
+        for (auto mode : {VisibilityMode::Direct, VisibilityMode::GpuFrustum}) {
+            renderer.set_visibility_mode(mode);
+            renderer.render(two_lights);
+            const auto dark = renderer.pixels();
+            require(renderer.stats().validation_errors == 0,
+                    "Zero-local-light descriptors are initialized");
+            auto legacy_lights = two_lights;
+            legacy_lights.authored_lights_present = false;
+            renderer.render(legacy_lights);
+            const auto legacy = renderer.pixels();
+            const auto left = (120 * 320 + 99) * 4;
+            require(legacy[left] > dark[left] + 15,
+                    "Authored-light presence suppresses the legacy sun even without a local light");
+            two_lights.local_lights = {
+                {LocalLight::Kind::Point, "red", {-1.4f, 0, 1.4f}, {0, 0, -1},
+                 {1, 0, 0, 1}, 8, 2.2f, .35f, .7f, false, 0},
+                {LocalLight::Kind::Point, "blue", {1.4f, 0, 1.4f}, {0, 0, -1},
+                {0, 0, 1, 1}, 8, 2.5f, .35f, .7f, false, 0}};
+            renderer.render(two_lights);
+            const auto lit = renderer.pixels();
+            const auto right = (120 * 320 + 221) * 4;
+            const auto ui = (10 * 320 + 10) * 4;
+            require(lit[left] > dark[left] + 20 && lit[right + 2] > dark[right + 2] + 20,
+                    "Separated red and blue point lights illuminate their receivers");
+            require(std::abs(int(lit[left + 2]) - int(dark[left + 2])) < 6 &&
+                        std::abs(int(lit[right]) - int(dark[right])) < 6,
+                    "Local light range keeps the opposite colored light off each receiver");
+            for (int channel = 0; channel < 4; ++channel)
+                require(lit[ui + channel] == dark[ui + channel],
+                        "Lighting changes leave UI tint unchanged");
+            require(renderer.stats().validation_errors == 0,
+                    "Direct and GPU local lighting report no Vulkan errors");
+            if (mode == VisibilityMode::GpuFrustum)
+                require(renderer.stats().effective_visibility_mode == VisibilityMode::GpuFrustum,
+                        "Local light image test actually exercises the GPU visibility path");
+            two_lights.local_lights[1].kind = LocalLight::Kind::Spot;
+            renderer.render(two_lights);
+            const auto aimed = renderer.pixels();
+            two_lights.local_lights[1].direction = {1, 0, 0};
+            renderer.render(two_lights);
+            const auto turned = renderer.pixels();
+            require(aimed[right + 2] > turned[right + 2] + 20,
+                    "Spotlight cone direction changes receiver illumination");
+            two_lights.local_lights.clear();
+        }
+        renderer.set_visibility_mode(VisibilityMode::Direct);
+        renderer.render(two_lights);
+        const auto unlit_overflow = renderer.pixels();
+        for (int i = 0; i < 128; ++i) {
+            LocalLight local;
+            local.stable_id = "low-priority-" + std::to_string(i);
+            local.position = {20, 20, 20};
+            local.range = 1;
+            local.intensity = 0;
+            local.casts_shadow = false;
+            two_lights.local_lights.push_back(local);
+        }
+        LocalLight high;
+        high.stable_id = "last-high-priority";
+        high.position = {-1.4f, 0, 1.4f};
+        high.color = {1, 0, 0, 1};
+        high.range = 2.2f;
+        high.intensity = 8;
+        high.shadow_priority = 10;
+        high.casts_shadow = false;
+        two_lights.local_lights.push_back(high);
+        two_lights.local_lights.back().range = -1;
+        bool overflow_validation_failed = false;
+        try {
+            renderer.render(two_lights);
+        } catch (const std::invalid_argument&) {
+            overflow_validation_failed = true;
+        }
+        require(overflow_validation_failed,
+                "Renderer validates light records beyond the 128-light cap");
+        two_lights.local_lights.back().range = 2.2f;
+        renderer.render(two_lights);
+        const auto ranked_pixels = renderer.pixels();
+        const auto ranked_left = (120 * 320 + 99) * 4;
+        require(renderer.stats().submitted_local_lights == 128 &&
+                    renderer.stats().omitted_local_lights == 1 &&
+                    ranked_pixels[ranked_left] > unlit_overflow[ranked_left] + 20,
+                "High-priority last light is submitted and omitted count is observable");
         if (argc > 2)
             renderer.capture(argv[2]);
         renderer.resize(400, 300);

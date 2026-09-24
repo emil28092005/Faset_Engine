@@ -80,6 +80,34 @@ struct Text {
     Color color{0.85f, 0.87f, 0.90f, 1};
     float size{14};
 };
+struct SunLight {
+    std::string stable_id;
+    Vec3 direction{-0.5f, -1, -0.3f};
+    Color color{1, 1, 1, 1};
+    float intensity{1};
+    bool casts_shadow{true};
+};
+struct LocalLight {
+    enum class Kind { Point, Spot };
+    Kind kind{Kind::Point};
+    std::string stable_id;
+    Vec3 position{};
+    Vec3 direction{0, 0, -1};
+    Color color{1, 1, 1, 1};
+    float intensity{1};
+    float range{10};
+    float inner_angle{0.35f};
+    float outer_angle{0.7f};
+    bool casts_shadow{true};
+    int shadow_priority{};
+};
+struct CameraFrustum {
+    Mat4 view{identity};
+    Mat4 projection{identity};
+    float near_plane{0.1f};
+    float far_plane{1000};
+    bool perspective{true};
+};
 struct Snapshot {
     // Optional scene viewport in drawable pixels (x, y, width, height); zero size uses the full
     // target.
@@ -100,6 +128,12 @@ struct Snapshot {
     // Distinguishes temporal histories when one Renderer displays different views.
     std::string view_id{};
     bool camera_cut{};
+    // Empty legacy scenes may use the renderer's compatibility sun. Any authored light
+    // component, including an explicitly disabled or opaque future one, suppresses it.
+    bool authored_lights_present{};
+    std::optional<SunLight> sun{};
+    std::vector<LocalLight> local_lights;
+    std::optional<CameraFrustum> camera_frustum{};
 };
 enum class VisibilityMode { Direct, GpuFrustum, GpuOcclusion };
 // CPU-only validation used before publishing a game or creating Vulkan pipelines.
@@ -149,6 +183,15 @@ struct FrameStats {
     std::uint64_t gpu_allocated_bytes{};
     std::uint32_t texture_count{};
     std::uint32_t vertices{}, draw_calls{}, culled_meshes{}, validation_errors{};
+    std::uint32_t submitted_local_lights{}, omitted_local_lights{};
+    std::uint32_t requested_sun_cascades{}, effective_sun_cascades{};
+    std::uint32_t sun_shadow_caster_draws{};
+    std::uint64_t sun_shadow_atlas_bytes{};
+    std::uint32_t requested_local_shadow_faces{}, local_shadow_faces{}, local_shadow_tiles{};
+    std::uint32_t dropped_shadow_faces{}, dropped_point_shadow_faces{};
+    std::uint32_t shadow_atlas_full_drops{}, shadow_caster_budget_drops{};
+    std::uint32_t shadow_unavailable_drops{}, shadow_caster_draws{};
+    std::uint64_t local_shadow_atlas_bytes{};
     bool gpu_visibility_active{}, hzb_valid{};
     // Requested and actual paths for the last frame; actual may be less capable.
     VisibilityMode requested_visibility_mode{VisibilityMode::Direct};
@@ -160,6 +203,8 @@ struct FrameStats {
     double cpu_ms{}, gpu_ms{}, readback_cpu_ms{};
     double gpu_main_cull_ms{}, gpu_main_raster_ms{}, gpu_hzb_ms{};
     double gpu_post_cull_ms{}, gpu_post_raster_ms{};
+    double gpu_sun_shadow_ms{}, gpu_local_shadow_ms{};
+    std::string effective_lighting_path{"forward"};
     std::string device;
 };
 struct HzbDebugImage {

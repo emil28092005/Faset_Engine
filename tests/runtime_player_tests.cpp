@@ -1,10 +1,12 @@
 #include <bit>
+#include <algorithm>
 #include <cmath>
 #include <faset/assets/asset_pipeline.hpp>
 #include <faset/core/io.hpp>
 #include <faset/player/SceneView.hpp>
 #include <faset/runtime/Runtime.hpp>
 #include <iostream>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 
@@ -23,11 +25,136 @@ template <class F> void rejects(F&& function, const char* message) {
     }
     check(caught, message);
 }
+template <class F>
+void rejectsContaining(F&& function, std::string_view entityId, std::string_view field) {
+    try {
+        function();
+    } catch (const std::exception& error) {
+        const std::string_view what(error.what());
+        check(what.find(entityId) != std::string_view::npos &&
+                  what.find(field) != std::string_view::npos,
+              "Invalid light reports entity and field");
+        return;
+    }
+    throw std::runtime_error("Invalid light was accepted");
+}
 Json component(std::string type, Json fields) {
     return {{"id", type}, {"type", type}, {"version", 1}, {"fields", fields}};
 }
 Json entity(std::string id, Json parent, Json components) {
     return {{"id", id}, {"name", id}, {"parent", parent}, {"components", components}};
+}
+void lightingExtraction(faset::player::SceneView& view) {
+    auto scene = Json{{"format", "faset.scene"},
+                      {"version", 1},
+                      {"id", "lighting"},
+                      {"name", "Lighting"},
+                      {"dimension", 3},
+                      {"instances", Json::array()},
+                      {"entities", Json::array()}};
+    const auto empty = view.build(scene, 16.f / 9.f);
+    check(!empty.authored_lights_present && !empty.sun && empty.local_lights.empty(),
+          "Scene with no lights leaves legacy sun fallback available");
+    check(empty.camera_frustum && empty.camera_frustum->perspective &&
+              empty.camera_frustum->near_plane > 0 &&
+              empty.camera_frustum->far_plane > empty.camera_frustum->near_plane &&
+              faset::render::multiply(empty.camera_frustum->projection,
+                                      empty.camera_frustum->view) == empty.view_projection,
+          "3D extraction retains an unjittered camera frustum");
+    scene["entities"] = Json::array({
+        entity("sun", nullptr,
+               Json::array({component("faset.transform", {{"rotation", {0, .4, 0}}}),
+                            component("faset.light", {{"kind", "directional"},
+                                                      {"color", {1, .8, .6, 1}},
+                                                      {"intensity", 2.5},
+                                                      {"casts_shadow", false}})})),
+        entity("point", nullptr,
+               Json::array({component("faset.transform", {{"position", {2, 3, 4}}}),
+                            component("faset.light", {{"kind", "point"},
+                                                      {"color", {1, 0, 0, 1}},
+                                                      {"intensity", 4},
+                                                      {"range", 6},
+                                                      {"shadow_priority", 3}})})),
+        entity("spot", nullptr,
+               Json::array({component("faset.transform", {{"position", {-2, 1, 0}}}),
+                            component("faset.light", {{"kind", "spot"},
+                                                      {"color", {0, 0, 1, 1}},
+                                                      {"intensity", 3},
+                                                      {"range", 8},
+                                                      {"inner_angle", .2},
+                                                      {"outer_angle", .6}})}))});
+    const auto a = view.build(scene, 16.f / 9.f);
+    check(a.authored_lights_present && a.sun && a.local_lights.size() == 2,
+          "Directional, point, and spot lights survive extraction");
+    check(a.sun->color[1] == .8f && a.sun->intensity == 2.5f && !a.sun->casts_shadow,
+          "Authored sun properties survive extraction");
+    check(a.local_lights[0].kind == faset::render::LocalLight::Kind::Point &&
+              a.local_lights[0].position == faset::render::Vec3{2, 3, 4} &&
+              a.local_lights[0].range == 6 && a.local_lights[0].shadow_priority == 3,
+          "Point fields and transform survive extraction");
+    check(a.local_lights[1].kind == faset::render::LocalLight::Kind::Spot &&
+              a.local_lights[1].inner_angle == .2f && a.local_lights[1].outer_angle == .6f,
+          "Spot cone survives extraction");
+    std::reverse(scene["entities"].begin(), scene["entities"].end());
+    const auto b = view.build(scene, 16.f / 9.f);
+    check(a.sun->stable_id == b.sun->stable_id &&
+              a.local_lights[0].stable_id == b.local_lights[0].stable_id &&
+              a.local_lights[1].stable_id == b.local_lights[1].stable_id,
+          "Light identity and ordering ignore entity array order");
+    scene["entities"].erase(scene["entities"].begin() + 2);
+    const auto localOnly = view.build(scene, 1);
+    check(localOnly.authored_lights_present && !localOnly.sun &&
+              localOnly.local_lights.size() == 2,
+          "Local-only lighting does not synthesize a sun");
+    scene["entities"] = Json::array({entity(
+        "disabled-sun", nullptr,
+        Json::array({component("faset.light", {{"kind", "directional"}, {"enabled", false}})}))});
+    const auto disabled = view.build(scene, 1);
+    check(disabled.authored_lights_present && !disabled.sun && disabled.local_lights.empty(),
+          "Explicit disabled sun suppresses legacy fallback");
+    scene["entities"][0]["components"][0]["version"] = 2;
+    const auto future = view.build(scene, 1);
+    check(future.authored_lights_present && !future.sun,
+          "Opaque future-version light still suppresses legacy fallback");
+    scene["entities"] = Json::array({
+        entity("sun-z", nullptr, Json::array({component("faset.light", Json::object())})),
+        entity("sun-a", nullptr, Json::array({component("faset.light", Json::object())}))});
+    const auto twoSuns = view.build(scene, 1);
+    check(twoSuns.sun && twoSuns.sun->stable_id.find("sun-a") != std::string::npos,
+          "Multiple suns select lowest stable identity");
+    check(!view.diagnostics().empty() &&
+              view.diagnostics().front().find("directional") != std::string::npos,
+          "Additional directionals produce an actionable diagnostic");
+    scene["entities"] = Json::array({entity(
+        "bad-light", nullptr,
+        Json::array({component("faset.light", {{"kind", "point"}, {"range", 0}})}))});
+    rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "range");
+    scene["entities"][0]["components"][0]["fields"] =
+        {{"kind", "spot"}, {"range", 10}, {"inner_angle", .8}, {"outer_angle", .2}};
+    rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "inner_angle");
+    scene["entities"][0]["components"][0]["fields"] = {{"kind", "area"}};
+    rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "kind");
+    scene["entities"][0]["components"][0]["fields"] =
+        {{"kind", "point"}, {"shadow_priority", std::int64_t{2147483648}}};
+    rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "shadow_priority");
+    scene["entities"][0]["components"][0]["fields"] = {{"kind", "point"}};
+    scene["entities"][0]["components"].insert(
+        scene["entities"][0]["components"].begin(),
+        component("faset.transform", {{"scale", {1, 1, 0}}}));
+    const auto flatPoint = view.build(scene, 1);
+    check(flatPoint.local_lights.size() == 1 &&
+              flatPoint.local_lights[0].kind == faset::render::LocalLight::Kind::Point,
+          "Point light accepts a zero Z scale because it needs only a position");
+    scene["entities"][0]["components"].erase(scene["entities"][0]["components"].begin());
+    scene["entities"][0]["components"][0]["fields"] =
+        {{"kind", "point"},
+         {"color", Json::array({1, std::numeric_limits<double>::quiet_NaN(), 1, 1})}};
+    rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "color");
+    scene["entities"][0]["components"].insert(
+        scene["entities"][0]["components"].begin(),
+        component("faset.transform", {{"position", {0, 0, 0}},
+                                       {"scale", Json::array({1, std::numeric_limits<double>::quiet_NaN(), 1})}}));
+    rejectsContaining([&] { view.build(scene, 1); }, "bad-light", "transform");
 }
 void physicsDebug(faset::player::SceneView& view) {
     for (int dimension : {2, 3}) {
@@ -159,6 +286,7 @@ void run() {
     faset::atomic_write(folder / "version.fscene", version);
     rejects([&] { faset::player::readScene(folder / "version.fscene"); }, "reject cooked version");
     faset::player::SceneView view(folder);
+    lightingExtraction(view);
     physicsDebug(view);
     auto snapshot = view.build(scene, 16.f / 9.f);
     check(snapshot.draws.size() == 1, "SceneView builtin mesh");

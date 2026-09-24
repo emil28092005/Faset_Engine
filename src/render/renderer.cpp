@@ -6,14 +6,17 @@
 #include <bit>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <faset/core/io.hpp>
 #include <faset/render/render_graph.hpp>
+#include <faset/render/lighting.hpp>
 #include <faset/render/renderer.hpp>
 #include <faset/render/visibility.hpp>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <numbers>
 #include <optional>
 #include <stdexcept>
 #include <unordered_map>
@@ -72,6 +75,40 @@ struct ScenePush {
     std::array<std::uint32_t, 4> draw_info;
 };
 static_assert(sizeof(ScenePush) == 112);
+struct LightingHeaderGpu {
+    std::array<std::uint32_t, 4> counts{};
+    std::array<float, 4> sun_direction_intensity{};
+    std::array<float, 4> sun_color{};
+    std::array<float, 4> camera_forward_shadow_distance{};
+    std::array<float, 4> cascade_splits{};
+};
+struct LocalLightGpu {
+    std::array<float, 4> position_range{};
+    std::array<float, 4> direction_cos_outer{};
+    std::array<float, 4> color_intensity{};
+    std::array<float, 4> cone_type_shadow_view{};
+    std::array<float, 4> reserved{};
+};
+struct ShadowViewGpu {
+    Mat4 view_projection{identity};
+    std::array<float, 4> tile_scale_offset{};
+    std::array<float, 4> guarded_clamp{};
+    std::array<float, 4> bias_flags{};
+};
+static_assert(sizeof(LightingHeaderGpu) == 80 &&
+              offsetof(LightingHeaderGpu, sun_direction_intensity) == 16 &&
+              offsetof(LightingHeaderGpu, sun_color) == 32 &&
+              offsetof(LightingHeaderGpu, camera_forward_shadow_distance) == 48 &&
+              offsetof(LightingHeaderGpu, cascade_splits) == 64);
+static_assert(sizeof(LocalLightGpu) == 80 &&
+              offsetof(LocalLightGpu, direction_cos_outer) == 16 &&
+              offsetof(LocalLightGpu, color_intensity) == 32 &&
+              offsetof(LocalLightGpu, cone_type_shadow_view) == 48 &&
+              offsetof(LocalLightGpu, reserved) == 64);
+static_assert(sizeof(ShadowViewGpu) == 112 &&
+              offsetof(ShadowViewGpu, tile_scale_offset) == 64 &&
+              offsetof(ShadowViewGpu, guarded_clamp) == 80 &&
+              offsetof(ShadowViewGpu, bias_flags) == 96);
 std::array<float, 4> point(const Mat4& m, std::array<float, 4> p) {
     std::array<float, 4> o{};
     for (int r = 0; r < 4; ++r)
@@ -164,7 +201,7 @@ struct SceneResources {
     std::array<float, 4> previous_viewport{};
     std::string previous_view_id;
 };
-constexpr std::uint32_t shadow_size = 1024;
+constexpr std::uint32_t timestamp_capacity = 24;
 } // namespace
 struct Renderer::Impl {
     RendererConfig config;
@@ -194,8 +231,10 @@ struct Renderer::Impl {
     VkExtent2D swap_extent{};
     std::vector<VkImage> swap_images;
     std::vector<VkImageLayout> swap_layouts;
-    Image color, depth, shadow;
+    Image color, depth, shadow, local_shadow;
+    std::uint32_t sun_shadow_size{}, local_shadow_size{};
     Buffer vertices, readback;
+    Buffer lighting_header, lighting_locals, lighting_views;
     SceneResources scene;
     InstanceTracker instance_tracker;
     std::unordered_map<std::string, std::size_t> previous_lods;
@@ -212,6 +251,9 @@ struct Renderer::Impl {
     std::unordered_map<const Texture*, CachedOpacity> opacity_cache;
     VkDescriptorSetLayout descriptor_layout{};
     VkDescriptorPool descriptor_pool{};
+    VkDescriptorSetLayout lighting_layout{};
+    VkDescriptorPool lighting_pool{};
+    VkDescriptorSet lighting_set{};
     VkSampler shadow_sampler{}, color_sampler{};
     VkPipelineLayout pipeline_layout{};
     VkPipeline pipeline{}, ui_pipeline{}, shadow_pipeline{}, sprite_pipeline{};
@@ -316,9 +358,13 @@ struct Renderer::Impl {
         destroy(scene.hzb[1]);
         destroy(vertices);
         destroy(readback);
+        destroy(lighting_header);
+        destroy(lighting_locals);
+        destroy(lighting_views);
         destroy(color);
         destroy(depth);
         destroy(shadow);
+        destroy(local_shadow);
         if (device) {
             destroy_scene_interfaces();
             if (pipeline)
@@ -333,8 +379,12 @@ struct Renderer::Impl {
                 vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
             if (descriptor_pool)
                 vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+            if (lighting_pool)
+                vkDestroyDescriptorPool(device, lighting_pool, nullptr);
             if (descriptor_layout)
                 vkDestroyDescriptorSetLayout(device, descriptor_layout, nullptr);
+            if (lighting_layout)
+                vkDestroyDescriptorSetLayout(device, lighting_layout, nullptr);
             if (shadow_sampler)
                 vkDestroySampler(device, shadow_sampler, nullptr);
             if (color_sampler)
@@ -721,14 +771,39 @@ struct Renderer::Impl {
             VkQueryPoolCreateInfo query{};
             query.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
             query.queryType = VK_QUERY_TYPE_TIMESTAMP;
-            query.queryCount = 12;
+            query.queryCount = timestamp_capacity;
             check(vkCreateQueryPool(device, &query, nullptr, &timestamp_pool),
                   "Create GPU timestamp queries");
         }
-        shadow =
-            make_image(shadow_size, shadow_size, VK_FORMAT_D32_SFLOAT,
-                       VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                       VK_IMAGE_ASPECT_DEPTH_BIT);
+        const auto shadow_usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                  VK_IMAGE_USAGE_SAMPLED_BIT;
+        for (const auto size : {2048u, 1024u}) {
+            if (size > max_image_dimension)
+                continue;
+            try {
+                shadow = make_image(size, size, VK_FORMAT_D32_SFLOAT, shadow_usage,
+                                    VK_IMAGE_ASPECT_DEPTH_BIT);
+                sun_shadow_size = size;
+                break;
+            } catch (const std::exception&) {
+                // Optional atlas allocation may fail; try the bounded half-size profile.
+            }
+        }
+        if (!shadow.handle)
+            shadow = make_image(1, 1, VK_FORMAT_D32_SFLOAT, shadow_usage,
+                                VK_IMAGE_ASPECT_DEPTH_BIT);
+        for (const auto size : {2048u, 1024u}) {
+            if (size > max_image_dimension)
+                continue;
+            try {
+                local_shadow = make_image(size, size, VK_FORMAT_D32_SFLOAT,
+                                          shadow_usage, VK_IMAGE_ASPECT_DEPTH_BIT);
+                local_shadow_size = size;
+                break;
+            } catch (const std::exception&) {
+                // Local shadows are optional; all affected lights remain unshadowed.
+            }
+        }
         make_targets();
         make_descriptors();
         make_pipelines();
@@ -889,6 +964,31 @@ struct Renderer::Impl {
         pi.pPoolSizes = sizes;
         check(vkCreateDescriptorPool(device, &pi, nullptr, &descriptor_pool),
               "Create descriptor pool");
+        std::array<VkDescriptorSetLayoutBinding, 4> lighting_bindings{};
+        for (std::uint32_t i = 0; i < lighting_bindings.size(); ++i)
+            lighting_bindings[i] = {i,
+                                    i == 3 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+                                           : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                    1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+        li.bindingCount = static_cast<std::uint32_t>(lighting_bindings.size());
+        li.pBindings = lighting_bindings.data();
+        check(vkCreateDescriptorSetLayout(device, &li, nullptr, &lighting_layout),
+              "Create lighting descriptor layout");
+        VkDescriptorPoolSize lighting_sizes[] = {
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1}};
+        pi.flags = 0;
+        pi.maxSets = 1;
+        pi.poolSizeCount = 2;
+        pi.pPoolSizes = lighting_sizes;
+        check(vkCreateDescriptorPool(device, &pi, nullptr, &lighting_pool),
+              "Create lighting descriptor pool");
+        VkDescriptorSetAllocateInfo lighting_allocation{};
+        lighting_allocation.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        lighting_allocation.descriptorPool = lighting_pool;
+        lighting_allocation.descriptorSetCount = 1;
+        lighting_allocation.pSetLayouts = &lighting_layout;
+        check(vkAllocateDescriptorSets(device, &lighting_allocation, &lighting_set),
+              "Allocate lighting descriptors");
         VkSamplerCreateInfo si{};
         si.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         si.magFilter = si.minFilter = VK_FILTER_NEAREST;
@@ -1009,8 +1109,9 @@ struct Renderer::Impl {
                                  sizeof(Push)};
         VkPipelineLayoutCreateInfo li{};
         li.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        li.setLayoutCount = 1;
-        li.pSetLayouts = &descriptor_layout;
+        const std::array<VkDescriptorSetLayout, 2> set_layouts{descriptor_layout, lighting_layout};
+        li.setLayoutCount = static_cast<std::uint32_t>(set_layouts.size());
+        li.pSetLayouts = set_layouts.data();
         li.pushConstantRangeCount = 1;
         li.pPushConstantRanges = &push;
         check(vkCreatePipelineLayout(device, &li, nullptr, &pipeline_layout),
@@ -1220,14 +1321,14 @@ struct Renderer::Impl {
         layout.pBindings = hzb.data();
         check(vkCreateDescriptorSetLayout(device, &layout, nullptr, &scene.hzb_layout),
               "Create HZB descriptor layout");
-        const std::array<VkDescriptorSetLayout, 2> scene_layouts{descriptor_layout,
-                                                                  scene.graphics_layout};
+        const std::array<VkDescriptorSetLayout, 3> scene_layouts{
+            descriptor_layout, lighting_layout, scene.graphics_layout};
         VkPushConstantRange graphics_push{VK_SHADER_STAGE_VERTEX_BIT |
                                               VK_SHADER_STAGE_FRAGMENT_BIT,
                                           0, sizeof(ScenePush)};
         VkPipelineLayoutCreateInfo pipeline_info{};
         pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipeline_info.setLayoutCount = 2;
+        pipeline_info.setLayoutCount = static_cast<std::uint32_t>(scene_layouts.size());
         pipeline_info.pSetLayouts = scene_layouts.data();
         pipeline_info.pushConstantRangeCount = 1;
         pipeline_info.pPushConstantRanges = &graphics_push;
@@ -1533,6 +1634,30 @@ struct Renderer::Impl {
                              VkBufferUsageFlags usage = 0) {
         upload_scene_buffer(buffer, values.data(), values.size() * sizeof(T), usage);
     }
+    void update_lighting_descriptors() {
+        const std::array<VkDescriptorBufferInfo, 3> buffers{{
+            {lighting_header.handle, 0, lighting_header.size},
+            {lighting_locals.handle, 0, lighting_locals.size},
+            {lighting_views.handle, 0, lighting_views.size}}};
+        const VkDescriptorImageInfo atlas{VK_NULL_HANDLE,
+                                          local_shadow.handle ? local_shadow.view : shadow.view,
+                                          VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL};
+        std::array<VkWriteDescriptorSet, 4> writes{};
+        for (std::uint32_t i = 0; i < writes.size(); ++i) {
+            writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[i].dstSet = lighting_set;
+            writes[i].dstBinding = i;
+            writes[i].descriptorCount = 1;
+            writes[i].descriptorType = i == 3 ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+                                               : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            if (i == 3)
+                writes[i].pImageInfo = &atlas;
+            else
+                writes[i].pBufferInfo = &buffers[i];
+        }
+        vkUpdateDescriptorSets(device, static_cast<std::uint32_t>(writes.size()),
+                               writes.data(), 0, nullptr);
+    }
     void update_scene_descriptors(bool occlusion) {
         auto write_buffers = [&](VkDescriptorSet set, std::span<const Buffer* const> buffers,
                                  std::uint32_t first_binding) {
@@ -1625,6 +1750,22 @@ struct Renderer::Impl {
     void render(const Snapshot& snapshot) {
         auto start = std::chrono::steady_clock::now();
         statistics.draw_calls = statistics.culled_meshes = statistics.gpu_label_count = 0;
+        statistics.submitted_local_lights = statistics.omitted_local_lights = 0;
+        statistics.requested_sun_cascades = statistics.effective_sun_cascades =
+            statistics.sun_shadow_caster_draws = 0;
+        statistics.sun_shadow_atlas_bytes = sun_shadow_size ? shadow.allocation_size : 0;
+        statistics.gpu_sun_shadow_ms = 0;
+        statistics.requested_local_shadow_faces = statistics.local_shadow_faces =
+            statistics.local_shadow_tiles = statistics.dropped_shadow_faces =
+            statistics.dropped_point_shadow_faces =
+            statistics.shadow_atlas_full_drops =
+            statistics.shadow_caster_budget_drops =
+            statistics.shadow_unavailable_drops =
+            statistics.shadow_caster_draws = 0;
+        statistics.local_shadow_atlas_bytes = local_shadow_size
+            ? local_shadow.allocation_size : 0;
+        statistics.gpu_local_shadow_ms = 0;
+        statistics.effective_lighting_path = "forward";
         statistics.gpu_bins = statistics.gpu_visible_instances =
             statistics.gpu_frustum_rejected = statistics.gpu_occlusion_deferred =
                 statistics.gpu_post_visible = 0;
@@ -1715,6 +1856,8 @@ struct Renderer::Impl {
         };
         std::vector<SelectedDraw> selected_draws;
         selected_draws.reserve(snapshot.draws.size());
+        std::vector<ShadowCasterBounds> shadow_casters;
+        shadow_casters.reserve(snapshot.draws.size());
         struct BuildingBin {
             const Mesh* mesh{};
             const Texture* texture{};
@@ -1724,10 +1867,17 @@ struct Renderer::Impl {
         std::vector<BuildingBin> building_bins;
         std::unordered_map<const Mesh*, std::pair<std::uint32_t, std::uint32_t>> mesh_ranges;
         std::unordered_map<std::string, std::size_t> current_lods;
-        for (const auto& item : snapshot.draws) {
+        for (std::size_t source_index = 0; source_index < snapshot.draws.size(); ++source_index) {
+            const auto& item = snapshot.draws[source_index];
             if (!item.mesh || item.mesh->vertices.empty())
                 continue;
             const auto source_bounds = world_bounds(item.mesh, item.model);
+            if (item.cast_shadow) {
+                if (source_index > UINT32_MAX)
+                    throw std::overflow_error("Shadow source draw index exceeds 32-bit capacity");
+                shadow_casters.push_back(
+                    {source_bounds, static_cast<std::uint32_t>(source_index)});
+            }
             std::vector<float> thresholds;
             std::vector<std::uint8_t> available;
             std::shared_ptr<const Mesh> selected_mesh = item.mesh;
@@ -1858,12 +2008,63 @@ struct Renderer::Impl {
             gpu_frame.textures.push_back(bin.texture);
         }
         gpu_frame.candidate_count = static_cast<std::uint32_t>(gpu_frame.candidates.size());
+        ShadowBudget shadow_budget;
+        shadow_budget.sun_atlas_size = sun_shadow_size;
+        shadow_budget.sun_atlas_available = sun_shadow_size != 0;
+        shadow_budget.local_atlas_size = local_shadow_size;
+        shadow_budget.local_atlas_available = local_shadow_size != 0;
+        const auto shadow_plan = build_shadow_plan(snapshot, shadow_casters, shadow_budget);
+        const bool sun_raster = sun_shadow_size &&
+            std::any_of(shadow_plan.sun_views.begin(), shadow_plan.sun_views.end(),
+                        [](const ShadowView& view) {
+                            return view.valid && !view.caster_indices.empty();
+                        });
+        statistics.requested_sun_cascades = shadow_plan.requested_sun_cascades;
+        statistics.effective_sun_cascades = sun_raster
+            ? shadow_plan.effective_sun_cascades : 0;
+        if (sun_raster)
+            for (const auto& view : shadow_plan.sun_views)
+                if (view.valid)
+                    statistics.sun_shadow_caster_draws +=
+                        static_cast<std::uint32_t>(view.caster_indices.size());
+        const bool local_raster = local_shadow_size &&
+            std::any_of(shadow_plan.local_views.begin(), shadow_plan.local_views.end(),
+                        [](const ShadowView& view) {
+                            return view.valid && !view.caster_indices.empty();
+                        });
+        statistics.requested_local_shadow_faces = shadow_plan.local_faces_requested;
+        statistics.local_shadow_tiles = shadow_plan.local_faces_used;
+        statistics.local_shadow_faces = local_raster ? shadow_plan.local_faces_used : 0;
+        statistics.dropped_shadow_faces = shadow_plan.dropped_local_faces;
+        statistics.dropped_point_shadow_faces = shadow_plan.dropped_point_faces;
+        for (const auto& assignment : shadow_plan.local_assignments) {
+            if (assignment.valid || assignment.reason == ShadowDropReason::None)
+                continue;
+            const auto& light = snapshot.local_lights[assignment.source_index];
+            const auto faces = light.kind == LocalLight::Kind::Point ? 6u : 1u;
+            if (assignment.reason == ShadowDropReason::TileBudget)
+                statistics.shadow_atlas_full_drops += faces;
+            else if (assignment.reason == ShadowDropReason::CasterBudget)
+                statistics.shadow_caster_budget_drops += faces;
+            else if (assignment.reason == ShadowDropReason::Unavailable)
+                statistics.shadow_unavailable_drops += faces;
+        }
+        for (const auto& view : shadow_plan.sun_views) {
+            if (view.reason == ShadowDropReason::CasterBudget)
+                ++statistics.shadow_caster_budget_drops;
+            else if (view.reason == ShadowDropReason::Unavailable)
+                ++statistics.shadow_unavailable_drops;
+        }
+        statistics.shadow_caster_draws = statistics.sun_shadow_caster_draws;
+        if (local_raster)
+            for (const auto& view : shadow_plan.local_views)
+                statistics.shadow_caster_draws +=
+                    static_cast<std::uint32_t>(view.caster_indices.size());
         std::vector<GpuVertex> data;
-        std::vector<Batch> scene_batches, transparent_batches, shadow_batches,
-            sprite_batches, ui_batches;
+        std::vector<Batch> scene_batches, transparent_batches, sprite_batches, ui_batches;
         for (const auto& selected : selected_draws) {
             const auto& item = *selected.source;
-            if (selected.gpu && !item.cast_shadow)
+            if (selected.gpu)
                 continue;
             auto first = data.size();
             const auto& mesh = *selected.mesh;
@@ -1886,16 +2087,12 @@ struct Renderer::Impl {
                 continue;
             Batch batch{static_cast<std::uint32_t>(first), count,
                         item.texture ? item.texture.get() : white.get()};
-            if (item.cast_shadow)
-                shadow_batches.push_back(batch);
-            if (!selected.gpu) {
-                if (outside(data, first))
-                    ++statistics.culled_meshes;
-                else if (gpu_active && !selected.opaque)
-                    transparent_batches.push_back(batch);
-                else
-                    scene_batches.push_back(batch);
-            }
+            if (outside(data, first))
+                ++statistics.culled_meshes;
+            else if (gpu_active && !selected.opaque)
+                transparent_batches.push_back(batch);
+            else
+                scene_batches.push_back(batch);
         }
         struct OrderedSprite {
             const Sprite* sprite;
@@ -1972,6 +2169,45 @@ struct Renderer::Impl {
                                   triangles.texture ? triangles.texture.get() : white.get(),
                                   triangles.clip_rect});
         }
+        std::vector<Batch> shadow_batch_by_source(snapshot.draws.size());
+        if (sun_raster || local_raster) {
+            std::vector<std::uint8_t> required(snapshot.draws.size());
+            for (const auto& view : shadow_plan.sun_views)
+                if (sun_raster && view.valid)
+                    for (const auto source : view.caster_indices)
+                        required.at(source) = 1;
+            for (const auto& view : shadow_plan.local_views)
+                if (local_raster && view.valid)
+                    for (const auto source : view.caster_indices)
+                        required.at(source) = 1;
+            for (std::size_t source = 0; source < required.size(); ++source) {
+                if (!required[source])
+                    continue;
+                const auto& item = snapshot.draws[source];
+                if (!item.mesh)
+                    continue;
+                const auto first = data.size();
+                const auto& mesh = *item.mesh; // Source LOD 0, independent of camera/P2 LOD.
+                auto emit = [&](std::uint32_t index) {
+                    if (index >= mesh.vertices.size())
+                        throw std::out_of_range("Shadow mesh index outside vertex range");
+                    data.push_back(gpu_vertex(mesh.vertices[index], item,
+                                              snapshot.view_projection));
+                };
+                if (mesh.indices.empty())
+                    for (std::uint32_t i = 0; i < mesh.vertices.size(); ++i)
+                        emit(i);
+                else
+                    for (const auto index : mesh.indices)
+                        emit(index);
+                const auto count = data.size() - first;
+                if (count % 3 || first > UINT32_MAX || count > UINT32_MAX)
+                    throw std::invalid_argument("Shadow mesh must fit complete triangles");
+                shadow_batch_by_source[source] =
+                    {static_cast<std::uint32_t>(first), static_cast<std::uint32_t>(count),
+                     white.get()};
+            }
+        }
         statistics.vertices = static_cast<std::uint32_t>(data.size() + gpu_frame.vertices.size());
         auto byte_count = std::max<std::size_t>(sizeof(GpuVertex), data.size() * sizeof(GpuVertex));
         if (vertices.size < byte_count) {
@@ -2017,19 +2253,114 @@ struct Renderer::Impl {
                                     VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             update_scene_descriptors(occlusion);
         }
-        Vec3 direction = snapshot.light_direction;
+        std::optional<SunLight> sun = snapshot.sun;
+        if (!sun && !snapshot.authored_lights_present && snapshot.local_lights.empty())
+            sun = SunLight{"legacy-sun", snapshot.light_direction, {1, 1, 1, 1}, 1, true};
+        Vec3 direction = sun ? sun->direction : snapshot.light_direction;
         float length = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1] +
                                  direction[2] * direction[2]);
-        if (length < 1e-5f) {
+        if (!std::isfinite(length) || length < 1e-5f) {
+            if (sun && sun->stable_id != "legacy-sun")
+                throw std::invalid_argument("Authored sun direction must be finite and nonzero");
             direction = {-.5f, -1, -.3f};
             length = std::sqrt(1.34f);
         }
         for (auto& v : direction)
             v /= length;
+        LightingHeaderGpu lighting{};
+        lighting.counts[1] = sun ? 1u : 0u;
+        lighting.counts[2] = sun_raster ? 1u : 0u;
+        lighting.sun_direction_intensity = {direction[0], direction[1], direction[2],
+                                            sun ? sun->intensity : 0};
+        lighting.sun_color = sun ? sun->color : Color{0, 0, 0, 1};
+        if (sun && (!std::isfinite(sun->intensity) || sun->intensity < 0 ||
+                    std::any_of(sun->color.begin(), sun->color.end(),
+                                [](float v) { return !std::isfinite(v) || v < 0; })))
+            throw std::invalid_argument("Authored sun radiance must be finite and nonnegative");
+        lighting.camera_forward_shadow_distance = {0, 0, -1, 80};
+        if (snapshot.camera_frustum) {
+            const auto& view = snapshot.camera_frustum->view;
+            lighting.camera_forward_shadow_distance = {-view[2], -view[6], -view[10], 80};
+        }
+        lighting.counts[3] = static_cast<std::uint32_t>(shadow_plan.sun_views.size());
+        std::vector<ShadowViewGpu> gpu_shadow_views;
+        gpu_shadow_views.reserve(std::max<std::size_t>(1, shadow_plan.sun_views.size()));
+        for (std::size_t i = 0; i < shadow_plan.sun_views.size(); ++i) {
+            const auto& view = shadow_plan.sun_views[i];
+            ShadowViewGpu gpu{};
+            gpu.view_projection = view.view_projection;
+            gpu.tile_scale_offset = view.atlas_scale_offset;
+            gpu.guarded_clamp = view.guarded_clamp;
+            gpu.bias_flags = {.0008f, .003f,
+                              sun_shadow_size ? 1.f / float(sun_shadow_size) : 0.f,
+                              sun_raster && view.valid ? 1.f : 0.f};
+            gpu_shadow_views.push_back(gpu);
+            if (i < lighting.cascade_splits.size())
+                lighting.cascade_splits[i] = view.split_far;
+        }
+        for (const auto& view : shadow_plan.local_views) {
+            ShadowViewGpu gpu{};
+            gpu.view_projection = view.view_projection;
+            gpu.tile_scale_offset = view.atlas_scale_offset;
+            gpu.guarded_clamp = view.guarded_clamp;
+            gpu.bias_flags = {.0008f, .003f,
+                              local_shadow_size ? 1.f / float(local_shadow_size) : 0.f,
+                              local_raster && view.valid ? 1.f : 0.f};
+            gpu_shadow_views.push_back(gpu);
+        }
+        std::vector<const LocalShadowAssignment*> assignments(snapshot.local_lights.size());
+        for (const auto& assignment : shadow_plan.local_assignments)
+            assignments.at(assignment.source_index) = &assignment;
+        statistics.omitted_local_lights = shadow_plan.omitted_local_lights;
+        std::vector<LocalLightGpu> gpu_lights;
+        gpu_lights.reserve(shadow_plan.submitted_local_indices.size());
+        for (const auto source : shadow_plan.submitted_local_indices) {
+            const auto& local = snapshot.local_lights[source];
+            auto spot_direction = local.direction;
+            float spot_length = std::hypot(spot_direction[0], spot_direction[1],
+                                           spot_direction[2]);
+            if (!std::isfinite(spot_length) || spot_length < 1e-6f) {
+                if (local.kind == LocalLight::Kind::Spot)
+                    throw std::invalid_argument("Spotlight direction must be finite and nonzero");
+                spot_direction = {0, 0, -1};
+                spot_length = 1;
+            }
+            for (auto& axis : spot_direction)
+                axis /= spot_length;
+            LocalLightGpu gpu{};
+            gpu.position_range = {local.position[0], local.position[1], local.position[2],
+                                  local.range};
+            const bool spot = local.kind == LocalLight::Kind::Spot;
+            gpu.direction_cos_outer = {spot_direction[0], spot_direction[1], spot_direction[2],
+                                       spot ? std::cos(local.outer_angle) : 0.f};
+            gpu.color_intensity = {local.color[0], local.color[1], local.color[2],
+                                   local.intensity};
+            gpu.cone_type_shadow_view = {spot ? std::cos(local.inner_angle) : 1.f,
+                                         spot ? 1.f : 0.f, -1, 0};
+            const auto* assignment = assignments.at(source);
+            if (local_raster && assignment && assignment->valid) {
+                gpu.cone_type_shadow_view[2] = float(
+                    shadow_plan.sun_views.size() + assignment->first_view);
+                gpu.cone_type_shadow_view[3] = float(assignment->face_count);
+            }
+            gpu_lights.push_back(gpu);
+        }
+        lighting.counts[0] = static_cast<std::uint32_t>(gpu_lights.size());
+        statistics.submitted_local_lights = lighting.counts[0];
+        if (gpu_lights.empty())
+            gpu_lights.push_back({}); // Descriptors always point at a full initialized record.
+        if (gpu_shadow_views.empty())
+            gpu_shadow_views.push_back({}); // Always bind an initialized record.
+        upload_scene_buffer(lighting_header, &lighting, sizeof(lighting), 0);
+        upload_scene_vector(lighting_locals, gpu_lights);
+        upload_scene_vector(lighting_views, gpu_shadow_views);
+        update_lighting_descriptors();
         Vec3 light_eye{-direction[0] * 30, -direction[1] * 30, -direction[2] * 30};
         Vec3 light_up = std::abs(direction[1]) > .98f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
-        Push push{multiply(orthographic(-20, 20, -20, 20, .1f, 80),
-                           look_at(light_eye, {0, 0, 0}, light_up)),
+        Push push{sun_raster && !shadow_plan.sun_views.empty()
+                      ? shadow_plan.sun_views.front().view_projection
+                      : multiply(orthographic(-20, 20, -20, 20, .1f, 80),
+                                 look_at(light_eye, {0, 0, 0}, light_up)),
                   {direction[0], direction[1], direction[2], 0},
                   {snapshot.eye[0], snapshot.eye[1], snapshot.eye[2], 1}};
         std::optional<std::uint32_t> swap_index;
@@ -2053,7 +2384,7 @@ struct Renderer::Impl {
         std::uint32_t timestamp_cursor = 0;
         std::vector<std::string> timestamp_labels;
         if (timestamp_pool) {
-            vkCmdResetQueryPool(command, timestamp_pool, 0, 12);
+            vkCmdResetQueryPool(command, timestamp_pool, 0, timestamp_capacity);
             vkCmdWriteTimestamp2(command, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                                  timestamp_pool, timestamp_cursor++);
         }
@@ -2078,6 +2409,12 @@ struct Renderer::Impl {
             vkCmdSetViewport(command, 0, 1, &viewport);
             vkCmdSetScissor(command, 0, 1, &scissor);
         };
+        auto bind_material = [&](VkDescriptorSet material) {
+            const std::array<VkDescriptorSet, 2> sets{material, lighting_set};
+            vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
+                                    0, static_cast<std::uint32_t>(sets.size()), sets.data(),
+                                    0, nullptr);
+        };
         auto draw_transparent = [&] {
             if (transparent_batches.empty())
                 return;
@@ -2088,8 +2425,7 @@ struct Renderer::Impl {
                                0, sizeof(push), &push);
             for (auto batch : transparent_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        pipeline_layout, 0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2102,8 +2438,7 @@ struct Renderer::Impl {
                                sizeof(push), &push);
             for (auto batch : sprite_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2125,8 +2460,7 @@ struct Renderer::Impl {
                     continue;
                 vkCmdSetScissor(command, 0, 1, &scissor);
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2181,7 +2515,7 @@ struct Renderer::Impl {
                               }
                           } end{*this};
                           callback();
-                          if (timestamp_pool && timestamp_cursor < 12) {
+                          if (timestamp_pool && timestamp_cursor < timestamp_capacity) {
                               vkCmdWriteTimestamp2(command,
                                                    VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                                                    timestamp_pool, timestamp_cursor++);
@@ -2189,35 +2523,79 @@ struct Renderer::Impl {
                           }
                       });
         };
-        add_pass("ShadowMap", {}, {"shadow"}, [&] {
-            transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                       VK_IMAGE_ASPECT_DEPTH_BIT);
-            VkRenderingAttachmentInfo attachment{};
-            attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-            attachment.imageView = shadow.view;
-            attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-            attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            attachment.clearValue.depthStencil = {1, 0};
-            VkRenderingInfo rendering{};
-            rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            rendering.renderArea = {{0, 0}, {shadow_size, shadow_size}};
-            rendering.layerCount = 1;
-            rendering.pDepthAttachment = &attachment;
-            vkCmdBeginRendering(command, &rendering);
-            set_viewport(shadow_size, shadow_size);
-            vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_pipeline);
-            vkCmdPushConstants(command, pipeline_layout,
-                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                               sizeof(push), &push);
-            for (auto batch : shadow_batches) {
-                vkCmdDraw(command, batch.count, 1, batch.first, 0);
-                ++statistics.draw_calls;
-            }
-            vkCmdEndRendering(command);
-            transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-                       VK_IMAGE_ASPECT_DEPTH_BIT);
-        });
+        auto raster_shadow_atlas = [&](Image& atlas, std::uint32_t atlas_size,
+                                       const std::vector<ShadowView>& views) {
+                transition(command, atlas, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_ASPECT_DEPTH_BIT);
+                VkRenderingAttachmentInfo attachment{};
+                attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                attachment.imageView = atlas.view;
+                attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                attachment.clearValue.depthStencil = {1, 0};
+                VkRenderingInfo rendering{};
+                rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                rendering.renderArea = {{0, 0}, {atlas_size, atlas_size}};
+                rendering.layerCount = 1;
+                rendering.pDepthAttachment = &attachment;
+                vkCmdBeginRendering(command, &rendering);
+                vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  shadow_pipeline);
+                for (const auto& view : views) {
+                    if (!view.valid || view.caster_indices.empty())
+                        continue;
+                    const auto guard = (view.tile_size - view.usable_size) / 2;
+                    const auto x = view.tile_origin_x + guard;
+                    const auto y = view.tile_origin_y + guard;
+                    const VkViewport viewport{float(x), float(y), float(view.usable_size),
+                                              float(view.usable_size), 0, 1};
+                    const VkRect2D scissor{{static_cast<std::int32_t>(x),
+                                             static_cast<std::int32_t>(y)},
+                                            {view.usable_size, view.usable_size}};
+                    vkCmdSetViewport(command, 0, 1, &viewport);
+                    vkCmdSetScissor(command, 0, 1, &scissor);
+                    auto view_push = push;
+                    view_push.light_view_projection = view.view_projection;
+                    vkCmdPushConstants(command, pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT |
+                                           VK_SHADER_STAGE_FRAGMENT_BIT,
+                                       0, sizeof(view_push), &view_push);
+                    for (const auto source : view.caster_indices) {
+                        const auto& batch = shadow_batch_by_source.at(source);
+                        if (!batch.count)
+                            continue;
+                        vkCmdDraw(command, batch.count, 1, batch.first, 0);
+                        ++statistics.draw_calls;
+                    }
+                }
+                vkCmdEndRendering(command);
+                transition(command, atlas, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_DEPTH_BIT);
+        };
+        if (sun_raster)
+            add_pass("SunShadowAtlas", {}, {"shadow"}, [&] {
+                raster_shadow_atlas(shadow, sun_shadow_size, shadow_plan.sun_views);
+            });
+        else
+            add_pass("ShadowFallback", {}, {"shadow"}, [&] {
+                // A bound descriptor still needs a matching image layout, even when
+                // every graphics shader branch treats its shadow as unshadowed.
+                transition(command, shadow, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_ASPECT_DEPTH_BIT);
+            });
+        if (local_raster)
+            add_pass("LocalShadowAtlas", {}, {"local_shadow"}, [&] {
+                raster_shadow_atlas(local_shadow, local_shadow_size,
+                                    shadow_plan.local_views);
+            });
+        else
+            add_pass("LocalShadowFallback", {}, {"local_shadow"}, [&] {
+                if (local_shadow.handle)
+                    transition(command, local_shadow,
+                               VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                               VK_IMAGE_ASPECT_DEPTH_BIT);
+            });
         if (gpu_active)
             add_pass("MainCull", {"shadow"},
                      {"main_indirect", "main_visible", "deferred_ids"}, [&] {
@@ -2277,8 +2655,9 @@ struct Renderer::Impl {
                 }
             });
         add_pass(occlusion ? "MainRaster" : "ForwardAndUI",
-                 gpu_active ? std::vector<std::string>{"shadow", "main_indirect", "main_visible"}
-                            : std::vector<std::string>{"shadow"},
+                 gpu_active ? std::vector<std::string>{"shadow", "local_shadow",
+                                                       "main_indirect", "main_visible"}
+                            : std::vector<std::string>{"shadow", "local_shadow"},
                  {"color", "depth"}, [&] {
             transition(command, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                        VK_IMAGE_ASPECT_COLOR_BIT);
@@ -2313,8 +2692,7 @@ struct Renderer::Impl {
             vkCmdPushConstants(command, pipeline_layout,
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                sizeof(push), &push);
-            vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1,
-                                    &white_descriptor, 0, nullptr);
+            bind_material(white_descriptor);
             if (gpu_active && !gpu_frame.bins.empty()) {
                 VkDeviceSize scene_offset{};
                 vkCmdBindVertexBuffers(command, 0, 1, &scene.vertices.handle, &scene_offset);
@@ -2322,7 +2700,7 @@ struct Renderer::Impl {
                                   scene.graphics_pipeline);
                 for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
                     auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
-                    const std::array<VkDescriptorSet, 2> sets{descriptor,
+                    const std::array<VkDescriptorSet, 3> sets{descriptor, lighting_set,
                                                                scene.graphics_main};
                     vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                             scene.graphics_pipeline_layout, 0, sets.size(),
@@ -2346,8 +2724,7 @@ struct Renderer::Impl {
             }
             for (auto batch : scene_batches) {
                 auto descriptor = textures.at(batch.texture).descriptor;
-                vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                                        0, 1, &descriptor, 0, nullptr);
+                bind_material(descriptor);
                 vkCmdDraw(command, batch.count, 1, batch.first, 0);
                 ++statistics.draw_calls;
             }
@@ -2446,7 +2823,7 @@ struct Renderer::Impl {
                                       scene.graphics_pipeline);
                     for (std::uint32_t bin = 0; bin < gpu_frame.bins.size(); ++bin) {
                         auto descriptor = textures.at(gpu_frame.textures[bin]).descriptor;
-                        const std::array<VkDescriptorSet, 2> sets{descriptor,
+                        const std::array<VkDescriptorSet, 3> sets{descriptor, lighting_set,
                                                                    scene.graphics_post};
                         vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                                 scene.graphics_pipeline_layout, 0,
@@ -2526,7 +2903,7 @@ struct Renderer::Impl {
         graph.execute();
         submit(swap_index.has_value());
         if (timestamp_pool) {
-            std::array<std::uint64_t, 12> stamps{};
+            std::array<std::uint64_t, timestamp_capacity> stamps{};
             check(vkGetQueryPoolResults(device, timestamp_pool, 0, timestamp_cursor,
                                         timestamp_cursor * sizeof(std::uint64_t), stamps.data(),
                                         sizeof(std::uint64_t),
@@ -2546,6 +2923,8 @@ struct Renderer::Impl {
                 const auto elapsed = milliseconds(stamps[i], stamps[i + 1]);
                 const auto& label = timestamp_labels[i];
                 if (label == "MainCull") statistics.gpu_main_cull_ms = elapsed;
+                else if (label == "SunShadowAtlas") statistics.gpu_sun_shadow_ms = elapsed;
+                else if (label == "LocalShadowAtlas") statistics.gpu_local_shadow_ms = elapsed;
                 else if (label == "MainRaster" || label == "ForwardAndUI")
                     statistics.gpu_main_raster_ms = elapsed;
                 else if (label == "BuildCurrentHZB") statistics.gpu_hzb_ms = elapsed;
@@ -2618,7 +2997,11 @@ struct Renderer::Impl {
         ++statistics.frame;
         statistics.gpu_allocated_bytes = vertices.allocation_size + readback.allocation_size +
                                          color.allocation_size + depth.allocation_size +
-                                         shadow.allocation_size;
+                                         shadow.allocation_size +
+                                         local_shadow.allocation_size +
+                                         lighting_header.allocation_size +
+                                         lighting_locals.allocation_size +
+                                         lighting_views.allocation_size;
         statistics.texture_count = static_cast<std::uint32_t>(textures.size());
         for (const auto& [_, texture] : textures)
             statistics.gpu_allocated_bytes += texture.image.allocation_size;

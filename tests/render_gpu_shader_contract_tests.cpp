@@ -59,6 +59,15 @@ int main() {
         faset::atomic_write_json(reflection_file, metadata);
         must_reject([&] { (void)faset::render::detail::load_gpu_shader_bundle(temporary); },
                     "A consistently rehashed but incompatible GPU record stride must be rejected");
+        faset::atomic_write_json(reflection_file,
+                                 faset::read_json(original / "gpuPostCullMain.reflection.json"));
+        reflection_file = temporary / "gpuVertexMain.reflection.json";
+        metadata = faset::read_json(original / "gpuVertexMain.reflection.json");
+        metadata["layout"]["descriptors"][0]["set"] = 1;
+        metadata["layout_fingerprint"] = faset::sha256(metadata["layout"].dump());
+        faset::atomic_write_json(reflection_file, metadata);
+        must_reject([&] { (void)faset::render::detail::load_gpu_shader_bundle(temporary); },
+                    "GPU graphics scene buffers must stay in descriptor set two");
         fs::remove(temporary / "gpuHzbMain.spv");
         must_reject([&] { (void)faset::render::detail::load_gpu_shader_bundle(temporary); },
                     "Missing P2 entry must be rejected");

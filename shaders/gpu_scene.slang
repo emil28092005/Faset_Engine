@@ -57,9 +57,9 @@ struct GpuFrameParameters {
     uint4 drawInfo; // x=visible ID range base; firstInstance is always zero
 };
 [[vk::push_constant]] ConstantBuffer<GpuFrameParameters> gpuFrame;
-[[vk::binding(0,1)]] StructuredBuffer<InstanceRecord> gfxInstances;
-[[vk::binding(1,1)]] StructuredBuffer<uint> gfxVisibleIds;
-[[vk::binding(2,1)]] StructuredBuffer<ViewRecord> gfxViews;
+[[vk::binding(0,2)]] StructuredBuffer<InstanceRecord> gfxInstances;
+[[vk::binding(1,2)]] StructuredBuffer<uint> gfxVisibleIds;
+[[vk::binding(2,2)]] StructuredBuffer<ViewRecord> gfxViews;
 
 // All indirect commands use firstInstance=0. The raw Vulkan index avoids the
 // BaseInstance read that Slang adds for SV_InstanceID (DrawParameters feature).
