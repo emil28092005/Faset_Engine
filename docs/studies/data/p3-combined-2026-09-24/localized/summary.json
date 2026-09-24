@@ -1,0 +1,526 @@
+{
+  "format": "faset.p3-localized-paired",
+  "version": 1,
+  "source_revision": "4a3453e2b1868555d833f578d43f48b8bc47d41a",
+  "benchmark_sha256": "ceb4fbde8f65bad60a3eb4d24c917619769ff058c66851bc10748ef0af5b45fd",
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "driver": "595.84",
+  "width": 1920,
+  "height": 1080,
+  "warmup_frames_per_run": 10,
+  "measured_frames_per_run": 30,
+  "runs": [
+    {
+      "shadows": "off",
+      "lights": 32,
+      "repeat": 1,
+      "lighting": "forward",
+      "csv": "off-32-1-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.31023999999999996,
+        "gpu_main_raster_ms": 0.31023999999999996,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.741472
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 32,
+      "repeat": 1,
+      "lighting": "tiled",
+      "csv": "off-32-1-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.132688,
+        "gpu_main_raster_ms": 0.07691200000000001,
+        "gpu_light_tiles_ms": 0.055664000000000005,
+        "gpu_ms": 1.6504159999999999
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 32,
+      "repeat": 2,
+      "lighting": "forward",
+      "csv": "off-32-2-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.234784,
+        "gpu_main_raster_ms": 0.234784,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 2.020032
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 32,
+      "repeat": 2,
+      "lighting": "tiled",
+      "csv": "off-32-2-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.132464,
+        "gpu_main_raster_ms": 0.07688,
+        "gpu_light_tiles_ms": 0.055344000000000004,
+        "gpu_ms": 1.828592
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 32,
+      "repeat": 3,
+      "lighting": "forward",
+      "csv": "off-32-3-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.234496,
+        "gpu_main_raster_ms": 0.234496,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.910336
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 32,
+      "repeat": 3,
+      "lighting": "tiled",
+      "csv": "off-32-3-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.13291199999999997,
+        "gpu_main_raster_ms": 0.07713600000000001,
+        "gpu_light_tiles_ms": 0.05544,
+        "gpu_ms": 1.696928
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 64,
+      "repeat": 1,
+      "lighting": "forward",
+      "csv": "off-64-1-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.42632000000000003,
+        "gpu_main_raster_ms": 0.42632000000000003,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.9124
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 64,
+      "repeat": 1,
+      "lighting": "tiled",
+      "csv": "off-64-1-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.211488,
+        "gpu_main_raster_ms": 0.106256,
+        "gpu_light_tiles_ms": 0.105568,
+        "gpu_ms": 1.6223200000000002
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 64,
+      "repeat": 2,
+      "lighting": "forward",
+      "csv": "off-64-2-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.425408,
+        "gpu_main_raster_ms": 0.425408,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.9930080000000001
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 64,
+      "repeat": 2,
+      "lighting": "tiled",
+      "csv": "off-64-2-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.21464,
+        "gpu_main_raster_ms": 0.106544,
+        "gpu_light_tiles_ms": 0.10744000000000001,
+        "gpu_ms": 1.642912
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 64,
+      "repeat": 3,
+      "lighting": "forward",
+      "csv": "off-64-3-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.426048,
+        "gpu_main_raster_ms": 0.426048,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.909408
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 64,
+      "repeat": 3,
+      "lighting": "tiled",
+      "csv": "off-64-3-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.211712,
+        "gpu_main_raster_ms": 0.10624,
+        "gpu_light_tiles_ms": 0.10552,
+        "gpu_ms": 1.711824
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 128,
+      "repeat": 1,
+      "lighting": "forward",
+      "csv": "off-128-1-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.807728,
+        "gpu_main_raster_ms": 0.807728,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 2.309152
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 128,
+      "repeat": 1,
+      "lighting": "tiled",
+      "csv": "off-128-1-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.371696,
+        "gpu_main_raster_ms": 0.166064,
+        "gpu_light_tiles_ms": 0.2052,
+        "gpu_ms": 1.892928
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 128,
+      "repeat": 2,
+      "lighting": "forward",
+      "csv": "off-128-2-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.8158719999999999,
+        "gpu_main_raster_ms": 0.8158719999999999,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 2.2763679999999997
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 128,
+      "repeat": 2,
+      "lighting": "tiled",
+      "csv": "off-128-2-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.37136,
+        "gpu_main_raster_ms": 0.165936,
+        "gpu_light_tiles_ms": 0.205344,
+        "gpu_ms": 1.841696
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 128,
+      "repeat": 3,
+      "lighting": "forward",
+      "csv": "off-128-3-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.81464,
+        "gpu_main_raster_ms": 0.81464,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 2.180304
+      }
+    },
+    {
+      "shadows": "off",
+      "lights": 128,
+      "repeat": 3,
+      "lighting": "tiled",
+      "csv": "off-128-3-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.371648,
+        "gpu_main_raster_ms": 0.16622399999999998,
+        "gpu_light_tiles_ms": 0.205216,
+        "gpu_ms": 1.8378079999999999
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 32,
+      "repeat": 1,
+      "lighting": "forward",
+      "csv": "on-32-1-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.23641600000000002,
+        "gpu_main_raster_ms": 0.23641600000000002,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.695616
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 32,
+      "repeat": 1,
+      "lighting": "tiled",
+      "csv": "on-32-1-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.13319999999999999,
+        "gpu_main_raster_ms": 0.077904,
+        "gpu_light_tiles_ms": 0.055296,
+        "gpu_ms": 1.690272
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 32,
+      "repeat": 2,
+      "lighting": "forward",
+      "csv": "on-32-2-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.23664000000000002,
+        "gpu_main_raster_ms": 0.23664000000000002,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.81024
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 32,
+      "repeat": 2,
+      "lighting": "tiled",
+      "csv": "on-32-2-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.13416,
+        "gpu_main_raster_ms": 0.07867199999999999,
+        "gpu_light_tiles_ms": 0.055296,
+        "gpu_ms": 1.6156480000000002
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 32,
+      "repeat": 3,
+      "lighting": "forward",
+      "csv": "on-32-3-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.236448,
+        "gpu_main_raster_ms": 0.236448,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.6823839999999999
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 32,
+      "repeat": 3,
+      "lighting": "tiled",
+      "csv": "on-32-3-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.133984,
+        "gpu_main_raster_ms": 0.078192,
+        "gpu_light_tiles_ms": 0.055696,
+        "gpu_ms": 1.5440800000000001
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 64,
+      "repeat": 1,
+      "lighting": "forward",
+      "csv": "on-64-1-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.42913599999999996,
+        "gpu_main_raster_ms": 0.42913599999999996,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.853392
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 64,
+      "repeat": 1,
+      "lighting": "tiled",
+      "csv": "on-64-1-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.212992,
+        "gpu_main_raster_ms": 0.107872,
+        "gpu_light_tiles_ms": 0.10516800000000001,
+        "gpu_ms": 1.678448
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 64,
+      "repeat": 2,
+      "lighting": "forward",
+      "csv": "on-64-2-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.428864,
+        "gpu_main_raster_ms": 0.428864,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.894864
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 64,
+      "repeat": 2,
+      "lighting": "tiled",
+      "csv": "on-64-2-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.213344,
+        "gpu_main_raster_ms": 0.108336,
+        "gpu_light_tiles_ms": 0.10511999999999999,
+        "gpu_ms": 2.012384
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 64,
+      "repeat": 3,
+      "lighting": "forward",
+      "csv": "on-64-3-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.430608,
+        "gpu_main_raster_ms": 0.430608,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 1.8314080000000001
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 64,
+      "repeat": 3,
+      "lighting": "tiled",
+      "csv": "on-64-3-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.21401599999999998,
+        "gpu_main_raster_ms": 0.108128,
+        "gpu_light_tiles_ms": 0.106112,
+        "gpu_ms": 1.9066239999999999
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 128,
+      "repeat": 1,
+      "lighting": "forward",
+      "csv": "on-128-1-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.8138559999999999,
+        "gpu_main_raster_ms": 0.8138559999999999,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 2.1968319999999997
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 128,
+      "repeat": 1,
+      "lighting": "tiled",
+      "csv": "on-128-1-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.374272,
+        "gpu_main_raster_ms": 0.167712,
+        "gpu_light_tiles_ms": 0.20656,
+        "gpu_ms": 1.751056
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 128,
+      "repeat": 2,
+      "lighting": "forward",
+      "csv": "on-128-2-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.816048,
+        "gpu_main_raster_ms": 0.816048,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 2.2043679999999997
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 128,
+      "repeat": 2,
+      "lighting": "tiled",
+      "csv": "on-128-2-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.37230399999999997,
+        "gpu_main_raster_ms": 0.16731200000000002,
+        "gpu_light_tiles_ms": 0.2048,
+        "gpu_ms": 1.8207520000000001
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 128,
+      "repeat": 3,
+      "lighting": "forward",
+      "csv": "on-128-3-forward.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.8148960000000001,
+        "gpu_main_raster_ms": 0.8148960000000001,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_ms": 2.366624
+      }
+    },
+    {
+      "shadows": "on",
+      "lights": 128,
+      "repeat": 3,
+      "lighting": "tiled",
+      "csv": "on-128-3-tiled.csv",
+      "median_ms": {
+        "gpu_build_plus_raster_ms": 0.371536,
+        "gpu_main_raster_ms": 0.166896,
+        "gpu_light_tiles_ms": 0.204736,
+        "gpu_ms": 1.9256639999999998
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "shadows": "off",
+      "lights": 32,
+      "forward_median_ms": 0.234784,
+      "tiled_median_ms": 0.132688,
+      "delta_tiled_minus_forward_ms": -0.10209599999999999
+    },
+    {
+      "shadows": "off",
+      "lights": 64,
+      "forward_median_ms": 0.426048,
+      "tiled_median_ms": 0.211712,
+      "delta_tiled_minus_forward_ms": -0.21433599999999997
+    },
+    {
+      "shadows": "off",
+      "lights": 128,
+      "forward_median_ms": 0.81464,
+      "tiled_median_ms": 0.371648,
+      "delta_tiled_minus_forward_ms": -0.44299200000000005
+    },
+    {
+      "shadows": "on",
+      "lights": 32,
+      "forward_median_ms": 0.236448,
+      "tiled_median_ms": 0.133984,
+      "delta_tiled_minus_forward_ms": -0.102464
+    },
+    {
+      "shadows": "on",
+      "lights": 64,
+      "forward_median_ms": 0.42913599999999996,
+      "tiled_median_ms": 0.213344,
+      "delta_tiled_minus_forward_ms": -0.21579199999999996
+    },
+    {
+      "shadows": "on",
+      "lights": 128,
+      "forward_median_ms": 0.8148960000000001,
+      "tiled_median_ms": 0.37230399999999997,
+      "delta_tiled_minus_forward_ms": -0.4425920000000001
+    }
+  ]
+}

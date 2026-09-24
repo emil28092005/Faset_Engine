@@ -1,0 +1,3084 @@
+{
+  "format": "faset.p3-lighting-benchmark",
+  "version": 2,
+  "commit": "4a3453e2b1868555d833f578d43f48b8bc47d41a",
+  "warmup_frames_per_run": 10,
+  "measured_frames_per_run": 30,
+  "width": 1920,
+  "height": 1080,
+  "validation": "off",
+  "driver": "NVIDIA GeForce RTX 2080 Ti 595.84",
+  "source_revision": "4a3453e2b1868555d833f578d43f48b8bc47d41a",
+  "source_root": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3-integration",
+  "source_dirty": false,
+  "benchmark_sha256": "ceb4fbde8f65bad60a3eb4d24c917619769ff058c66851bc10748ef0af5b45fd",
+  "shader_bundle": {
+    "compatibility.spv": "83d519113c99c7b14cf92bc6e0e9867edd91da1f370f964df6ba978d51470a54",
+    "fragmentMain.reflection.json": "2b07af2aae7578bdb6c2aa22658538821608b1dd5aeddd7b06e42b2e78cedf12",
+    "fragmentMain.spv": "fea4dd48664a510bad12b5e8582f2db798d4dbea62ce0de35dc2acfe32372733",
+    "gpuCullMain.reflection.json": "8986a45a8d29743d16f0caece9181b18c85d6490d93b4a56cdb4f53052890f3f",
+    "gpuCullMain.spv": "e5ea6589ddb3613b59f8e58420be95a534cf4149816bc65bae26b1395c638955",
+    "gpuHzbMain.reflection.json": "589818f670881c64f3aba726ee3bc82fe4b9d835a347f99134e0e157dc4a112e",
+    "gpuHzbMain.spv": "08682362ee2120ed19d260e613285071747c3e436bb09bb6238e46f9cedc2308",
+    "gpuPostCullMain.reflection.json": "19ce128388c7f88e0c517fb58a25e46f1382e35ae5f376b10eebe155a2811c4c",
+    "gpuPostCullMain.spv": "1f8edd3be1f99f9433494a6f7be68f1317d6e7099e19354a7b8130d5d932224d",
+    "gpuShadowMain.reflection.json": "96b3620b163dadf214933cfba6600b1b6a835c4d98b75b1f83e6ccd3dedb2425",
+    "gpuShadowMain.spv": "f56e0ae3e9b31cb1e3f24e379c81e11c853f8a7102648aaaebc92a17c7e8e53c",
+    "gpuTemporalVertexMain.reflection.json": "7a8efe2645e7ce465ca44d19f8cfb2eb6c767abd1c3ce12ed69a149a50be8a8c",
+    "gpuTemporalVertexMain.spv": "dfe7309aafbd41974668b295e179354965db440e4156b9f12d6a67db16b357f9",
+    "gpuVertexMain.reflection.json": "01a6cc1bbf3c11c558560d6f8557fd4582d392906ed20a8c729673d0ebf640ed",
+    "gpuVertexMain.spv": "32421d4a91f3a88d5210fee7af34b48bcad83072f14e2ccb9ef2ff983e45f78f",
+    "lightTileMain.reflection.json": "bf6a9256aaa6d6edacfa1e1c265d7c8ce2c1e4ea4036e0bea078c22fd4b536ca",
+    "lightTileMain.spv": "92850edcc5ee5b586a90ce84ee69a98075a6fff3c13db4a57528d9431afe8b68",
+    "shadowMain.reflection.json": "d39e2f83c797589296eac9dce139b9ad836a895d6685bc40f79dd2609d687fee",
+    "shadowMain.spv": "7643b4d688492b5ee923b9606f0b0e70343ca05fa67673838206119a6f86d8d8",
+    "temporalCompositeFragmentMain.reflection.json": "44765a41fc362c9a97b1a19834f285e2e7facb24d8715e3d8559b8e9633a7a0e",
+    "temporalCompositeFragmentMain.spv": "9e21c8534c0e70a58ae018fb2d143bf9cfb70112e71b67585f525eef0aecad1b",
+    "temporalCompositeVertexMain.reflection.json": "a3a2ea858bd038423896043b0703704f707addceb5bd56721cd897f6bd092065",
+    "temporalCompositeVertexMain.spv": "6b19f65b64f40d0a249660fdfba9dd5d95831ffab7314a307bf1f5cf39c6a248",
+    "temporalFragmentMain.reflection.json": "e36452227788f3703d7342b6d9a7a0efef74ce4da3aa96bb176a26e169ec3628",
+    "temporalFragmentMain.spv": "03adc6673276979b3ea46becf3a36940d3061af77cb8c965c7471feff8dbf89a",
+    "temporalResolveMain.reflection.json": "9407ee1522f32df231d996ea691224863c023c1ca42cc02ccd7e16de1d873082",
+    "temporalResolveMain.spv": "4c5fc0da7a4c424e5426694c2c2d9f3cd17d1a64066712f5defe882ad8776662",
+    "temporalVertexMain.reflection.json": "6f7812ce88b14bca62a6d2ad82a8657e2ee48c252558f34677c6a2bd980a7edb",
+    "temporalVertexMain.spv": "6cc3535c952a33ee46fd417fbec7fcad8f24357508b2119256b3077be3d60955",
+    "vertexMain.reflection.json": "b3bdff863d53a0b385e06a36701a83a6ecafe9a93e97281a732cce8ff862c0db",
+    "vertexMain.spv": "1ad2631c35d654f48166321ae43d4165043e1b919b14f1dc61caf97b1ada0898"
+  },
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "lighting_path": "mixed",
+  "requested_lighting": "tiled",
+  "validation_enabled": false,
+  "build_configuration": "Release",
+  "run_order": [
+    "shadows-off_direct_lights-000_run-1.csv",
+    "shadows-off_direct_lights-032_run-1.csv",
+    "shadows-off_direct_lights-004_run-1.csv",
+    "shadows-off_direct_lights-064_run-1.csv",
+    "shadows-off_direct_lights-016_run-1.csv",
+    "shadows-off_direct_lights-128_run-1.csv",
+    "shadows-off_gpu-frustum_lights-000_run-1.csv",
+    "shadows-off_gpu-frustum_lights-032_run-1.csv",
+    "shadows-off_gpu-frustum_lights-004_run-1.csv",
+    "shadows-off_gpu-frustum_lights-064_run-1.csv",
+    "shadows-off_gpu-frustum_lights-016_run-1.csv",
+    "shadows-off_gpu-frustum_lights-128_run-1.csv",
+    "shadows-off_gpu-occlusion_lights-000_run-1.csv",
+    "shadows-off_gpu-occlusion_lights-032_run-1.csv",
+    "shadows-off_gpu-occlusion_lights-004_run-1.csv",
+    "shadows-off_gpu-occlusion_lights-064_run-1.csv",
+    "shadows-off_gpu-occlusion_lights-016_run-1.csv",
+    "shadows-off_gpu-occlusion_lights-128_run-1.csv",
+    "shadows-off_direct_lights-000_run-2.csv",
+    "shadows-off_direct_lights-032_run-2.csv",
+    "shadows-off_direct_lights-004_run-2.csv",
+    "shadows-off_direct_lights-064_run-2.csv",
+    "shadows-off_direct_lights-016_run-2.csv",
+    "shadows-off_direct_lights-128_run-2.csv",
+    "shadows-off_gpu-frustum_lights-000_run-2.csv",
+    "shadows-off_gpu-frustum_lights-032_run-2.csv",
+    "shadows-off_gpu-frustum_lights-004_run-2.csv",
+    "shadows-off_gpu-frustum_lights-064_run-2.csv",
+    "shadows-off_gpu-frustum_lights-016_run-2.csv",
+    "shadows-off_gpu-frustum_lights-128_run-2.csv",
+    "shadows-off_gpu-occlusion_lights-000_run-2.csv",
+    "shadows-off_gpu-occlusion_lights-032_run-2.csv",
+    "shadows-off_gpu-occlusion_lights-004_run-2.csv",
+    "shadows-off_gpu-occlusion_lights-064_run-2.csv",
+    "shadows-off_gpu-occlusion_lights-016_run-2.csv",
+    "shadows-off_gpu-occlusion_lights-128_run-2.csv",
+    "shadows-off_direct_lights-000_run-3.csv",
+    "shadows-off_direct_lights-032_run-3.csv",
+    "shadows-off_direct_lights-004_run-3.csv",
+    "shadows-off_direct_lights-064_run-3.csv",
+    "shadows-off_direct_lights-016_run-3.csv",
+    "shadows-off_direct_lights-128_run-3.csv",
+    "shadows-off_gpu-frustum_lights-000_run-3.csv",
+    "shadows-off_gpu-frustum_lights-032_run-3.csv",
+    "shadows-off_gpu-frustum_lights-004_run-3.csv",
+    "shadows-off_gpu-frustum_lights-064_run-3.csv",
+    "shadows-off_gpu-frustum_lights-016_run-3.csv",
+    "shadows-off_gpu-frustum_lights-128_run-3.csv",
+    "shadows-off_gpu-occlusion_lights-000_run-3.csv",
+    "shadows-off_gpu-occlusion_lights-032_run-3.csv",
+    "shadows-off_gpu-occlusion_lights-004_run-3.csv",
+    "shadows-off_gpu-occlusion_lights-064_run-3.csv",
+    "shadows-off_gpu-occlusion_lights-016_run-3.csv",
+    "shadows-off_gpu-occlusion_lights-128_run-3.csv",
+    "shadows-on_direct_lights-000_run-1.csv",
+    "shadows-on_direct_lights-032_run-1.csv",
+    "shadows-on_direct_lights-004_run-1.csv",
+    "shadows-on_direct_lights-064_run-1.csv",
+    "shadows-on_direct_lights-016_run-1.csv",
+    "shadows-on_direct_lights-128_run-1.csv",
+    "shadows-on_gpu-frustum_lights-000_run-1.csv",
+    "shadows-on_gpu-frustum_lights-032_run-1.csv",
+    "shadows-on_gpu-frustum_lights-004_run-1.csv",
+    "shadows-on_gpu-frustum_lights-064_run-1.csv",
+    "shadows-on_gpu-frustum_lights-016_run-1.csv",
+    "shadows-on_gpu-frustum_lights-128_run-1.csv",
+    "shadows-on_gpu-occlusion_lights-000_run-1.csv",
+    "shadows-on_gpu-occlusion_lights-032_run-1.csv",
+    "shadows-on_gpu-occlusion_lights-004_run-1.csv",
+    "shadows-on_gpu-occlusion_lights-064_run-1.csv",
+    "shadows-on_gpu-occlusion_lights-016_run-1.csv",
+    "shadows-on_gpu-occlusion_lights-128_run-1.csv",
+    "shadows-on_direct_lights-000_run-2.csv",
+    "shadows-on_direct_lights-032_run-2.csv",
+    "shadows-on_direct_lights-004_run-2.csv",
+    "shadows-on_direct_lights-064_run-2.csv",
+    "shadows-on_direct_lights-016_run-2.csv",
+    "shadows-on_direct_lights-128_run-2.csv",
+    "shadows-on_gpu-frustum_lights-000_run-2.csv",
+    "shadows-on_gpu-frustum_lights-032_run-2.csv",
+    "shadows-on_gpu-frustum_lights-004_run-2.csv",
+    "shadows-on_gpu-frustum_lights-064_run-2.csv",
+    "shadows-on_gpu-frustum_lights-016_run-2.csv",
+    "shadows-on_gpu-frustum_lights-128_run-2.csv",
+    "shadows-on_gpu-occlusion_lights-000_run-2.csv",
+    "shadows-on_gpu-occlusion_lights-032_run-2.csv",
+    "shadows-on_gpu-occlusion_lights-004_run-2.csv",
+    "shadows-on_gpu-occlusion_lights-064_run-2.csv",
+    "shadows-on_gpu-occlusion_lights-016_run-2.csv",
+    "shadows-on_gpu-occlusion_lights-128_run-2.csv",
+    "shadows-on_direct_lights-000_run-3.csv",
+    "shadows-on_direct_lights-032_run-3.csv",
+    "shadows-on_direct_lights-004_run-3.csv",
+    "shadows-on_direct_lights-064_run-3.csv",
+    "shadows-on_direct_lights-016_run-3.csv",
+    "shadows-on_direct_lights-128_run-3.csv",
+    "shadows-on_gpu-frustum_lights-000_run-3.csv",
+    "shadows-on_gpu-frustum_lights-032_run-3.csv",
+    "shadows-on_gpu-frustum_lights-004_run-3.csv",
+    "shadows-on_gpu-frustum_lights-064_run-3.csv",
+    "shadows-on_gpu-frustum_lights-016_run-3.csv",
+    "shadows-on_gpu-frustum_lights-128_run-3.csv",
+    "shadows-on_gpu-occlusion_lights-000_run-3.csv",
+    "shadows-on_gpu-occlusion_lights-032_run-3.csv",
+    "shadows-on_gpu-occlusion_lights-004_run-3.csv",
+    "shadows-on_gpu-occlusion_lights-064_run-3.csv",
+    "shadows-on_gpu-occlusion_lights-016_run-3.csv",
+    "shadows-on_gpu-occlusion_lights-128_run-3.csv"
+  ],
+  "runs_completed": 108,
+  "rows": 3240,
+  "configurations": [
+    {
+      "shadows": "off",
+      "visibility": "direct",
+      "light_count": 0,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.045472,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.6528,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.1337010000000003,
+            "readback_cpu_ms": 0.8867525,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.045472,
+            "forward_raster_ms": 0.045472
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.03608,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.616816,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.137328,
+            "readback_cpu_ms": 0.9010750000000001,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.03608,
+            "forward_raster_ms": 0.03608
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.03608,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.51624,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.0055639999999997,
+            "readback_cpu_ms": 0.918933,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.03608,
+            "forward_raster_ms": 0.03608
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.03608,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.616816,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.1337010000000003,
+        "readback_cpu_ms": 0.9010750000000001,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.03608,
+        "forward_raster_ms": 0.03608
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.04624,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.214432,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.781523,
+        "readback_cpu_ms": 1.02284,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.04624,
+        "forward_raster_ms": 0.04624
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "direct",
+      "light_count": 4,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.096256,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.535488,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.1445665,
+            "readback_cpu_ms": 0.9071359999999999,
+            "gpu_light_tiles_ms": 0.012896,
+            "gpu_build_plus_raster_ms": 0.109104,
+            "forward_raster_ms": 0.096256
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.095968,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.48824,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.0107495,
+            "readback_cpu_ms": 0.925566,
+            "gpu_light_tiles_ms": 0.01312,
+            "gpu_build_plus_raster_ms": 0.108864,
+            "forward_raster_ms": 0.095968
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.09616,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.699184,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.2482875,
+            "readback_cpu_ms": 1.0222375000000001,
+            "gpu_light_tiles_ms": 0.013104000000000001,
+            "gpu_build_plus_raster_ms": 0.109152,
+            "forward_raster_ms": 0.09616
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.09616,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.535488,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.1445665,
+        "readback_cpu_ms": 0.925566,
+        "gpu_light_tiles_ms": 0.013104000000000001,
+        "gpu_build_plus_raster_ms": 0.109104,
+        "forward_raster_ms": 0.09616
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.097664,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.054336,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.57862,
+        "readback_cpu_ms": 1.199743,
+        "gpu_light_tiles_ms": 0.013888,
+        "gpu_build_plus_raster_ms": 0.110592,
+        "forward_raster_ms": 0.097664
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "direct",
+      "light_count": 16,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.289424,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.839152,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.282672,
+            "readback_cpu_ms": 0.9550365000000001,
+            "gpu_light_tiles_ms": 0.034367999999999996,
+            "gpu_build_plus_raster_ms": 0.3236,
+            "forward_raster_ms": 0.289424
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.289744,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.74448,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.3519930000000002,
+            "readback_cpu_ms": 0.971743,
+            "gpu_light_tiles_ms": 0.03392,
+            "gpu_build_plus_raster_ms": 0.323584,
+            "forward_raster_ms": 0.289744
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.2904,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.839952,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.2531765000000004,
+            "readback_cpu_ms": 0.9089895,
+            "gpu_light_tiles_ms": 0.034288,
+            "gpu_build_plus_raster_ms": 0.32408000000000003,
+            "forward_raster_ms": 0.2904
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.289744,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.839152,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.282672,
+        "readback_cpu_ms": 0.9550365000000001,
+        "gpu_light_tiles_ms": 0.034288,
+        "gpu_build_plus_raster_ms": 0.3236,
+        "forward_raster_ms": 0.289744
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.291296,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.401568,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.799217,
+        "readback_cpu_ms": 1.079536,
+        "gpu_light_tiles_ms": 0.034816,
+        "gpu_build_plus_raster_ms": 0.325888,
+        "forward_raster_ms": 0.291296
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "direct",
+      "light_count": 32,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.553296,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.018784,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.564774,
+            "readback_cpu_ms": 0.976432,
+            "gpu_light_tiles_ms": 0.062192,
+            "gpu_build_plus_raster_ms": 0.6157440000000001,
+            "forward_raster_ms": 0.553296
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.554064,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.976512,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.3647020000000003,
+            "readback_cpu_ms": 0.874675,
+            "gpu_light_tiles_ms": 0.062112,
+            "gpu_build_plus_raster_ms": 0.616064,
+            "forward_raster_ms": 0.554064
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.554352,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.9749919999999999,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.4517515,
+            "readback_cpu_ms": 0.9466255,
+            "gpu_light_tiles_ms": 0.061744,
+            "gpu_build_plus_raster_ms": 0.61608,
+            "forward_raster_ms": 0.554352
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.554064,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.976512,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.4517515,
+        "readback_cpu_ms": 0.9466255,
+        "gpu_light_tiles_ms": 0.062112,
+        "gpu_build_plus_raster_ms": 0.616064,
+        "forward_raster_ms": 0.554064
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.55776,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.25872,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.820376,
+        "readback_cpu_ms": 1.052285,
+        "gpu_light_tiles_ms": 0.062912,
+        "gpu_build_plus_raster_ms": 0.620384,
+        "forward_raster_ms": 0.55776
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "direct",
+      "light_count": 64,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.0784,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.1336320000000004,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.6051725,
+            "readback_cpu_ms": 1.015245,
+            "gpu_light_tiles_ms": 0.11849599999999999,
+            "gpu_build_plus_raster_ms": 1.1968480000000001,
+            "forward_raster_ms": 1.0784
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.078768,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.216048,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.6919005,
+            "readback_cpu_ms": 0.9837405,
+            "gpu_light_tiles_ms": 0.11856,
+            "gpu_build_plus_raster_ms": 1.197376,
+            "forward_raster_ms": 1.078768
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.0749119999999999,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.20336,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.6374175,
+            "readback_cpu_ms": 0.915341,
+            "gpu_light_tiles_ms": 0.11784,
+            "gpu_build_plus_raster_ms": 1.1925919999999999,
+            "forward_raster_ms": 1.0749119999999999
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 1.0784,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.20336,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 4.6374175,
+        "readback_cpu_ms": 0.9837405,
+        "gpu_light_tiles_ms": 0.11849599999999999,
+        "gpu_build_plus_raster_ms": 1.1968480000000001,
+        "forward_raster_ms": 1.0784
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 1.08336,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.705984,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 5.209276,
+        "readback_cpu_ms": 1.252012,
+        "gpu_light_tiles_ms": 0.120032,
+        "gpu_build_plus_raster_ms": 1.20384,
+        "forward_raster_ms": 1.08336
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "direct",
+      "light_count": 128,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.12232,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.669936,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.4123655,
+            "readback_cpu_ms": 1.0408985,
+            "gpu_light_tiles_ms": 0.224048,
+            "gpu_build_plus_raster_ms": 2.347392,
+            "forward_raster_ms": 2.12232
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.120608,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.589472000000001,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.4274845,
+            "readback_cpu_ms": 1.0616725,
+            "gpu_light_tiles_ms": 0.224688,
+            "gpu_build_plus_raster_ms": 2.34504,
+            "forward_raster_ms": 2.120608
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.123952,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.7463999999999995,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.5350015,
+            "readback_cpu_ms": 1.109102,
+            "gpu_light_tiles_ms": 0.222512,
+            "gpu_build_plus_raster_ms": 2.346016,
+            "forward_raster_ms": 2.123952
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 2.12232,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 4.669936,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 6.4274845,
+        "readback_cpu_ms": 1.0616725,
+        "gpu_light_tiles_ms": 0.224048,
+        "gpu_build_plus_raster_ms": 2.346016,
+        "forward_raster_ms": 2.12232
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 2.14016,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 5.005632,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 6.837417,
+        "readback_cpu_ms": 1.470534,
+        "gpu_light_tiles_ms": 0.229056,
+        "gpu_build_plus_raster_ms": 2.363392,
+        "forward_raster_ms": 2.14016
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-frustum",
+      "light_count": 0,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034224000000000004,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.521616,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.121543,
+            "readback_cpu_ms": 0.884784,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.034224000000000004,
+            "forward_raster_ms": 0.034224000000000004
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.033936,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.570192,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.0411010000000003,
+            "readback_cpu_ms": 0.8995765,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.033936,
+            "forward_raster_ms": 0.033936
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034416,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.614064,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.1444215,
+            "readback_cpu_ms": 0.8967514999999999,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.034416,
+            "forward_raster_ms": 0.034416
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.034224000000000004,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.570192,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.121543,
+        "readback_cpu_ms": 0.8967514999999999,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.034224000000000004,
+        "forward_raster_ms": 0.034224000000000004
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.034912,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.912512,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.388201,
+        "readback_cpu_ms": 1.101097,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.034912,
+        "forward_raster_ms": 0.034912
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-frustum",
+      "light_count": 4,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.0948,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.6262720000000002,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.057202,
+            "readback_cpu_ms": 0.9329095000000001,
+            "gpu_light_tiles_ms": 0.01304,
+            "gpu_build_plus_raster_ms": 0.108112,
+            "forward_raster_ms": 0.0948
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.094624,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.484224,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 2.951332,
+            "readback_cpu_ms": 0.930791,
+            "gpu_light_tiles_ms": 0.013136,
+            "gpu_build_plus_raster_ms": 0.107792,
+            "forward_raster_ms": 0.094624
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.09540799999999999,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.51984,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.1229005,
+            "readback_cpu_ms": 0.9725245,
+            "gpu_light_tiles_ms": 0.013184000000000001,
+            "gpu_build_plus_raster_ms": 0.108688,
+            "forward_raster_ms": 0.09540799999999999
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.0948,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.51984,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.057202,
+        "readback_cpu_ms": 0.9329095000000001,
+        "gpu_light_tiles_ms": 0.013136,
+        "gpu_build_plus_raster_ms": 0.108112,
+        "forward_raster_ms": 0.0948
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.09632,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.041184,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.647219,
+        "readback_cpu_ms": 1.190215,
+        "gpu_light_tiles_ms": 0.01376,
+        "gpu_build_plus_raster_ms": 0.110144,
+        "forward_raster_ms": 0.09632
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-frustum",
+      "light_count": 16,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.28627199999999997,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.902496,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.3622875,
+            "readback_cpu_ms": 0.9432595,
+            "gpu_light_tiles_ms": 0.0344,
+            "gpu_build_plus_raster_ms": 0.320608,
+            "forward_raster_ms": 0.28627199999999997
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.286576,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.722928,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.434934,
+            "readback_cpu_ms": 0.9894864999999999,
+            "gpu_light_tiles_ms": 0.0344,
+            "gpu_build_plus_raster_ms": 0.32104,
+            "forward_raster_ms": 0.286576
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.28867200000000004,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.7377600000000002,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.3971835,
+            "readback_cpu_ms": 0.925591,
+            "gpu_light_tiles_ms": 0.034336,
+            "gpu_build_plus_raster_ms": 0.323088,
+            "forward_raster_ms": 0.28867200000000004
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.286576,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.7377600000000002,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.3971835,
+        "readback_cpu_ms": 0.9432595,
+        "gpu_light_tiles_ms": 0.0344,
+        "gpu_build_plus_raster_ms": 0.32104,
+        "forward_raster_ms": 0.286576
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.290016,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.181632,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.716861,
+        "readback_cpu_ms": 1.08161,
+        "gpu_light_tiles_ms": 0.034976,
+        "gpu_build_plus_raster_ms": 0.324832,
+        "forward_raster_ms": 0.290016
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-frustum",
+      "light_count": 32,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.5542400000000001,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.9812319999999999,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.412773,
+            "readback_cpu_ms": 0.943685,
+            "gpu_light_tiles_ms": 0.061904,
+            "gpu_build_plus_raster_ms": 0.616752,
+            "forward_raster_ms": 0.5542400000000001
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.555024,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.20648,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.6444039999999998,
+            "readback_cpu_ms": 0.922685,
+            "gpu_light_tiles_ms": 0.062368,
+            "gpu_build_plus_raster_ms": 0.617728,
+            "forward_raster_ms": 0.555024
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.5585439999999999,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.1333599999999997,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.6629899999999997,
+            "readback_cpu_ms": 0.9040255,
+            "gpu_light_tiles_ms": 0.06256,
+            "gpu_build_plus_raster_ms": 0.620976,
+            "forward_raster_ms": 0.5585439999999999
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.555024,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.1333599999999997,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.6444039999999998,
+        "readback_cpu_ms": 0.922685,
+        "gpu_light_tiles_ms": 0.062368,
+        "gpu_build_plus_raster_ms": 0.617728,
+        "forward_raster_ms": 0.555024
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.56048,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.437088,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 4.000406,
+        "readback_cpu_ms": 1.069949,
+        "gpu_light_tiles_ms": 0.063456,
+        "gpu_build_plus_raster_ms": 0.625152,
+        "forward_raster_ms": 0.56048
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-frustum",
+      "light_count": 64,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.07632,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.09112,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.7538225,
+            "readback_cpu_ms": 0.997662,
+            "gpu_light_tiles_ms": 0.117696,
+            "gpu_build_plus_raster_ms": 1.194432,
+            "forward_raster_ms": 1.07632
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.077056,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.997264,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.5650055,
+            "readback_cpu_ms": 0.8897634999999999,
+            "gpu_light_tiles_ms": 0.118784,
+            "gpu_build_plus_raster_ms": 1.1959520000000001,
+            "forward_raster_ms": 1.077056
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.0815839999999999,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.1890720000000004,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.615807,
+            "readback_cpu_ms": 0.9975915,
+            "gpu_light_tiles_ms": 0.118512,
+            "gpu_build_plus_raster_ms": 1.20024,
+            "forward_raster_ms": 1.0815839999999999
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 1.077056,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.09112,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 4.615807,
+        "readback_cpu_ms": 0.9975915,
+        "gpu_light_tiles_ms": 0.118512,
+        "gpu_build_plus_raster_ms": 1.1959520000000001,
+        "forward_raster_ms": 1.077056
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 1.085024,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.536768,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 5.316108,
+        "readback_cpu_ms": 1.253795,
+        "gpu_light_tiles_ms": 0.11984,
+        "gpu_build_plus_raster_ms": 1.203872,
+        "forward_raster_ms": 1.085024
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-frustum",
+      "light_count": 128,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.112384,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.641712,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.3513505,
+            "readback_cpu_ms": 1.104924,
+            "gpu_light_tiles_ms": 0.222528,
+            "gpu_build_plus_raster_ms": 2.337072,
+            "forward_raster_ms": 2.112384
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.106144,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.617488,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.280317,
+            "readback_cpu_ms": 1.0030765,
+            "gpu_light_tiles_ms": 0.223072,
+            "gpu_build_plus_raster_ms": 2.32952,
+            "forward_raster_ms": 2.106144
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.126416,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.404816,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.281559,
+            "readback_cpu_ms": 1.0330135,
+            "gpu_light_tiles_ms": 0.224224,
+            "gpu_build_plus_raster_ms": 2.352464,
+            "forward_raster_ms": 2.126416
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 2.112384,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 4.617488,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 6.281559,
+        "readback_cpu_ms": 1.0330135,
+        "gpu_light_tiles_ms": 0.223072,
+        "gpu_build_plus_raster_ms": 2.337072,
+        "forward_raster_ms": 2.112384
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 2.132448,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 5.02672,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 7.031033,
+        "readback_cpu_ms": 1.465694,
+        "gpu_light_tiles_ms": 0.235392,
+        "gpu_build_plus_raster_ms": 2.35792,
+        "forward_raster_ms": 2.132448
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-occlusion",
+      "light_count": 0,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034128000000000006,
+            "gpu_post_raster_ms": 0.005728,
+            "gpu_ms": 1.710976,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.512661,
+            "readback_cpu_ms": 1.0816955,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.039760000000000004,
+            "forward_raster_ms": 0.039760000000000004
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034128,
+            "gpu_post_raster_ms": 0.005696,
+            "gpu_ms": 1.952112,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.4380555,
+            "readback_cpu_ms": 0.947948,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.039616,
+            "forward_raster_ms": 0.039616
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034352,
+            "gpu_post_raster_ms": 0.005744,
+            "gpu_ms": 1.783744,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.1545955,
+            "readback_cpu_ms": 0.927354,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.039856,
+            "forward_raster_ms": 0.039856
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.034128000000000006,
+        "gpu_post_raster_ms": 0.005728,
+        "gpu_ms": 1.783744,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.4380555,
+        "readback_cpu_ms": 0.947948,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.039760000000000004,
+        "forward_raster_ms": 0.039760000000000004
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.03472,
+        "gpu_post_raster_ms": 0.006016,
+        "gpu_ms": 2.210656,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.860983,
+        "readback_cpu_ms": 1.236122,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.04048,
+        "forward_raster_ms": 0.040479999999999995
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-occlusion",
+      "light_count": 4,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.094624,
+            "gpu_post_raster_ms": 0.005632,
+            "gpu_ms": 1.962464,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.4504785,
+            "readback_cpu_ms": 0.9254155,
+            "gpu_light_tiles_ms": 0.01296,
+            "gpu_build_plus_raster_ms": 0.113168,
+            "forward_raster_ms": 0.100144
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.09384,
+            "gpu_post_raster_ms": 0.005632,
+            "gpu_ms": 1.798496,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.340341,
+            "readback_cpu_ms": 0.8770290000000001,
+            "gpu_light_tiles_ms": 0.013024,
+            "gpu_build_plus_raster_ms": 0.11235200000000001,
+            "forward_raster_ms": 0.09939200000000001
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.095296,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 1.8089279999999999,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.2706394999999997,
+            "readback_cpu_ms": 0.8792735,
+            "gpu_light_tiles_ms": 0.012944,
+            "gpu_build_plus_raster_ms": 0.11368,
+            "forward_raster_ms": 0.10073599999999999
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.094624,
+        "gpu_post_raster_ms": 0.005632,
+        "gpu_ms": 1.8089279999999999,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.340341,
+        "readback_cpu_ms": 0.8792735,
+        "gpu_light_tiles_ms": 0.01296,
+        "gpu_build_plus_raster_ms": 0.113168,
+        "forward_raster_ms": 0.100144
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.104704,
+        "gpu_post_raster_ms": 0.005888,
+        "gpu_ms": 2.39856,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.844411,
+        "readback_cpu_ms": 1.054419,
+        "gpu_light_tiles_ms": 0.013792,
+        "gpu_build_plus_raster_ms": 0.123296,
+        "forward_raster_ms": 0.110432
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-occlusion",
+      "light_count": 16,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.285472,
+            "gpu_post_raster_ms": 0.005376,
+            "gpu_ms": 1.9912480000000001,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.431323,
+            "readback_cpu_ms": 0.9055275,
+            "gpu_light_tiles_ms": 0.0344,
+            "gpu_build_plus_raster_ms": 0.325312,
+            "forward_raster_ms": 0.290912
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.285536,
+            "gpu_post_raster_ms": 0.0056159999999999995,
+            "gpu_ms": 1.9287999999999998,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.4515455,
+            "readback_cpu_ms": 0.9221195,
+            "gpu_light_tiles_ms": 0.033856,
+            "gpu_build_plus_raster_ms": 0.324768,
+            "forward_raster_ms": 0.29088
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.287216,
+            "gpu_post_raster_ms": 0.005632,
+            "gpu_ms": 1.826144,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.3938315,
+            "readback_cpu_ms": 0.937654,
+            "gpu_light_tiles_ms": 0.034144,
+            "gpu_build_plus_raster_ms": 0.327136,
+            "forward_raster_ms": 0.292608
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.285536,
+        "gpu_post_raster_ms": 0.0056159999999999995,
+        "gpu_ms": 1.9287999999999998,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.431323,
+        "readback_cpu_ms": 0.9221195,
+        "gpu_light_tiles_ms": 0.034144,
+        "gpu_build_plus_raster_ms": 0.325312,
+        "forward_raster_ms": 0.290912
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.288736,
+        "gpu_post_raster_ms": 0.005856,
+        "gpu_ms": 2.28384,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.94454,
+        "readback_cpu_ms": 1.17174,
+        "gpu_light_tiles_ms": 0.03488,
+        "gpu_build_plus_raster_ms": 0.336224,
+        "forward_raster_ms": 0.29420799999999997
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-occlusion",
+      "light_count": 32,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.554512,
+            "gpu_post_raster_ms": 0.005536,
+            "gpu_ms": 2.26928,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.781072,
+            "readback_cpu_ms": 0.9590544999999999,
+            "gpu_light_tiles_ms": 0.062368,
+            "gpu_build_plus_raster_ms": 0.62232,
+            "forward_raster_ms": 0.559904
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.554624,
+            "gpu_post_raster_ms": 0.005632,
+            "gpu_ms": 2.1637120000000003,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.757302,
+            "readback_cpu_ms": 0.961754,
+            "gpu_light_tiles_ms": 0.061808,
+            "gpu_build_plus_raster_ms": 0.62232,
+            "forward_raster_ms": 0.5600480000000001
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.5578080000000001,
+            "gpu_post_raster_ms": 0.005552,
+            "gpu_ms": 2.165088,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.6285245,
+            "readback_cpu_ms": 0.8421540000000001,
+            "gpu_light_tiles_ms": 0.062287999999999996,
+            "gpu_build_plus_raster_ms": 0.62616,
+            "forward_raster_ms": 0.5633440000000001
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.554624,
+        "gpu_post_raster_ms": 0.005552,
+        "gpu_ms": 2.165088,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.757302,
+        "readback_cpu_ms": 0.9590544999999999,
+        "gpu_light_tiles_ms": 0.062287999999999996,
+        "gpu_build_plus_raster_ms": 0.62232,
+        "forward_raster_ms": 0.5600480000000001
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.560064,
+        "gpu_post_raster_ms": 0.005984,
+        "gpu_ms": 2.697248,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 4.329907,
+        "readback_cpu_ms": 1.193892,
+        "gpu_light_tiles_ms": 0.063104,
+        "gpu_build_plus_raster_ms": 0.63376,
+        "forward_raster_ms": 0.567392
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-occlusion",
+      "light_count": 64,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.078128,
+            "gpu_post_raster_ms": 0.005632,
+            "gpu_ms": 3.3941280000000003,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.9687275,
+            "readback_cpu_ms": 0.9265479999999999,
+            "gpu_light_tiles_ms": 0.118016,
+            "gpu_build_plus_raster_ms": 1.2016,
+            "forward_raster_ms": 1.0835679999999999
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.076784,
+            "gpu_post_raster_ms": 0.005648,
+            "gpu_ms": 3.382384,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.7877115,
+            "readback_cpu_ms": 0.8927345,
+            "gpu_light_tiles_ms": 0.11819199999999999,
+            "gpu_build_plus_raster_ms": 1.200544,
+            "forward_raster_ms": 1.0822880000000001
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.085376,
+            "gpu_post_raster_ms": 0.005632,
+            "gpu_ms": 3.394544,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 4.778554,
+            "readback_cpu_ms": 0.945118,
+            "gpu_light_tiles_ms": 0.118704,
+            "gpu_build_plus_raster_ms": 1.209824,
+            "forward_raster_ms": 1.0909119999999999
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 1.078128,
+        "gpu_post_raster_ms": 0.005632,
+        "gpu_ms": 3.3941280000000003,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 4.7877115,
+        "readback_cpu_ms": 0.9265479999999999,
+        "gpu_light_tiles_ms": 0.11819199999999999,
+        "gpu_build_plus_raster_ms": 1.2016,
+        "forward_raster_ms": 1.0835679999999999
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 1.089504,
+        "gpu_post_raster_ms": 0.005952,
+        "gpu_ms": 3.891872,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 5.56656,
+        "readback_cpu_ms": 1.198019,
+        "gpu_light_tiles_ms": 0.12,
+        "gpu_build_plus_raster_ms": 1.214176,
+        "forward_raster_ms": 1.095136
+      }
+    },
+    {
+      "shadows": "off",
+      "visibility": "gpu-occlusion",
+      "light_count": 128,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.111792,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 4.905792,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.5895905,
+            "readback_cpu_ms": 0.9764465,
+            "gpu_light_tiles_ms": 0.222752,
+            "gpu_build_plus_raster_ms": 2.3392,
+            "forward_raster_ms": 2.117344
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.1043200000000004,
+            "gpu_post_raster_ms": 0.0056,
+            "gpu_ms": 4.92832,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.749076,
+            "readback_cpu_ms": 1.1073135,
+            "gpu_light_tiles_ms": 0.22299200000000002,
+            "gpu_build_plus_raster_ms": 2.332864,
+            "forward_raster_ms": 2.1099680000000003
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.12552,
+            "gpu_post_raster_ms": 0.0056,
+            "gpu_ms": 5.045792,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 6.595060500000001,
+            "readback_cpu_ms": 0.9804495,
+            "gpu_light_tiles_ms": 0.224,
+            "gpu_build_plus_raster_ms": 2.354496,
+            "forward_raster_ms": 2.1307039999999997
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 2.111792,
+        "gpu_post_raster_ms": 0.0056,
+        "gpu_ms": 4.92832,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 6.595060500000001,
+        "readback_cpu_ms": 0.9804495,
+        "gpu_light_tiles_ms": 0.22299200000000002,
+        "gpu_build_plus_raster_ms": 2.3392,
+        "forward_raster_ms": 2.117344
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 2.12976,
+        "gpu_post_raster_ms": 0.005856,
+        "gpu_ms": 5.175424,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 7.033026,
+        "readback_cpu_ms": 1.303609,
+        "gpu_light_tiles_ms": 0.22752,
+        "gpu_build_plus_raster_ms": 2.361312,
+        "forward_raster_ms": 2.136832
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "direct",
+      "light_count": 0,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.036336,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.539312,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.2036024999999997,
+            "readback_cpu_ms": 0.9893915,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.036336,
+            "forward_raster_ms": 0.036336
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.036239999999999994,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.5969280000000001,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.006376,
+            "readback_cpu_ms": 0.9279755000000001,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.036239999999999994,
+            "forward_raster_ms": 0.036239999999999994
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.036416,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.49192,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.1427579999999997,
+            "readback_cpu_ms": 0.98608,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.036416,
+            "forward_raster_ms": 0.036416
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.036336,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.539312,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.1427579999999997,
+        "readback_cpu_ms": 0.98608,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.036336,
+        "forward_raster_ms": 0.036336
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.0368,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.866048,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.544897,
+        "readback_cpu_ms": 1.233056,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.0368,
+        "forward_raster_ms": 0.0368
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "direct",
+      "light_count": 4,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.135008,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.53824,
+            "gpu_shadow_ms": 0.017424,
+            "cpu_ms": 2.972106,
+            "readback_cpu_ms": 0.772337,
+            "gpu_light_tiles_ms": 0.01296,
+            "gpu_build_plus_raster_ms": 0.147728,
+            "forward_raster_ms": 0.135008
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.135168,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.673728,
+            "gpu_shadow_ms": 0.016768,
+            "cpu_ms": 3.1627555000000003,
+            "readback_cpu_ms": 0.9056885,
+            "gpu_light_tiles_ms": 0.01304,
+            "gpu_build_plus_raster_ms": 0.14839999999999998,
+            "forward_raster_ms": 0.135168
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.134544,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.586496,
+            "gpu_shadow_ms": 0.017776,
+            "cpu_ms": 3.104486,
+            "readback_cpu_ms": 0.9421619999999999,
+            "gpu_light_tiles_ms": 0.013008,
+            "gpu_build_plus_raster_ms": 0.147456,
+            "forward_raster_ms": 0.134544
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 24,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 12,
+        "shadow_atlas_full_drops": 12
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.135008,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.586496,
+        "gpu_shadow_ms": 0.017424,
+        "cpu_ms": 3.104486,
+        "readback_cpu_ms": 0.9056885,
+        "gpu_light_tiles_ms": 0.013008,
+        "gpu_build_plus_raster_ms": 0.147728,
+        "forward_raster_ms": 0.135008
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.135968,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.102592,
+        "gpu_shadow_ms": 0.018272,
+        "cpu_ms": 3.579783,
+        "readback_cpu_ms": 1.02311,
+        "gpu_light_tiles_ms": 0.013728,
+        "gpu_build_plus_raster_ms": 0.149152,
+        "forward_raster_ms": 0.135968
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "direct",
+      "light_count": 16,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.323584,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.903424,
+            "gpu_shadow_ms": 0.017888,
+            "cpu_ms": 3.4916915,
+            "readback_cpu_ms": 0.9438955,
+            "gpu_light_tiles_ms": 0.034288,
+            "gpu_build_plus_raster_ms": 0.35808,
+            "forward_raster_ms": 0.323584
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.325632,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.795968,
+            "gpu_shadow_ms": 0.01776,
+            "cpu_ms": 3.4450735,
+            "readback_cpu_ms": 0.903564,
+            "gpu_light_tiles_ms": 0.034144,
+            "gpu_build_plus_raster_ms": 0.359504,
+            "forward_raster_ms": 0.325632
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.324368,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.917376,
+            "gpu_shadow_ms": 0.017152,
+            "cpu_ms": 3.6437885000000003,
+            "readback_cpu_ms": 1.152308,
+            "gpu_light_tiles_ms": 0.034368,
+            "gpu_build_plus_raster_ms": 0.3584,
+            "forward_raster_ms": 0.324368
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 96,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 84,
+        "shadow_atlas_full_drops": 84
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.324368,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.903424,
+        "gpu_shadow_ms": 0.01776,
+        "cpu_ms": 3.4916915,
+        "readback_cpu_ms": 0.9438955,
+        "gpu_light_tiles_ms": 0.034288,
+        "gpu_build_plus_raster_ms": 0.3584,
+        "forward_raster_ms": 0.324368
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.335488,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.23136,
+        "gpu_shadow_ms": 0.0184,
+        "cpu_ms": 4.105925,
+        "readback_cpu_ms": 1.232645,
+        "gpu_light_tiles_ms": 0.037952,
+        "gpu_build_plus_raster_ms": 0.37264,
+        "forward_raster_ms": 0.335488
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "direct",
+      "light_count": 32,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.589696,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.0423359999999997,
+            "gpu_shadow_ms": 0.017648,
+            "cpu_ms": 3.6391545,
+            "readback_cpu_ms": 0.945103,
+            "gpu_light_tiles_ms": 0.061904,
+            "gpu_build_plus_raster_ms": 0.6513439999999999,
+            "forward_raster_ms": 0.589696
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.5897600000000001,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.007824,
+            "gpu_shadow_ms": 0.018000000000000002,
+            "cpu_ms": 3.4833655,
+            "readback_cpu_ms": 0.900118,
+            "gpu_light_tiles_ms": 0.06257599999999999,
+            "gpu_build_plus_raster_ms": 0.652304,
+            "forward_raster_ms": 0.5897600000000001
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.589872,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.078976,
+            "gpu_shadow_ms": 0.017568,
+            "cpu_ms": 3.466925,
+            "readback_cpu_ms": 0.950533,
+            "gpu_light_tiles_ms": 0.062192,
+            "gpu_build_plus_raster_ms": 0.651888,
+            "forward_raster_ms": 0.589872
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 192,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 180,
+        "shadow_atlas_full_drops": 180
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.5897600000000001,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.0423359999999997,
+        "gpu_shadow_ms": 0.017648,
+        "cpu_ms": 3.4833655,
+        "readback_cpu_ms": 0.945103,
+        "gpu_light_tiles_ms": 0.062192,
+        "gpu_build_plus_raster_ms": 0.651888,
+        "forward_raster_ms": 0.5897600000000001
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.595488,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.505344,
+        "gpu_shadow_ms": 0.0184,
+        "cpu_ms": 4.098551,
+        "readback_cpu_ms": 1.147134,
+        "gpu_light_tiles_ms": 0.063104,
+        "gpu_build_plus_raster_ms": 0.659296,
+        "forward_raster_ms": 0.595488
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "direct",
+      "light_count": 64,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.1156959999999998,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.222176,
+            "gpu_shadow_ms": 0.017856,
+            "cpu_ms": 4.756492,
+            "readback_cpu_ms": 0.9488449999999999,
+            "gpu_light_tiles_ms": 0.118784,
+            "gpu_build_plus_raster_ms": 1.2347679999999999,
+            "forward_raster_ms": 1.1156959999999998
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.1166559999999999,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.27208,
+            "gpu_shadow_ms": 0.01752,
+            "cpu_ms": 4.8409770000000005,
+            "readback_cpu_ms": 0.9718180000000001,
+            "gpu_light_tiles_ms": 0.118896,
+            "gpu_build_plus_raster_ms": 1.2360479999999998,
+            "forward_raster_ms": 1.1166559999999999
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.11584,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.2718879999999997,
+            "gpu_shadow_ms": 0.017824,
+            "cpu_ms": 4.88266,
+            "readback_cpu_ms": 1.0060825,
+            "gpu_light_tiles_ms": 0.118864,
+            "gpu_build_plus_raster_ms": 1.2350560000000002,
+            "forward_raster_ms": 1.11584
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 384,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 372,
+        "shadow_atlas_full_drops": 372
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 1.11584,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.2718879999999997,
+        "gpu_shadow_ms": 0.017824,
+        "cpu_ms": 4.8409770000000005,
+        "readback_cpu_ms": 0.9718180000000001,
+        "gpu_light_tiles_ms": 0.118864,
+        "gpu_build_plus_raster_ms": 1.2350560000000002,
+        "forward_raster_ms": 1.11584
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 1.123936,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.702816,
+        "gpu_shadow_ms": 0.018432,
+        "cpu_ms": 5.438068,
+        "readback_cpu_ms": 1.278201,
+        "gpu_light_tiles_ms": 0.133184,
+        "gpu_build_plus_raster_ms": 1.253216,
+        "forward_raster_ms": 1.123936
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "direct",
+      "light_count": 128,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.168848,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.8184640000000005,
+            "gpu_shadow_ms": 0.018000000000000002,
+            "cpu_ms": 6.840477999999999,
+            "readback_cpu_ms": 1.226604,
+            "gpu_light_tiles_ms": 0.224224,
+            "gpu_build_plus_raster_ms": 2.392112,
+            "forward_raster_ms": 2.168848
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.169728,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.823040000000001,
+            "gpu_shadow_ms": 0.018416000000000002,
+            "cpu_ms": 6.466492499999999,
+            "readback_cpu_ms": 0.924689,
+            "gpu_light_tiles_ms": 0.2252,
+            "gpu_build_plus_raster_ms": 2.3943839999999996,
+            "forward_raster_ms": 2.169728
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.167072,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.670992,
+            "gpu_shadow_ms": 0.018272,
+            "cpu_ms": 6.4794325,
+            "readback_cpu_ms": 1.108035,
+            "gpu_light_tiles_ms": 0.22304000000000002,
+            "gpu_build_plus_raster_ms": 2.3924,
+            "forward_raster_ms": 2.167072
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 768,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 756,
+        "shadow_atlas_full_drops": 756
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 2.168848,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 4.8184640000000005,
+        "gpu_shadow_ms": 0.018272,
+        "cpu_ms": 6.4794325,
+        "readback_cpu_ms": 1.108035,
+        "gpu_light_tiles_ms": 0.224224,
+        "gpu_build_plus_raster_ms": 2.3924,
+        "forward_raster_ms": 2.168848
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 2.180928,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 5.083392,
+        "gpu_shadow_ms": 0.01888,
+        "cpu_ms": 7.02431,
+        "readback_cpu_ms": 1.272781,
+        "gpu_light_tiles_ms": 0.235584,
+        "gpu_build_plus_raster_ms": 2.407872,
+        "forward_raster_ms": 2.180928
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-frustum",
+      "light_count": 0,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034432,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.6006719999999999,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.176011,
+            "readback_cpu_ms": 0.976031,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.034432,
+            "forward_raster_ms": 0.034432
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034288,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.5335679999999998,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.1123255,
+            "readback_cpu_ms": 0.9089195000000001,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.034288,
+            "forward_raster_ms": 0.034288
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034528,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.54328,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 2.8679395000000003,
+            "readback_cpu_ms": 0.854482,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.034528,
+            "forward_raster_ms": 0.034528
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.034432,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.54328,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.1123255,
+        "readback_cpu_ms": 0.9089195000000001,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.034432,
+        "forward_raster_ms": 0.034432
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.034944,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.00512,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.547993,
+        "readback_cpu_ms": 1.106557,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.034944,
+        "forward_raster_ms": 0.034944
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-frustum",
+      "light_count": 4,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.13248,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.8630399999999998,
+            "gpu_shadow_ms": 0.017632000000000002,
+            "cpu_ms": 3.463944,
+            "readback_cpu_ms": 0.9589035,
+            "gpu_light_tiles_ms": 0.012816000000000001,
+            "gpu_build_plus_raster_ms": 0.14544,
+            "forward_raster_ms": 0.13248
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.13240000000000002,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.7536800000000001,
+            "gpu_shadow_ms": 0.01768,
+            "cpu_ms": 3.2595035,
+            "readback_cpu_ms": 0.9566794999999999,
+            "gpu_light_tiles_ms": 0.013056000000000002,
+            "gpu_build_plus_raster_ms": 0.145488,
+            "forward_raster_ms": 0.13240000000000002
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.131936,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.5309439999999999,
+            "gpu_shadow_ms": 0.017744000000000003,
+            "cpu_ms": 3.3534105,
+            "readback_cpu_ms": 0.9974915,
+            "gpu_light_tiles_ms": 0.012944,
+            "gpu_build_plus_raster_ms": 0.145136,
+            "forward_raster_ms": 0.131936
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 24,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 12,
+        "shadow_atlas_full_drops": 12
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.13240000000000002,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.7536800000000001,
+        "gpu_shadow_ms": 0.01768,
+        "cpu_ms": 3.3534105,
+        "readback_cpu_ms": 0.9589035,
+        "gpu_light_tiles_ms": 0.012944,
+        "gpu_build_plus_raster_ms": 0.14544,
+        "forward_raster_ms": 0.13240000000000002
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.1528,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.051136,
+        "gpu_shadow_ms": 0.018304,
+        "cpu_ms": 3.815307,
+        "readback_cpu_ms": 1.334497,
+        "gpu_light_tiles_ms": 0.013792,
+        "gpu_build_plus_raster_ms": 0.166656,
+        "forward_raster_ms": 0.1528
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-frustum",
+      "light_count": 16,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.31744,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.81432,
+            "gpu_shadow_ms": 0.017328,
+            "cpu_ms": 3.4006595,
+            "readback_cpu_ms": 0.9836855,
+            "gpu_light_tiles_ms": 0.034224000000000004,
+            "gpu_build_plus_raster_ms": 0.35175999999999996,
+            "forward_raster_ms": 0.31744
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.317168,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.8562720000000001,
+            "gpu_shadow_ms": 0.017647999999999997,
+            "cpu_ms": 3.428913,
+            "readback_cpu_ms": 0.9472325,
+            "gpu_light_tiles_ms": 0.034367999999999996,
+            "gpu_build_plus_raster_ms": 0.351728,
+            "forward_raster_ms": 0.317168
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.31796800000000003,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.77416,
+            "gpu_shadow_ms": 0.017279999999999997,
+            "cpu_ms": 3.4151119999999997,
+            "readback_cpu_ms": 0.9318679999999999,
+            "gpu_light_tiles_ms": 0.03456,
+            "gpu_build_plus_raster_ms": 0.352992,
+            "forward_raster_ms": 0.31796800000000003
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 96,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 84,
+        "shadow_atlas_full_drops": 84
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.31744,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 1.81432,
+        "gpu_shadow_ms": 0.017328,
+        "cpu_ms": 3.4151119999999997,
+        "readback_cpu_ms": 0.9472325,
+        "gpu_light_tiles_ms": 0.034367999999999996,
+        "gpu_build_plus_raster_ms": 0.35175999999999996,
+        "forward_raster_ms": 0.31744
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.328608,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.236928,
+        "gpu_shadow_ms": 0.018368,
+        "cpu_ms": 3.853759,
+        "readback_cpu_ms": 1.116386,
+        "gpu_light_tiles_ms": 0.034816,
+        "gpu_build_plus_raster_ms": 0.36416,
+        "forward_raster_ms": 0.328608
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-frustum",
+      "light_count": 32,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.5909439999999999,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.2137599999999997,
+            "gpu_shadow_ms": 0.018048,
+            "cpu_ms": 3.718965,
+            "readback_cpu_ms": 0.9198105,
+            "gpu_light_tiles_ms": 0.062544,
+            "gpu_build_plus_raster_ms": 0.6535679999999999,
+            "forward_raster_ms": 0.5909439999999999
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.59112,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 1.9317600000000001,
+            "gpu_shadow_ms": 0.017984,
+            "cpu_ms": 3.628274,
+            "readback_cpu_ms": 0.9793625,
+            "gpu_light_tiles_ms": 0.062271999999999994,
+            "gpu_build_plus_raster_ms": 0.653552,
+            "forward_raster_ms": 0.59112
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.591328,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 2.063376,
+            "gpu_shadow_ms": 0.017984,
+            "cpu_ms": 3.9113379999999998,
+            "readback_cpu_ms": 1.1258590000000002,
+            "gpu_light_tiles_ms": 0.063344,
+            "gpu_build_plus_raster_ms": 0.6544639999999999,
+            "forward_raster_ms": 0.591328
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 192,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 180,
+        "shadow_atlas_full_drops": 180
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.59112,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.063376,
+        "gpu_shadow_ms": 0.017984,
+        "cpu_ms": 3.718965,
+        "readback_cpu_ms": 0.9793625,
+        "gpu_light_tiles_ms": 0.062544,
+        "gpu_build_plus_raster_ms": 0.6535679999999999,
+        "forward_raster_ms": 0.59112
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.59568,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 2.549312,
+        "gpu_shadow_ms": 0.0184,
+        "cpu_ms": 4.379521,
+        "readback_cpu_ms": 1.226264,
+        "gpu_light_tiles_ms": 0.06384,
+        "gpu_build_plus_raster_ms": 0.66288,
+        "forward_raster_ms": 0.59568
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-frustum",
+      "light_count": 64,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.120336,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.34024,
+            "gpu_shadow_ms": 0.017647999999999997,
+            "cpu_ms": 5.4698775,
+            "readback_cpu_ms": 1.2656325,
+            "gpu_light_tiles_ms": 0.118752,
+            "gpu_build_plus_raster_ms": 1.23896,
+            "forward_raster_ms": 1.120336
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.11944,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.274448,
+            "gpu_shadow_ms": 0.017759999999999998,
+            "cpu_ms": 5.047636,
+            "readback_cpu_ms": 1.1263645,
+            "gpu_light_tiles_ms": 0.118784,
+            "gpu_build_plus_raster_ms": 1.238176,
+            "forward_raster_ms": 1.11944
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.1170719999999998,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 3.26824,
+            "gpu_shadow_ms": 0.017759999999999998,
+            "cpu_ms": 5.008362,
+            "readback_cpu_ms": 1.1168065,
+            "gpu_light_tiles_ms": 0.118288,
+            "gpu_build_plus_raster_ms": 1.23544,
+            "forward_raster_ms": 1.1170719999999998
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 384,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 372,
+        "shadow_atlas_full_drops": 372
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 1.11944,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.274448,
+        "gpu_shadow_ms": 0.017759999999999998,
+        "cpu_ms": 5.047636,
+        "readback_cpu_ms": 1.1263645,
+        "gpu_light_tiles_ms": 0.118752,
+        "gpu_build_plus_raster_ms": 1.238176,
+        "forward_raster_ms": 1.11944
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 1.125952,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 3.809856,
+        "gpu_shadow_ms": 0.0184,
+        "cpu_ms": 6.358915,
+        "readback_cpu_ms": 1.708664,
+        "gpu_light_tiles_ms": 0.120352,
+        "gpu_build_plus_raster_ms": 1.246944,
+        "forward_raster_ms": 1.125952
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-frustum",
+      "light_count": 128,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.1552800000000003,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.85608,
+            "gpu_shadow_ms": 0.018032,
+            "cpu_ms": 6.74589,
+            "readback_cpu_ms": 1.159903,
+            "gpu_light_tiles_ms": 0.222912,
+            "gpu_build_plus_raster_ms": 2.378064,
+            "forward_raster_ms": 2.1552800000000003
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.158064,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.838976000000001,
+            "gpu_shadow_ms": 0.018320000000000003,
+            "cpu_ms": 6.484617,
+            "readback_cpu_ms": 0.998478,
+            "gpu_light_tiles_ms": 0.223072,
+            "gpu_build_plus_raster_ms": 2.38072,
+            "forward_raster_ms": 2.158064
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.159744,
+            "gpu_post_raster_ms": 0.0,
+            "gpu_ms": 4.8898399999999995,
+            "gpu_shadow_ms": 0.017936,
+            "cpu_ms": 6.6874795,
+            "readback_cpu_ms": 1.0434535,
+            "gpu_light_tiles_ms": 0.22304000000000002,
+            "gpu_build_plus_raster_ms": 2.384944,
+            "forward_raster_ms": 2.159744
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 768,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 756,
+        "shadow_atlas_full_drops": 756
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 2.158064,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 4.85608,
+        "gpu_shadow_ms": 0.018032,
+        "cpu_ms": 6.6874795,
+        "readback_cpu_ms": 1.0434535,
+        "gpu_light_tiles_ms": 0.22304000000000002,
+        "gpu_build_plus_raster_ms": 2.38072,
+        "forward_raster_ms": 2.158064
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 2.173664,
+        "gpu_post_raster_ms": 0.0,
+        "gpu_ms": 5.078592,
+        "gpu_shadow_ms": 0.018432,
+        "cpu_ms": 7.167089,
+        "readback_cpu_ms": 1.427873,
+        "gpu_light_tiles_ms": 0.22912,
+        "gpu_build_plus_raster_ms": 2.397888,
+        "forward_raster_ms": 2.173664
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-occlusion",
+      "light_count": 0,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034352,
+            "gpu_post_raster_ms": 0.005712,
+            "gpu_ms": 1.722496,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.2638465,
+            "readback_cpu_ms": 0.9136635,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.039824,
+            "forward_raster_ms": 0.039824
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034528,
+            "gpu_post_raster_ms": 0.00576,
+            "gpu_ms": 1.683024,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.089117,
+            "readback_cpu_ms": 0.899397,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.03992,
+            "forward_raster_ms": 0.03992
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.034272,
+            "gpu_post_raster_ms": 0.00576,
+            "gpu_ms": 1.6693920000000002,
+            "gpu_shadow_ms": 0.0,
+            "cpu_ms": 3.2203245000000003,
+            "readback_cpu_ms": 0.8984449999999999,
+            "gpu_light_tiles_ms": 0.0,
+            "gpu_build_plus_raster_ms": 0.039888,
+            "forward_raster_ms": 0.03988799999999999
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 0,
+        "rendered_local_shadow_faces": 0,
+        "shadow_tiles": 0,
+        "dropped_shadow_faces": 0,
+        "shadow_atlas_full_drops": 0
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.034352,
+        "gpu_post_raster_ms": 0.00576,
+        "gpu_ms": 1.683024,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.2203245000000003,
+        "readback_cpu_ms": 0.899397,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.039888,
+        "forward_raster_ms": 0.03988799999999999
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.034976,
+        "gpu_post_raster_ms": 0.00608,
+        "gpu_ms": 2.220832,
+        "gpu_shadow_ms": 0.0,
+        "cpu_ms": 3.671616,
+        "readback_cpu_ms": 0.999706,
+        "gpu_light_tiles_ms": 0.0,
+        "gpu_build_plus_raster_ms": 0.040768,
+        "forward_raster_ms": 0.040768
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-occlusion",
+      "light_count": 4,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.132256,
+            "gpu_post_raster_ms": 0.005728,
+            "gpu_ms": 1.906096,
+            "gpu_shadow_ms": 0.017264,
+            "cpu_ms": 3.4400645,
+            "readback_cpu_ms": 0.9519610000000001,
+            "gpu_light_tiles_ms": 0.013104000000000001,
+            "gpu_build_plus_raster_ms": 0.150976,
+            "forward_raster_ms": 0.13776
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.13196799999999997,
+            "gpu_post_raster_ms": 0.005584,
+            "gpu_ms": 1.71824,
+            "gpu_shadow_ms": 0.017712,
+            "cpu_ms": 3.2494395,
+            "readback_cpu_ms": 0.8755565000000001,
+            "gpu_light_tiles_ms": 0.012928,
+            "gpu_build_plus_raster_ms": 0.15016000000000002,
+            "forward_raster_ms": 0.13734400000000002
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.13136,
+            "gpu_post_raster_ms": 0.005728,
+            "gpu_ms": 1.8988800000000001,
+            "gpu_shadow_ms": 0.017712,
+            "cpu_ms": 3.4436405,
+            "readback_cpu_ms": 0.931482,
+            "gpu_light_tiles_ms": 0.01296,
+            "gpu_build_plus_raster_ms": 0.15006399999999998,
+            "forward_raster_ms": 0.137072
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 24,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 12,
+        "shadow_atlas_full_drops": 12
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.13196799999999997,
+        "gpu_post_raster_ms": 0.005728,
+        "gpu_ms": 1.8988800000000001,
+        "gpu_shadow_ms": 0.017712,
+        "cpu_ms": 3.4400645,
+        "readback_cpu_ms": 0.931482,
+        "gpu_light_tiles_ms": 0.01296,
+        "gpu_build_plus_raster_ms": 0.15016000000000002,
+        "forward_raster_ms": 0.13734400000000002
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.13328,
+        "gpu_post_raster_ms": 0.00608,
+        "gpu_ms": 2.32976,
+        "gpu_shadow_ms": 0.018368,
+        "cpu_ms": 3.972773,
+        "readback_cpu_ms": 1.104243,
+        "gpu_light_tiles_ms": 0.01376,
+        "gpu_build_plus_raster_ms": 0.165344,
+        "forward_raster_ms": 0.146272
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-occlusion",
+      "light_count": 16,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.316832,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 1.968512,
+            "gpu_shadow_ms": 0.017231999999999997,
+            "cpu_ms": 3.4997365,
+            "readback_cpu_ms": 0.8873340000000001,
+            "gpu_light_tiles_ms": 0.0344,
+            "gpu_build_plus_raster_ms": 0.356656,
+            "forward_raster_ms": 0.322464
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.31689599999999996,
+            "gpu_post_raster_ms": 0.0056159999999999995,
+            "gpu_ms": 1.916112,
+            "gpu_shadow_ms": 0.018032,
+            "cpu_ms": 3.428472,
+            "readback_cpu_ms": 0.900293,
+            "gpu_light_tiles_ms": 0.033728,
+            "gpu_build_plus_raster_ms": 0.355888,
+            "forward_raster_ms": 0.322272
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.31691199999999997,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 1.931904,
+            "gpu_shadow_ms": 0.017248,
+            "cpu_ms": 3.494131,
+            "readback_cpu_ms": 0.90951,
+            "gpu_light_tiles_ms": 0.034384,
+            "gpu_build_plus_raster_ms": 0.356592,
+            "forward_raster_ms": 0.322736
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 96,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 84,
+        "shadow_atlas_full_drops": 84
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.31689599999999996,
+        "gpu_post_raster_ms": 0.005664,
+        "gpu_ms": 1.931904,
+        "gpu_shadow_ms": 0.017248,
+        "cpu_ms": 3.494131,
+        "readback_cpu_ms": 0.900293,
+        "gpu_light_tiles_ms": 0.034384,
+        "gpu_build_plus_raster_ms": 0.356592,
+        "forward_raster_ms": 0.322464
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.325792,
+        "gpu_post_raster_ms": 0.006048,
+        "gpu_ms": 2.30544,
+        "gpu_shadow_ms": 0.018336,
+        "cpu_ms": 3.786152,
+        "readback_cpu_ms": 0.989697,
+        "gpu_light_tiles_ms": 0.034816,
+        "gpu_build_plus_raster_ms": 0.36624,
+        "forward_raster_ms": 0.331712
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-occlusion",
+      "light_count": 32,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.58832,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 2.31264,
+            "gpu_shadow_ms": 0.018016,
+            "cpu_ms": 3.9263065,
+            "readback_cpu_ms": 0.885115,
+            "gpu_light_tiles_ms": 0.062224,
+            "gpu_build_plus_raster_ms": 0.656576,
+            "forward_raster_ms": 0.594
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.5885119999999999,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 2.2559519999999997,
+            "gpu_shadow_ms": 0.017488,
+            "cpu_ms": 3.9137425,
+            "readback_cpu_ms": 0.9370775,
+            "gpu_light_tiles_ms": 0.061824000000000004,
+            "gpu_build_plus_raster_ms": 0.656064,
+            "forward_raster_ms": 0.593968
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 0.58904,
+            "gpu_post_raster_ms": 0.0056159999999999995,
+            "gpu_ms": 2.303776,
+            "gpu_shadow_ms": 0.018224,
+            "cpu_ms": 3.9498905,
+            "readback_cpu_ms": 0.875672,
+            "gpu_light_tiles_ms": 0.062528,
+            "gpu_build_plus_raster_ms": 0.657408,
+            "forward_raster_ms": 0.594688
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 192,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 180,
+        "shadow_atlas_full_drops": 180
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 0.5885119999999999,
+        "gpu_post_raster_ms": 0.005664,
+        "gpu_ms": 2.303776,
+        "gpu_shadow_ms": 0.018016,
+        "cpu_ms": 3.9263065,
+        "readback_cpu_ms": 0.885115,
+        "gpu_light_tiles_ms": 0.062224,
+        "gpu_build_plus_raster_ms": 0.656576,
+        "forward_raster_ms": 0.594
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 0.594144,
+        "gpu_post_raster_ms": 0.005952,
+        "gpu_ms": 2.840576,
+        "gpu_shadow_ms": 0.018432,
+        "cpu_ms": 4.635564,
+        "readback_cpu_ms": 1.206075,
+        "gpu_light_tiles_ms": 0.063488,
+        "gpu_build_plus_raster_ms": 0.662816,
+        "forward_raster_ms": 0.599968
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-occlusion",
+      "light_count": 64,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.1191680000000002,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 3.422576,
+            "gpu_shadow_ms": 0.017967999999999998,
+            "cpu_ms": 4.9332955,
+            "readback_cpu_ms": 0.9788915,
+            "gpu_light_tiles_ms": 0.118528,
+            "gpu_build_plus_raster_ms": 1.24264,
+            "forward_raster_ms": 1.124848
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.119344,
+            "gpu_post_raster_ms": 0.005664,
+            "gpu_ms": 3.433024,
+            "gpu_shadow_ms": 0.01792,
+            "cpu_ms": 4.9626114999999995,
+            "readback_cpu_ms": 0.9643489999999999,
+            "gpu_light_tiles_ms": 0.11832000000000001,
+            "gpu_build_plus_raster_ms": 1.2440799999999999,
+            "forward_raster_ms": 1.1250559999999998
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 1.12088,
+            "gpu_post_raster_ms": 0.005696,
+            "gpu_ms": 3.450592,
+            "gpu_shadow_ms": 0.017696,
+            "cpu_ms": 5.108105500000001,
+            "readback_cpu_ms": 0.9147905000000001,
+            "gpu_light_tiles_ms": 0.118096,
+            "gpu_build_plus_raster_ms": 1.244976,
+            "forward_raster_ms": 1.126704
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 384,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 372,
+        "shadow_atlas_full_drops": 372
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 1.119344,
+        "gpu_post_raster_ms": 0.005664,
+        "gpu_ms": 3.433024,
+        "gpu_shadow_ms": 0.01792,
+        "cpu_ms": 4.9626114999999995,
+        "readback_cpu_ms": 0.9643489999999999,
+        "gpu_light_tiles_ms": 0.11832000000000001,
+        "gpu_build_plus_raster_ms": 1.2440799999999999,
+        "forward_raster_ms": 1.1250559999999998
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 1.12528,
+        "gpu_post_raster_ms": 0.005888,
+        "gpu_ms": 3.972288,
+        "gpu_shadow_ms": 0.018432,
+        "cpu_ms": 5.75751,
+        "readback_cpu_ms": 1.273633,
+        "gpu_light_tiles_ms": 0.120416,
+        "gpu_build_plus_raster_ms": 1.252768,
+        "forward_raster_ms": 1.130816
+      }
+    },
+    {
+      "shadows": "on",
+      "visibility": "gpu-occlusion",
+      "light_count": 128,
+      "runs": [
+        {
+          "run_index": 1,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.158512,
+            "gpu_post_raster_ms": 0.005679999999999999,
+            "gpu_ms": 4.702192,
+            "gpu_shadow_ms": 0.018352,
+            "cpu_ms": 6.2327475,
+            "readback_cpu_ms": 0.95184,
+            "gpu_light_tiles_ms": 0.223184,
+            "gpu_build_plus_raster_ms": 2.387632,
+            "forward_raster_ms": 2.1645760000000003
+          }
+        },
+        {
+          "run_index": 2,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.15848,
+            "gpu_post_raster_ms": 0.005696,
+            "gpu_ms": 4.722976,
+            "gpu_shadow_ms": 0.018320000000000003,
+            "cpu_ms": 6.423481499999999,
+            "readback_cpu_ms": 1.011082,
+            "gpu_light_tiles_ms": 0.223104,
+            "gpu_build_plus_raster_ms": 2.3892160000000002,
+            "forward_raster_ms": 2.164
+          }
+        },
+        {
+          "run_index": 3,
+          "frames": 30,
+          "median_ms": {
+            "gpu_main_raster_ms": 2.1600159999999997,
+            "gpu_post_raster_ms": 0.005696,
+            "gpu_ms": 4.869567999999999,
+            "gpu_shadow_ms": 0.018432,
+            "cpu_ms": 6.6226525,
+            "readback_cpu_ms": 1.002837,
+            "gpu_light_tiles_ms": 0.223248,
+            "gpu_build_plus_raster_ms": 2.3897120000000003,
+            "forward_raster_ms": 2.165968
+          }
+        }
+      ],
+      "shadow_counts": {
+        "requested_local_shadow_faces": 768,
+        "rendered_local_shadow_faces": 12,
+        "shadow_tiles": 12,
+        "dropped_shadow_faces": 756,
+        "shadow_atlas_full_drops": 756
+      },
+      "median_ms": {
+        "gpu_main_raster_ms": 2.158512,
+        "gpu_post_raster_ms": 0.005696,
+        "gpu_ms": 4.722976,
+        "gpu_shadow_ms": 0.018352,
+        "cpu_ms": 6.423481499999999,
+        "readback_cpu_ms": 1.002837,
+        "gpu_light_tiles_ms": 0.223184,
+        "gpu_build_plus_raster_ms": 2.3892160000000002,
+        "forward_raster_ms": 2.1645760000000003
+      },
+      "p95_ms": {
+        "gpu_main_raster_ms": 2.170272,
+        "gpu_post_raster_ms": 0.006144,
+        "gpu_ms": 5.001728,
+        "gpu_shadow_ms": 0.01936,
+        "cpu_ms": 7.144056,
+        "readback_cpu_ms": 1.334567,
+        "gpu_light_tiles_ms": 0.229824,
+        "gpu_build_plus_raster_ms": 2.405696,
+        "forward_raster_ms": 2.176576
+      }
+    }
+  ],
+  "forward_plus_gate": null
+}
