@@ -50,8 +50,8 @@ int main() {
     auto metadata = faset::read_json(reflection);
     require(metadata["layout"]["stage"] == "compute" &&
                 metadata["layout"]["descriptors"].size() == 7 &&
-                metadata["layout"]["push_constants"][0]["size"] == 64,
-            "Temporal resolve ABI contains seven images and a 64-byte push block");
+                metadata["layout"]["push_constants"][0]["size"] == 80,
+            "Temporal resolve ABI contains seven images and an 80-byte push block");
     metadata["layout"]["descriptors"][5]["binding"] = 8;
     metadata["layout_fingerprint"] = faset::sha256(metadata["layout"].dump());
     faset::atomic_write_json(reflection, metadata);

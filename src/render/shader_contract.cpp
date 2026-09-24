@@ -211,14 +211,15 @@ void validate_temporal_layout(const Json& layout, std::string_view entry) {
             "temporal push constants are malformed");
     if (resolve) {
         require(constants.size() == 1 && constants[0].at("offset") == 0 &&
-                    constants[0].at("size") == 64 && spirv_constants.size() == 1,
+                    constants[0].at("size") == 80 && spirv_constants.size() == 1,
                 "temporal resolve push block changed");
         const auto& members = constants[0].at("members");
         const auto& spirv_members = spirv_constants[0].at("members");
-        require(members.size() == 4 && spirv_members.size() == 4,
+        require(members.size() == 5 && spirv_members.size() == 5,
                 "temporal resolve push members changed");
-        const char* types[] = {"uint32x4", "float32x4", "float32x4", "uint32x4"};
-        for (std::size_t i = 0; i < 4; ++i)
+        const char* types[] = {"uint32x4", "float32x4", "float32x4", "uint32x4",
+                               "float32x4"};
+        for (std::size_t i = 0; i < 5; ++i)
             require(members[i].at("offset") == 16 * i &&
                         members[i].at("size") == 16 && members[i].at("type") == types[i] &&
                         spirv_members[i].at("member") == i &&

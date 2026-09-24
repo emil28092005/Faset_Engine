@@ -53,6 +53,12 @@ void offset_scene_and_sharp_ui() {
             "Pixels outside the offset scene rectangle retain the Off clear result");
     require(stats.validation_errors == 0,
             "Temporal graph attachment store/load and transitions pass Vulkan validation");
+    if (stats.gpu_ms > 0)
+        require(stats.gpu_temporal_resolve_ms > 0 &&
+                    stats.gpu_temporal_composite_ms > 0,
+                "Temporal resolve and composite expose independent GPU pass timings");
+    require(stats.gpu_allocated_bytes > off.stats().gpu_allocated_bytes,
+            "Temporal scene, velocity and output histories count toward live GPU memory");
 }
 } // namespace
 

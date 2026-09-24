@@ -338,7 +338,16 @@ struct BuildService::Impl {
                                      "gpuShadowMain.spv", "gpuCullMain.spv", "gpuHzbMain.spv",
                                      "gpuPostCullMain.spv", "gpuVertexMain.reflection.json",
                                      "gpuShadowMain.reflection.json", "gpuCullMain.reflection.json",
-                                     "gpuHzbMain.reflection.json", "gpuPostCullMain.reflection.json"})
+                                     "gpuHzbMain.reflection.json", "gpuPostCullMain.reflection.json",
+                                     "temporalResolveMain.spv", "temporalResolveMain.reflection.json",
+                                     "temporalCompositeVertexMain.spv",
+                                     "temporalCompositeVertexMain.reflection.json",
+                                     "temporalCompositeFragmentMain.spv",
+                                     "temporalCompositeFragmentMain.reflection.json",
+                                     "temporalVertexMain.spv", "temporalVertexMain.reflection.json",
+                                     "temporalFragmentMain.spv", "temporalFragmentMain.reflection.json",
+                                     "gpuTemporalVertexMain.spv",
+                                     "gpuTemporalVertexMain.reflection.json"})
                 copy_required_file(native_directory / "shaders" / file, staging / "shaders" / file);
             copy_runtime_libraries(job, player, staging, native_directory, configuration);
             Json manifest{{"format", "faset.build"},
@@ -590,7 +599,16 @@ struct BuildService::Impl {
                                        "gpuShadowMain.spv", "gpuCullMain.spv", "gpuHzbMain.spv",
                                        "gpuPostCullMain.spv", "gpuVertexMain.reflection.json",
                                        "gpuShadowMain.reflection.json", "gpuCullMain.reflection.json",
-                                       "gpuHzbMain.reflection.json", "gpuPostCullMain.reflection.json"})
+                                       "gpuHzbMain.reflection.json", "gpuPostCullMain.reflection.json",
+                                       "temporalResolveMain.spv", "temporalResolveMain.reflection.json",
+                                       "temporalCompositeVertexMain.spv",
+                                       "temporalCompositeVertexMain.reflection.json",
+                                       "temporalCompositeFragmentMain.spv",
+                                       "temporalCompositeFragmentMain.reflection.json",
+                                       "temporalVertexMain.spv", "temporalVertexMain.reflection.json",
+                                       "temporalFragmentMain.spv", "temporalFragmentMain.reflection.json",
+                                       "gpuTemporalVertexMain.spv",
+                                       "gpuTemporalVertexMain.reflection.json"})
                 copy_required_file(build_directory / "shaders" / shader,
                                    staging / "shaders" / shader);
             for (const auto& entry : fs::directory_iterator(build_directory)) {

@@ -217,6 +217,8 @@ struct TemporalResources {
     TemporalCapabilities capabilities{};
     TemporalHistoryState history;
     Mat4 previous_jittered_vp{identity};
+    Mat4 previous_unjittered_vp{identity};
+    std::array<float, 2> previous_jitter{};
     std::uint64_t shader_generation{1};
     std::uint32_t internal_width{}, internal_height{}, completed_index{};
     bool has_completed_image{};
@@ -236,7 +238,8 @@ struct Renderer::Impl {
     VkDevice device{};
     VkQueue queue{};
     std::uint32_t queue_family{};
-    std::uint32_t max_compute_groups_x{}, max_storage_buffer_range{},
+    std::uint32_t max_compute_groups_x{}, max_compute_groups_y{},
+                  max_storage_buffer_range{},
                   max_image_dimension{};
     bool independent_blend_supported{};
     VkCommandPool pool{};
@@ -757,6 +760,7 @@ struct Renderer::Impl {
                     timestamp_period = properties.limits.timestampPeriod;
                     timestamp_bits = queues[i].timestampValidBits;
                     max_compute_groups_x = properties.limits.maxComputeWorkGroupCount[0];
+                    max_compute_groups_y = properties.limits.maxComputeWorkGroupCount[1];
                     max_storage_buffer_range = properties.limits.maxStorageBufferRange;
                     max_image_dimension = properties.limits.maxImageDimension2D;
                     independent_blend_supported = features.features.independentBlend;
@@ -798,7 +802,8 @@ struct Renderer::Impl {
                              VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
                     temporal.capabilities.extent =
                         width <= max_image_dimension && height <= max_image_dimension &&
-                        (width + 7) / 8 <= max_compute_groups_x;
+                        (width + 7) / 8 <= max_compute_groups_x &&
+                        (height + 7) / 8 <= max_compute_groups_y;
                 }
             }
         }
@@ -923,7 +928,8 @@ struct Renderer::Impl {
         temporal.has_completed_image = false;
         scene.hzb_history_valid = false;
         temporal.capabilities.extent = width <= max_image_dimension &&
-            height <= max_image_dimension && (width + 7) / 8 <= max_compute_groups_x;
+            height <= max_image_dimension && (width + 7) / 8 <= max_compute_groups_x &&
+            (height + 7) / 8 <= max_compute_groups_y;
         const auto effective = select_effective_temporal_mode(config.temporal_mode,
                                                                temporal.capabilities);
         const auto internal = temporal_internal_extent(width, height, effective,
@@ -1698,7 +1704,7 @@ struct Renderer::Impl {
             check(vkCreateDescriptorSetLayout(device, &descriptor_info, nullptr,
                                               &temporal.composite_layout),
                   "Create temporal composite descriptor layout");
-            VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 64};
+            VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 80};
             VkPipelineLayoutCreateInfo layout_info{};
             layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
             layout_info.setLayoutCount = 1;
@@ -1862,7 +1868,8 @@ struct Renderer::Impl {
         }
         for (auto module : modules)
             vkDestroyShaderModule(device, module, nullptr);
-        refresh_temporal_descriptors();
+        if (!temporal.descriptor_pool)
+            refresh_temporal_descriptors();
     }
     GpuVertex gpu_vertex(const Vertex& v, const DrawItem& item, const Mat4& vp,
                          const Mat4* previous_model = nullptr,
@@ -3415,11 +3422,19 @@ struct Renderer::Impl {
                     std::array<std::uint32_t, 4> dimensions;
                     std::array<float, 4> output_rect, internal_rect;
                     std::array<std::uint32_t, 4> flags;
+                    std::array<float, 4> jitter_motion;
                 };
-                static_assert(sizeof(ResolvePush) == 64);
+                static_assert(sizeof(ResolvePush) == 80);
+                const bool static_camera = statistics.temporal_history_valid &&
+                    temporal.previous_unjittered_vp == snapshot.view_projection;
                 ResolvePush parameters{{width, height, raster_width, raster_height},
                                        output_scene_viewport, scene_viewport,
-                                       {statistics.temporal_history_valid ? 1u : 0u, 0, 0, 0}};
+                                       {statistics.temporal_history_valid ? 1u : 0u, 0, 0, 0},
+                                       {(statistics.temporal_jitter[0] -
+                                         temporal.previous_jitter[0]) * .5f,
+                                        (statistics.temporal_jitter[1] -
+                                         temporal.previous_jitter[1]) * .5f,
+                                        static_camera ? 1.f : 0.f, 0.f}};
                 vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
                                   temporal.resolve_pipeline);
                 vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -3567,8 +3582,14 @@ struct Renderer::Impl {
                     statistics.gpu_main_raster_ms = elapsed;
                 else if (label == "BuildCurrentHZB") statistics.gpu_hzb_ms = elapsed;
                 else if (label == "PostCull") statistics.gpu_post_cull_ms = elapsed;
-                else if (label == "PostRasterAndUI")
+                else if (label == "PostRasterAndUI" || label == "PostRasterScene")
                     statistics.gpu_post_raster_ms = elapsed;
+                else if (label == "TemporalResolve")
+                    statistics.gpu_temporal_resolve_ms = elapsed;
+                else if (label == "TemporalComposite")
+                    statistics.gpu_temporal_composite_ms = elapsed;
+                else if (label == "UI")
+                    statistics.gpu_ui_ms = elapsed;
             }
         }
         if (swap_index) {
@@ -3633,6 +3654,8 @@ struct Renderer::Impl {
         scene.previous_view_id = view_id;
         scene.hzb_history_valid = occlusion;
         temporal.previous_jittered_vp = raster_vp;
+        temporal.previous_unjittered_vp = snapshot.view_projection;
+        temporal.previous_jitter = statistics.temporal_jitter;
         temporal.history.complete(temporal_key);
         if (temporal_active) {
             temporal.completed_index = temporal.has_completed_image
@@ -3663,6 +3686,12 @@ struct Renderer::Impl {
             for (const auto& image : scene.hzb)
                 statistics.gpu_allocated_bytes += image.allocation_size;
         }
+        statistics.gpu_allocated_bytes += temporal.scene_color.allocation_size +
+            temporal.velocity.allocation_size;
+        for (const auto& image : temporal.history_color)
+            statistics.gpu_allocated_bytes += image.allocation_size;
+        for (const auto& image : temporal.history_depth)
+            statistics.gpu_allocated_bytes += image.allocation_size;
         statistics.validation_errors = validation_errors.load();
         statistics.cpu_ms =
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
@@ -3686,23 +3715,35 @@ bool Renderer::reload_shaders(std::string& error) {
     auto previous_ui = r.ui_pipeline;
     auto previous_shadow = r.shadow_pipeline;
     auto previous_sprite = r.sprite_pipeline;
+    auto previous_temporal_ui = r.temporal_ui_pipeline;
     auto previous_layout_fingerprints = r.shader_layouts;
     auto previous_gpu_fingerprints = r.scene.shader_layouts;
     auto previous_gpu = r.scene.graphics_pipeline;
     auto previous_cull = r.scene.cull_pipeline;
     auto previous_post = r.scene.post_pipeline;
     auto previous_hzb = r.scene.hzb_pipeline;
+    const auto previous_temporal_layouts = r.temporal.shader_layouts;
+    const auto previous_temporal_scene_layouts = r.temporal.scene_shader_layouts;
+    const std::array<VkPipeline, 5> previous_temporal_pipelines{
+        r.temporal.resolve_pipeline, r.temporal.composite_pipeline,
+        r.temporal.direct_pipeline, r.temporal.transparent_pipeline,
+        r.temporal.gpu_pipeline};
     r.pipeline_layout = {};
     r.pipeline = {};
     r.ui_pipeline = {};
     r.shadow_pipeline = {};
     r.sprite_pipeline = {};
+    r.temporal_ui_pipeline = {};
     r.scene.graphics_pipeline = r.scene.cull_pipeline = r.scene.post_pipeline =
         r.scene.hzb_pipeline = {};
+    r.temporal.resolve_pipeline = r.temporal.composite_pipeline =
+        r.temporal.direct_pipeline = r.temporal.transparent_pipeline =
+            r.temporal.gpu_pipeline = {};
     try {
         r.make_pipelines();
         if (r.scene.graphics_pipeline_layout)
             r.make_scene_pipelines();
+        r.make_temporal_interfaces_and_pipelines();
     } catch (const std::exception& exception) {
         if (r.pipeline)
             vkDestroyPipeline(r.device, r.pipeline, nullptr);
@@ -3712,10 +3753,17 @@ bool Renderer::reload_shaders(std::string& error) {
             vkDestroyPipeline(r.device, r.shadow_pipeline, nullptr);
         if (r.sprite_pipeline)
             vkDestroyPipeline(r.device, r.sprite_pipeline, nullptr);
+        if (r.temporal_ui_pipeline)
+            vkDestroyPipeline(r.device, r.temporal_ui_pipeline, nullptr);
         if (r.pipeline_layout)
             vkDestroyPipelineLayout(r.device, r.pipeline_layout, nullptr);
         for (auto pipeline : {r.scene.graphics_pipeline, r.scene.cull_pipeline,
                               r.scene.post_pipeline, r.scene.hzb_pipeline})
+            if (pipeline)
+                vkDestroyPipeline(r.device, pipeline, nullptr);
+        for (auto pipeline : {r.temporal.resolve_pipeline, r.temporal.composite_pipeline,
+                              r.temporal.direct_pipeline, r.temporal.transparent_pipeline,
+                              r.temporal.gpu_pipeline})
             if (pipeline)
                 vkDestroyPipeline(r.device, pipeline, nullptr);
         r.pipeline_layout = previous_layout;
@@ -3723,12 +3771,20 @@ bool Renderer::reload_shaders(std::string& error) {
         r.ui_pipeline = previous_ui;
         r.shadow_pipeline = previous_shadow;
         r.sprite_pipeline = previous_sprite;
+        r.temporal_ui_pipeline = previous_temporal_ui;
         r.scene.graphics_pipeline = previous_gpu;
         r.scene.cull_pipeline = previous_cull;
         r.scene.post_pipeline = previous_post;
         r.scene.hzb_pipeline = previous_hzb;
+        r.temporal.resolve_pipeline = previous_temporal_pipelines[0];
+        r.temporal.composite_pipeline = previous_temporal_pipelines[1];
+        r.temporal.direct_pipeline = previous_temporal_pipelines[2];
+        r.temporal.transparent_pipeline = previous_temporal_pipelines[3];
+        r.temporal.gpu_pipeline = previous_temporal_pipelines[4];
         r.shader_layouts = previous_layout_fingerprints;
         r.scene.shader_layouts = previous_gpu_fingerprints;
+        r.temporal.shader_layouts = previous_temporal_layouts;
+        r.temporal.scene_shader_layouts = previous_temporal_scene_layouts;
         error = exception.what();
         return false;
     }
@@ -3736,10 +3792,15 @@ bool Renderer::reload_shaders(std::string& error) {
     vkDestroyPipeline(r.device, previous_ui, nullptr);
     vkDestroyPipeline(r.device, previous_shadow, nullptr);
     vkDestroyPipeline(r.device, previous_sprite, nullptr);
+    vkDestroyPipeline(r.device, previous_temporal_ui, nullptr);
     for (auto pipeline : {previous_gpu, previous_cull, previous_post, previous_hzb})
         if (pipeline)
             vkDestroyPipeline(r.device, pipeline, nullptr);
+    for (auto pipeline : previous_temporal_pipelines)
+        if (pipeline)
+            vkDestroyPipeline(r.device, pipeline, nullptr);
     vkDestroyPipelineLayout(r.device, previous_layout, nullptr);
+    ++r.temporal.shader_generation;
     error.clear();
     return true;
 }
@@ -3791,6 +3852,9 @@ void Renderer::set_temporal_mode(TemporalMode mode, float scale) {
 }
 TemporalMode Renderer::temporal_mode() const {
     return impl_->config.temporal_mode;
+}
+float Renderer::render_scale() const {
+    return impl_->config.render_scale;
 }
 void Renderer::set_visibility_diagnostics(bool enabled) {
     impl_->config.visibility_diagnostics = enabled;

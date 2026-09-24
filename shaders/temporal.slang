@@ -8,6 +8,7 @@ struct TemporalResolveParameters {
     float4 outputSceneRect;   // output-pixel x/y/width/height
     float4 internalSceneRect; // internal-pixel x/y/width/height
     uint4 flags;              // x = prior history valid
+    float4 jitterMotion;      // xy = current-minus-prior local UV; z = static camera
 };
 [[vk::push_constant]] ConstantBuffer<TemporalResolveParameters> temporalParameters;
 [[vk::binding(0,0)]] Texture2D<float4> currentSceneColor;
@@ -74,15 +75,20 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
 
     if (insideScene && temporalParameters.flags.x != 0) {
         const float4 centerMotion = sceneVelocityAt(currentPixel);
-        if (all(isfinite(centerMotion)) && centerMotion.w > 0 &&
-            centerMotion.z >= 0 && centerMotion.z <= 1) {
-            float4 selectedMotion = centerMotion;
+        const bool centerValid = all(isfinite(centerMotion)) && centerMotion.w > 0 &&
+                                 centerMotion.z >= 0 && centerMotion.z <= 1;
+        float4 selectedMotion = centerMotion;
+        bool stationarySilhouette = false;
+        bool stationaryForegroundEdge = false;
+        if (centerValid) {
             float selectedDepth = currentDepth;
             const float currentTolerance = .002 + .01 * currentDepth;
+            bool touchesFar = false;
             [unroll] for (int dy = -1; dy <= 1; ++dy)
                 [unroll] for (int dx = -1; dx <= 1; ++dx) {
                     const int2 neighbor = clampScenePixel(currentPixel + int2(dx, dy));
                     const float depth = sceneDepthAt(neighbor);
+                    touchesFar = touchesFar || depth >= .999;
                     const float4 motion = sceneVelocityAt(neighbor);
                     if (all(isfinite(motion)) && motion.w > 0 && motion.z >= 0 &&
                         motion.z <= 1 && abs(depth - currentDepth) <= currentTolerance &&
@@ -91,6 +97,35 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
                         selectedMotion = motion;
                     }
                 }
+            const float2 mismatchPixels =
+                (centerMotion.xy - temporalParameters.jitterMotion.xy) * outputRect.zw;
+            stationaryForegroundEdge = touchesFar &&
+                temporalParameters.jitterMotion.z > .5 &&
+                dot(mismatchPixels, mismatchPixels) < .01;
+        } else if (currentDepth >= .999 && temporalParameters.jitterMotion.z > .5) {
+            // The far side of a *static* subpixel silhouette has no center
+            // velocity. Borrow only a neighbor whose motion is indistinguishable
+            // from camera jitter. Moving/revealed edges keep strict rejection.
+            float bestDistance = 1e30;
+            [unroll] for (int dy = -1; dy <= 1; ++dy)
+                [unroll] for (int dx = -1; dx <= 1; ++dx) {
+                    const int2 neighbor = clampScenePixel(currentPixel + int2(dx, dy));
+                    const float depth = sceneDepthAt(neighbor);
+                    const float4 motion = sceneVelocityAt(neighbor);
+                    const float2 mismatchPixels =
+                        (motion.xy - temporalParameters.jitterMotion.xy) * outputRect.zw;
+                    const float distance = float(dx * dx + dy * dy);
+                    if (depth < .999 && all(isfinite(motion)) && motion.w > 0 &&
+                        motion.z >= 0 && motion.z <= 1 &&
+                        dot(mismatchPixels, mismatchPixels) < .01 &&
+                        distance < bestDistance) {
+                        bestDistance = distance;
+                        selectedMotion = motion;
+                        stationarySilhouette = true;
+                    }
+                }
+        }
+        if (centerValid || stationarySilhouette) {
             const float2 previousLocalUV = sceneLocalUV - selectedMotion.xy;
             if (all(isfinite(previousLocalUV)) && all(previousLocalUV >= 0) &&
                 all(previousLocalUV < 1)) {
@@ -102,8 +137,11 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
                         int2(outputExtent) - 1);
                     const float priorDepth = previousHistoryDepth.Load(int3(priorPixel, 0));
                     const float depthTolerance = .002 + .01 * selectedMotion.z;
-                    if (isfinite(priorDepth) &&
-                        abs(priorDepth - selectedMotion.z) <= depthTolerance) {
+                    const bool matchingSurface = isfinite(priorDepth) &&
+                        abs(priorDepth - selectedMotion.z) <= depthTolerance;
+                    const bool matchingFar = (stationarySilhouette || stationaryForegroundEdge) &&
+                        isfinite(priorDepth) && priorDepth >= .999;
+                    if (matchingSurface || matchingFar) {
                         float3 low = float3(1e30), high = float3(-1e30);
                         [unroll] for (int dy = -1; dy <= 1; ++dy)
                             [unroll] for (int dx = -1; dx <= 1; ++dx) {
@@ -112,8 +150,10 @@ void temporalResolveMain(uint3 dispatchId : SV_DispatchThreadID) {
                                 high = max(high, color);
                             }
                         const float2 motionPixels = selectedMotion.xy * outputRect.zw;
-                        const float weight = .9 * saturate(centerMotion.w) /
-                                             (1 + .5 * length(motionPixels));
+                        const float weight = stationarySilhouette || matchingFar
+                            ? .3
+                            : .9 * saturate(centerMotion.w) /
+                                  (1 + .5 * length(motionPixels));
                         const float3 priorColor = clamp(historyBilinear(previousOutputUV).rgb,
                                                         low, high);
                         resolved.rgb = lerp(currentColor.rgb, priorColor, weight);

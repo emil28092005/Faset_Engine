@@ -48,7 +48,10 @@ int main() {
         fs::create_directories(bundle);
         for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
-                                  "gpuHzbMain", "gpuPostCullMain"})
+                                  "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
+                                  "temporalCompositeVertexMain", "temporalCompositeFragmentMain",
+                                  "temporalVertexMain", "temporalFragmentMain",
+                                  "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 fs::copy_file(path_from_utf8(FASET_TEST_SHADER_DIRECTORY) / name, bundle / name);
@@ -88,7 +91,10 @@ int main() {
         render::Renderer renderer(configuration);
         const auto baseline_only = temporary / "baseline-only";
         fs::create_directories(baseline_only);
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain"})
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+                                  "temporalResolveMain", "temporalCompositeVertexMain",
+                                  "temporalCompositeFragmentMain", "temporalVertexMain",
+                                  "temporalFragmentMain", "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 fs::copy_file(bundle / name, baseline_only / name);
@@ -124,6 +130,13 @@ int main() {
         opaque_cube.instance_key = "shader-reload-cube";
         opaque_cube.cast_shadow = false;
         opaque_scene.draws.push_back(opaque_cube);
+        auto temporal_configuration = configuration;
+        temporal_configuration.temporal_mode = render::TemporalMode::TAA;
+        render::Renderer temporal_renderer(temporal_configuration);
+        temporal_renderer.render(opaque_scene);
+        temporal_renderer.render(opaque_scene);
+        require(temporal_renderer.stats().temporal_history_valid,
+                "Temporal reload fixture has a completed color history");
         gpu_renderer.render(opaque_scene);
         const auto gpu_expected = gpu_renderer.pixels();
         render::Snapshot scene;
@@ -141,7 +154,10 @@ int main() {
         fs::create_directories(native_io_path(deep_bundle));
         for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
-                                  "gpuHzbMain", "gpuPostCullMain"})
+                                  "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
+                                  "temporalCompositeVertexMain", "temporalCompositeFragmentMain",
+                                  "temporalVertexMain", "temporalFragmentMain",
+                                  "gpuTemporalVertexMain"})
             for (const auto* extension : {".spv", ".reflection.json"}) {
                 const auto name = std::string(entry) + extension;
                 atomic_write(deep_bundle / name, read_text(bundle / name));
@@ -179,6 +195,17 @@ int main() {
             require(renderer.stats().validation_errors == 0,
                     "Rejected bytecode must not reach Vulkan validation");
         };
+        const auto temporal_resolve = read_text(bundle / "temporalResolveMain.spv");
+        fs::remove(native_io_path(bundle / "temporalResolveMain.spv"));
+        std::string temporal_error;
+        require(!temporal_renderer.reload_shaders(temporal_error) && !temporal_error.empty(),
+                "A partial temporal package must reject reload atomically");
+        temporal_renderer.render(opaque_scene);
+        require(temporal_renderer.stats().effective_temporal_mode == render::TemporalMode::TAA &&
+                    temporal_renderer.stats().temporal_history_valid &&
+                    temporal_renderer.stats().validation_errors == 0,
+                "Rejected temporal reload retains active mode, pixels and history");
+        atomic_write(bundle / "temporalResolveMain.spv", temporal_resolve);
         atomic_write(bundle / "fragmentMain.spv", "damaged bytecode");
         retained();
         restore();
@@ -236,6 +263,13 @@ int main() {
         require(renderer.reload_shaders(error), "Compatible shader edit reloads successfully");
         require(gpu_renderer.reload_shaders(error),
                 "Compatible fragment edit reloads GPU scene pipeline");
+        require(temporal_renderer.reload_shaders(error),
+                "Complete compatible package reloads temporal pipelines");
+        temporal_renderer.render(opaque_scene);
+        require(!temporal_renderer.stats().temporal_history_valid &&
+                    temporal_renderer.stats().temporal_reset_reason ==
+                        render::TemporalResetReason::ShaderReload,
+                "Successful temporal shader reload rejects stale color history");
         gpu_renderer.render(opaque_scene);
         const auto gpu_changed = gpu_renderer.pixels();
         require(gpu_changed != gpu_expected,

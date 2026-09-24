@@ -39,6 +39,54 @@ const char* visibility_mode_name(faset::render::VisibilityMode mode) {
     }
     return "unknown";
 }
+const char* temporal_mode_name(faset::render::TemporalMode mode) {
+    switch (mode) {
+    case faset::render::TemporalMode::Off: return "off";
+    case faset::render::TemporalMode::TAA: return "taa";
+    case faset::render::TemporalMode::Upscale: return "upscale";
+    }
+    return "unknown";
+}
+const char* temporal_fallback_name(faset::render::TemporalFallbackReason reason) {
+    using Reason = faset::render::TemporalFallbackReason;
+    switch (reason) {
+    case Reason::None: return "none";
+    case Reason::ComputeUnavailable: return "compute-unavailable";
+    case Reason::FormatUnavailable: return "format-unavailable";
+    case Reason::ExtentUnsupported: return "extent-unsupported";
+    }
+    return "unknown";
+}
+const char* temporal_reset_name(faset::render::TemporalResetReason reason) {
+    using Reason = faset::render::TemporalResetReason;
+    switch (reason) {
+    case Reason::None: return "none";
+    case Reason::FirstFrame: return "first-frame";
+    case Reason::CameraCut: return "camera-cut";
+    case Reason::CameraDiscontinuity: return "camera-discontinuity";
+    case Reason::ViewChanged: return "view-changed";
+    case Reason::ViewportChanged: return "viewport-changed";
+    case Reason::ProjectionChanged: return "projection-changed";
+    case Reason::Resize: return "resize";
+    case Reason::ModeChanged: return "mode-changed";
+    case Reason::ScaleChanged: return "scale-changed";
+    case Reason::ShaderReload: return "shader-reload";
+    case Reason::Unsupported: return "unsupported";
+    }
+    return "unknown";
+}
+float render_scale_value(const std::string& value) {
+    std::size_t consumed{};
+    float scale{};
+    try {
+        scale = std::stof(value, &consumed);
+    } catch (const std::exception&) {
+        throw std::invalid_argument("--render-scale must be a finite number");
+    }
+    if (consumed != value.size() || !std::isfinite(scale))
+        throw std::invalid_argument("--render-scale must be a finite number");
+    return scale;
+}
 struct ProfileSample {
     double wall{}, simulation{}, snapshot{}, render{}, rendererCpu{}, gpu{}, readbackCpu{};
     faset::runtime::FrameStats runtime;
@@ -125,7 +173,27 @@ Json profileFrames(const std::vector<ProfileSample>& samples) {
                           {"gpu_sun_shadow_ms",
                            gpuMeasured ? Json(sample.lighting.gpu_sun_shadow_ms) : Json(nullptr)},
                           {"gpu_local_shadow_ms",
-                           gpuMeasured ? Json(sample.lighting.gpu_local_shadow_ms) : Json(nullptr)}});
+                           gpuMeasured ? Json(sample.lighting.gpu_local_shadow_ms) : Json(nullptr)},
+                          {"requested_temporal_mode",
+                           temporal_mode_name(sample.lighting.requested_temporal_mode)},
+                          {"effective_temporal_mode",
+                           temporal_mode_name(sample.lighting.effective_temporal_mode)},
+                          {"temporal_fallback_reason",
+                           temporal_fallback_name(sample.lighting.temporal_fallback_reason)},
+                          {"temporal_reset_reason",
+                           temporal_reset_name(sample.lighting.temporal_reset_reason)},
+                          {"temporal_history_valid", sample.lighting.temporal_history_valid},
+                          {"temporal_valid_motion_instances",
+                           sample.lighting.temporal_valid_motion_instances},
+                          {"temporal_internal_width", sample.lighting.temporal_internal_width},
+                          {"temporal_internal_height", sample.lighting.temporal_internal_height},
+                          {"temporal_jitter", sample.lighting.temporal_jitter},
+                          {"gpu_temporal_resolve_ms",
+                           gpuMeasured ? Json(sample.lighting.gpu_temporal_resolve_ms) : Json(nullptr)},
+                          {"gpu_temporal_composite_ms",
+                           gpuMeasured ? Json(sample.lighting.gpu_temporal_composite_ms) : Json(nullptr)},
+                          {"gpu_ui_ms",
+                           gpuMeasured ? Json(sample.lighting.gpu_ui_ms) : Json(nullptr)}});
     }
     return {{"samples", std::move(frames)},
             {"summary_ms",
@@ -234,6 +302,8 @@ int player_main(int argc, char** argv) {
             projectRoot;
         bool headless = false, validateOnly = false, debugPhysics = false, watchLua = false;
         auto visibilityMode = faset::render::VisibilityMode::Direct;
+        auto temporalMode = faset::render::TemporalMode::Off;
+        float renderScale = 1.f;
         std::string visibilityName = "direct";
         std::uint64_t maximumFrames = 0;
         std::set<std::string> options;
@@ -244,7 +314,8 @@ int player_main(int argc, char** argv) {
                     << "faset_player [--scene PATH] [--assets CACHE] [--frames N] "
                        "[--headless] [--capture PATH.ppm] [--validate] [--control PATH] "
                        "[--profile PATH.json] [--debug-physics] [--project ROOT] "
-                       "[--watch-lua] [--visibility direct|gpu-frustum|gpu-occlusion]\n"
+                       "[--watch-lua] [--visibility direct|gpu-frustum|gpu-occlusion] "
+                       "[--temporal off|taa|upscale] [--render-scale 0.5..1]\n"
                        "No --scene: open scene.fscene beside the executable. CACHE contains "
                        "assets/<id>/.\n"
                        "Headless uses offscreen Vulkan; --frames uses the configured fixed "
@@ -262,6 +333,9 @@ int player_main(int argc, char** argv) {
                        "--visibility selects the renderer for this Player run; Direct is "
                        "the default. GPU modes require their packaged shader bundle and "
                        "device capabilities.\n"
+                       "--temporal selects scene TAA or temporal upscaling; Off is the default. "
+                       "--render-scale applies only to upscale and must be at least 0.5 "
+                       "and less than 1. UI remains at output resolution.\n"
                        "Keys: A/D horizontal, W/S vertical, Space jump, E interact, P pause, "
                        "N single-step, F3 physics boxes, Escape quit.\n";
                 return 0;
@@ -298,6 +372,18 @@ int player_main(int argc, char** argv) {
                                                 "or gpu-occlusion");
             } else if (arg == "--frames")
                 maximumFrames = count(value());
+            else if (arg == "--temporal") {
+                const auto selected = value();
+                if (selected == "off")
+                    temporalMode = faset::render::TemporalMode::Off;
+                else if (selected == "taa")
+                    temporalMode = faset::render::TemporalMode::TAA;
+                else if (selected == "upscale")
+                    temporalMode = faset::render::TemporalMode::Upscale;
+                else
+                    throw std::invalid_argument("--temporal must be off, taa or upscale");
+            } else if (arg == "--render-scale")
+                renderScale = render_scale_value(value());
             else if (arg == "--headless")
                 headless = true;
             else if (arg == "--validate")
@@ -309,6 +395,7 @@ int player_main(int argc, char** argv) {
             else
                 throw std::invalid_argument("Unknown option: " + arg);
         }
+        (void)faset::render::temporal_internal_extent(1280, 720, temporalMode, renderScale);
         if (options.contains("--profile") &&
             (profilePath.empty() || !options.contains("--frames") || maximumFrames > 100000 ||
              validateOnly))
@@ -413,6 +500,8 @@ int player_main(int argc, char** argv) {
         renderConfig.headless = headless;
         renderConfig.validation = true;
         renderConfig.visibility_mode = visibilityMode;
+        renderConfig.temporal_mode = temporalMode;
+        renderConfig.render_scale = renderScale;
         faset::render::Renderer renderer(renderConfig);
         const auto rendererReady = Clock::now();
         std::vector<ProfileSample> profile;
@@ -604,6 +693,13 @@ int player_main(int argc, char** argv) {
                           << "using "
                           << visibility_mode_name(renderer.stats().effective_visibility_mode)
                           << " rendering.\n";
+            if (frames == 0 && temporalMode != renderer.stats().effective_temporal_mode)
+                std::cerr << "Requested " << temporal_mode_name(temporalMode)
+                          << " temporal rendering is unavailable ("
+                          << temporal_fallback_name(renderer.stats().temporal_fallback_reason)
+                          << "); using "
+                          << temporal_mode_name(renderer.stats().effective_temporal_mode)
+                          << ".\n";
             const auto frameFinished = Clock::now();
             if (frames == 0)
                 firstFrameMs = milliseconds(started, frameFinished);
@@ -649,6 +745,12 @@ int player_main(int argc, char** argv) {
                  {"visibility_mode", visibilityName},
                  {"effective_visibility_mode",
                   visibility_mode_name(stats.effective_visibility_mode)},
+                 {"temporal_mode", temporal_mode_name(temporalMode)},
+                 {"render_scale", renderScale},
+                 {"effective_temporal_mode",
+                  temporal_mode_name(stats.effective_temporal_mode)},
+                 {"temporal_fallback_reason",
+                  temporal_fallback_name(stats.temporal_fallback_reason)},
                  {"effective_lighting_path", stats.effective_lighting_path},
                  {"simulation_mode", "synthetic_fixed_timestep"},
                  {"fixed_delta_seconds", config.fixedDelta},
@@ -678,6 +780,9 @@ int player_main(int argc, char** argv) {
                                     {"visibility_mode", visibilityName},
                                     {"effective_visibility_mode",
                                      visibility_mode_name(stats.effective_visibility_mode)},
+                                    {"temporal_mode", temporal_mode_name(temporalMode)},
+                                    {"effective_temporal_mode",
+                                     temporal_mode_name(stats.effective_temporal_mode)},
                                     {"gpu_visibility_active", stats.gpu_visibility_active},
                                     {"validation_errors", stats.validation_errors}}
                          .dump()

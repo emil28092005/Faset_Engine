@@ -239,6 +239,7 @@ class Renderer {
     VisibilityMode visibility_mode() const;
     void set_temporal_mode(TemporalMode mode, float render_scale = 1.f);
     TemporalMode temporal_mode() const;
+    float render_scale() const;
     void set_visibility_diagnostics(bool enabled);
     // Reads the most recently completed HZB mip for editor diagnostics only.
     // Normal visibility decisions remain entirely on the GPU.
