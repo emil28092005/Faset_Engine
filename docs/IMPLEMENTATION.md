@@ -501,7 +501,18 @@ scene reached 149.39 ms p95 wall time, dominated by CPU simulation/snapshot;
 this is a visible scalability issue, not a tiny-demo Release budget comparison.
 The historical exact-scene Release budgets were met in the earlier 2026-09-18
 record, but that evolving working-tree baseline does not certify the current
-revision. A quiet-host current Release rerun is pending.
+revision. A clean `4a3453e` physical-GPU rerun now covers both exact-scene
+source-hidden Release games, sequentially for 240 frames at 1280×720 with
+active Khronos validation. 2D/3D p95 frame wall was 2.694/3.036 ms, GPU
+0.573/0.617 ms, readback 0.559/0.561 ms, simulation 0.242/0.300 ms, snapshot
+0.197/0.288 ms; startup from `main()` was 295.4/248.3 ms. These meet their
+initial tracking budgets. Explicit Vulkan allocation instead reached
+45,112,032/45,212,272 bytes (43.02/43.12 MiB), exceeding the 20 MiB target:
+eager 2048² D32 sun and local atlases consume 16 MiB each even in the 2D
+fixture with zero shadow raster. This memory miss is recorded, not silently
+rebaselined. The same clean build exported and source-hidden relocated C++ 2D,
+C++ 3D with Blender import, and Lua-only games; all rendered 120 frames with
+validation active and zero reported errors.
 
 Linux focused cache, diagnostics, schema and workflow-math tests pass; a real
 failed-build replay now reports navigable `Scripts/Gameplay.cpp:73:2`. The

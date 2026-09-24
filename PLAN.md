@@ -192,8 +192,17 @@ CTest и перенос всех трёх Release-игр, включая Lua-onl
 [чистой ревизии `4ac02ee`](https://github.com/emil28092005/Faset_Engine/actions/runs/35937433040).
 Это функциональная проверка software Vulkan без активного validation layer.
 Исторический Release benchmark точных демо нельзя
-подменять новым Debug workflow; свежий Release reference и физический Windows GPU
-остаются отдельным покрытием. Dynamic gameplay loading рассматривать при
+подменять новым Debug workflow. На чистой совмещённой ревизии `4a3453e`
+все три Release-игры после переноса и скрытия исходников отрисовали по 120
+кадров на физической RTX с активной Vulkan validation и без ошибок. Точные
+2D/3D демо отдельно прошли по 240 кадров: p95 полного кадра 2,694/3,036 мс,
+GPU 0,573/0,617 мс, readback 0,559/0,561 мс, simulation 0,242/0,300 мс,
+snapshot 0,197/0,288 мс; startup 295/248 мс. Эти показатели укладываются
+в соответствующие tracking budgets. Явные Vulkan allocations 43,02/43,12 MiB
+**превысили** исходный ориентир 20 MiB из-за двух постоянно созданных 2048²
+D32 shadow-атласов по 16 MiB; даже 2D-сцена с нулём shadow raster держит оба.
+Память требует оптимизации/нового baseline, без подмены бюджета. Физический
+Windows GPU остаётся отдельным покрытием. Dynamic gameplay loading рассматривать при
 подтверждённой проблеме линковки, без обещания C++ hot reload в P1.
 
 ### P2. GPU-driven visibility и LOD

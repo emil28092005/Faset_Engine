@@ -5,8 +5,10 @@ implementation and measured Forward+ checkpoint is source revision
 `a0a4e29d480ed3344f19bd3565d48668ca913fed` on `feat/p3-lighting`.
 The earlier shadow/benchmark integration checkpoint was `b191ae0`. The
 lighting slice has Linux functional and reference-GPU evidence plus Windows
-SwiftShader CI at the tiled revision. Temporal reconstruction and the final
-combined revision have their own acceptance.
+SwiftShader CI at the tiled revision. The combined P1+P3 renderer checkpoint
+`4a3453e` was tested separately, including the temporal renderer. Its lighting
+A/B raw data are in [study 24](../../studies/24-p3-integrated-forward-plus-2026-09-24.md),
+and temporal image/cost evidence has a [separate record](../p3-temporal-2026-09-24/README.md).
 
 ## Implemented at the checkpoint
 
@@ -43,16 +45,16 @@ combined revision have their own acceptance.
 
 | Case | Automated evidence | Current status |
 | --- | --- | --- |
-| Empty, disabled, local-only, multiple sun; schema bounds | `scene_view`, `render_lighting_policy`, `render_offscreen` | Linux Debug green at `a0a4e29`; integrated revision pending |
-| Four cascades, split bounds, subtexel stabilization, offscreen/source-LOD0 caster | `render_lighting_policy`, `render_lighting_sun` | Linux GPU and pinned SwiftShader P3 green at `a0a4e29` |
-| Spot cone, six point faces and seam, dropped whole point shadow | `render_lighting_local`, `render_lighting_policy` | Linux GPU and pinned SwiftShader P3 green at `a0a4e29` |
+| Empty, disabled, local-only, multiple sun; schema bounds | `scene_view`, `render_lighting_policy`, `render_offscreen` | Linux Debug green at `4a3453e` |
+| Four cascades, split bounds, subtexel stabilization, offscreen/source-LOD0 caster | `render_lighting_policy`, `render_lighting_sun` | Linux GPU green at `4a3453e`; pinned SwiftShader P3 green at `a0a4e29` |
+| Spot cone, six point faces and seam, dropped whole point shadow | `render_lighting_local`, `render_lighting_policy` | Linux GPU green at `4a3453e`; pinned SwiftShader P3 green at `a0a4e29` |
 | 128-light/16-face/4096-draw limits, optional-atlas fallback | `render_lighting_policy`, `render_offscreen`, `render_lighting_local` | CPU and supported-atlas GPU paths covered; allocation fallback not exercised on an actual constrained device; sampled D32 is a renderer requirement |
-| Direct/GPU frustum/GPU occlusion image parity, P2 reload and 2D/UI independence | `render_lighting_sun`, `render_lighting_local`, `render_shader_reload`, `render_offscreen` | Linux Debug green at `a0a4e29`; integrated revision pending |
-| Forward+/forward parity, near plane, resize, overflow, and shader reload | `render_lighting_tiled`, `render_shader_reload`, `render_shader_reflection`, `build_schema_publication` | Linux Debug and pinned SwiftShader P3 green at `a0a4e29`; 128-light localized Release captures match exactly |
-| Driver, profile, real 64×64 benchmark smoke | `render_lighting_benchmark_schema`, `render_lighting_benchmark_smoke`, `player_shutdown_diagnostics` | Full Linux Debug green at `a0a4e29` |
-| 1920×1080 0/4/16/32/64/128 Release sweep, three repeats, both shadow states | `tools/benchmark_p3_lighting.py --sweep` | Forward baseline measured; its separate raw study is being integrated |
-| 1920×1080 paired paths, 32/64/128 dense and localized lights | `faset_p3_lighting_benchmark --lighting forward|tiled` | Raw 1080 frames and six diagnostic samples retained in study 23; dense slower, localized faster by build+raster |
-| Windows native build, pinned SwiftShader GPU tests, relocated Release 2D/3D Players | `windows-graphics.yml`, `ci.yml` | Native/manual and Windows graphics passed at `a0a4e29`; 64/64 Windows CTests and two relocated 120-frame Release games; combined revision pending |
+| Direct/GPU frustum/GPU occlusion image parity, P2 reload and 2D/UI independence | `render_lighting_sun`, `render_lighting_local`, `render_shader_reload`, `render_offscreen` | Linux Debug green at `4a3453e` |
+| Forward+/forward parity, near plane, resize, overflow, and shader reload | `render_lighting_tiled`, `render_shader_reload`, `render_shader_reflection`, `build_schema_publication` | Linux Debug green at `4a3453e`; pinned SwiftShader P3 green at `a0a4e29`; 128-light localized Release captures matched at `a0a4e29` |
+| Driver, profile, real 64×64 benchmark smoke | `render_lighting_benchmark_schema`, `render_lighting_benchmark_smoke`, `player_shutdown_diagnostics` | Full Linux Debug green at `4a3453e` |
+| 1920×1080 0/4/16/32/64/128 Release sweep, three repeats, both shadow states | `tools/benchmark_p3_lighting.py --sweep` | Forward and tiled repeated at clean `4a3453e`: 6,480 raw frames across three visibility modes; study 24 |
+| 1920×1080 paired paths, 32/64/128 dense and localized lights | `faset_p3_lighting_benchmark --lighting forward|tiled` | Dense tiled 11–13% slower; localized tiled 43–54% faster in build+raster on the reference GPU; study 24 retains another 1,080 localized frames |
+| Windows native build, pinned SwiftShader GPU tests, relocated Release 2D/3D Players | `windows-graphics.yml`, `ci.yml` | Native/manual passed at `4a3453e`; Windows graphics at that revision is tracked below; `a0a4e29` passed 64 Windows CTests and two relocated 120-frame Release games |
 
 The supported-atlas GPU tests create a renderer with validation requested and
 assert zero reported Vulkan errors; a test result is a validation-layer pass only
@@ -60,6 +62,20 @@ when the layer was actually active. `render_window_lifecycle` can skip if the
 Linux compositor declines programmatic restore. The Windows workflow uses pinned
 SwiftShader, not a physical Windows GPU, and may lack the Khronos layer. Linux
 reference-GPU results cannot establish physical Windows performance.
+
+At clean combined source `4a3453e`, the [local Linux Debug run](linux-debug-integrated-4a3453e-ctest.txt)
+registered 73 CTests: 72 passed, no failures and one compositor-dependent window
+lifecycle skip. Both real Release C++ games and the Lua-only game were relocated with
+their source projects hidden and rendered 120/120 frames each on the physical
+RTX 2080 Ti with active Khronos validation and zero reported errors. The
+[native/manual CI run](https://github.com/emil28092005/Faset_Engine/actions/runs/35944874993)
+passed on Linux and Windows; the corresponding
+[Windows graphics run](https://github.com/emil28092005/Faset_Engine/actions/runs/35944875002)
+is the integrated SwiftShader acceptance run. The P3 paired sweep was repeated
+on this exact clean revision with identical binary and shader hashes across
+forward and tiled paths. The timed CSVs omit tile-occupancy readback: their
+zero-valued overflow field is **not** evidence of no overflow. Study 24 retains
+all frame rows, hashes and bounded interpretation.
 
 ## Reproduction and retained evidence
 
@@ -100,7 +116,7 @@ and [Windows graphics/SwiftShader CI](https://github.com/emil28092005/Faset_Engi
 also passed. The Windows graphics job ran all 64 CTests, including the tiled
 image case, and exported and relocated both checked-in Release games for 120
 frames. This is software Vulkan on Windows; physical Windows GPU performance
-and the later combined P1+P3 revision remain unverified here.
+remains unverified here. The combined P1+P3 CI links above are separate.
 
 ```sh
 cmake --build --preset linux-debug --parallel 2
@@ -114,9 +130,10 @@ The benchmark wrapper retains one raw CSV per run, a merged CSV, and a summary.
 It rejects visibility fallback, missing GPU timestamps, missing lights, duplicate
 frames, and validation errors. An offscreen capture's `cpu_ms` includes GPU wait
 and readback; it is not thread CPU time. The exact Release benchmark revision,
-driver and paired path data are retained in study 23. Release full CTest,
-final integrated Windows Actions and relocated Player checks still need to be
-added before this is a complete P3 lighting acceptance record.
+driver and original paired path data are retained in study 23. The combined
+clean-revision repeat and three relocated physical-GPU games are now in study
+24 and the P1 record. Final Release full CTest and integrated Windows graphics
+results are tracked separately from the earlier source checkpoints.
 
 ## Limits carried forward
 

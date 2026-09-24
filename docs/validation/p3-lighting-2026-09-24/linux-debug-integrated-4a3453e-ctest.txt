@@ -1,0 +1,160 @@
+Test project /home/emil/Desktop/.worktrees/Faset_Engine-p1-p3-integration/build/linux-debug
+      Start 52: build_schema_publication
+      Start 12: render_temporal_acceptance
+ 1/73 Test #12: render_temporal_acceptance .........   Passed   10.32 sec
+      Start 25: render_lighting_benchmark_schema
+ 2/73 Test #25: render_lighting_benchmark_schema ...   Passed    7.22 sec
+      Start 66: editor_gui_mcp
+ 3/73 Test #66: editor_gui_mcp .....................   Passed    4.88 sec
+      Start 21: render_shader_reload
+ 4/73 Test #21: render_shader_reload ...............   Passed    5.15 sec
+      Start 60: editor_ui_reload
+ 5/73 Test #60: editor_ui_reload ...................   Passed    4.20 sec
+      Start 23: render_shader_reflection
+ 6/73 Test #23: render_shader_reflection ...........   Passed    3.95 sec
+      Start 59: editor_ui_project_settings
+ 7/73 Test #52: build_schema_publication ...........   Passed   37.86 sec
+      Start 47: lua_player_reload
+ 8/73 Test #59: editor_ui_project_settings .........   Passed    3.53 sec
+      Start 62: editor_ui_templates
+ 9/73 Test #47: lua_player_reload ..................   Passed    2.65 sec
+      Start  9: render_lighting_tiled
+10/73 Test #62: editor_ui_templates ................   Passed    2.73 sec
+      Start 45: player_shutdown_diagnostics
+11/73 Test  #9: render_lighting_tiled ..............   Passed    3.12 sec
+      Start 28: gpu_visibility
+12/73 Test #28: gpu_visibility .....................   Passed    1.29 sec
+      Start 54: editor_session_settings
+13/73 Test #45: player_shutdown_diagnostics ........   Passed    3.41 sec
+      Start 42: render_gpu_open_sequence
+14/73 Test #54: editor_session_settings ............   Passed    2.14 sec
+      Start 32: render_gpu_door
+15/73 Test #42: render_gpu_open_sequence ...........   Passed    1.85 sec
+      Start 63: editor_ui_gizmos
+16/73 Test #32: render_gpu_door ....................   Passed    0.85 sec
+      Start 64: editor_ui_authoring
+17/73 Test #63: editor_ui_gizmos ...................   Passed    1.09 sec
+      Start 19: render_offscreen
+18/73 Test #19: render_offscreen ...................   Passed    0.67 sec
+      Start 58: editor_ui_import_conflicts
+19/73 Test #64: editor_ui_authoring ................   Passed    1.69 sec
+      Start 39: render_gpu_lifecycle
+20/73 Test #58: editor_ui_import_conflicts .........   Passed    1.08 sec
+      Start 61: editor_ui_launcher
+21/73 Test #61: editor_ui_launcher .................   Passed    0.97 sec
+      Start 15: render_temporal_lifecycle
+22/73 Test #39: render_gpu_lifecycle ...............   Passed    1.46 sec
+      Start 57: ui_render
+23/73 Test #57: ui_render ..........................   Passed    0.73 sec
+      Start 20: render_sprite_alpha
+24/73 Test #20: render_sprite_alpha ................   Passed    0.67 sec
+      Start  8: render_lighting_local
+25/73 Test #15: render_temporal_lifecycle ..........   Passed    1.57 sec
+      Start 73: playable_3d
+26/73 Test  #8: render_lighting_local ..............   Passed    1.09 sec
+      Start  7: render_lighting_sun
+27/73 Test #73: playable_3d ........................   Passed    0.93 sec
+      Start 36: render_gpu_lod
+28/73 Test #36: render_gpu_lod .....................   Passed    0.93 sec
+      Start 38: render_gpu_near
+29/73 Test  #7: render_lighting_sun ................   Passed    1.27 sec
+      Start 31: render_gpu_dense
+30/73 Test #38: render_gpu_near ....................   Passed    0.85 sec
+      Start 26: render_lighting_benchmark_smoke
+31/73 Test #31: render_gpu_dense ...................   Passed    0.73 sec
+      Start 37: render_gpu_teleport
+32/73 Test #26: render_lighting_benchmark_smoke ....   Passed    0.60 sec
+      Start 41: render_gpu_projection
+33/73 Test #37: render_gpu_teleport ................   Passed    0.70 sec
+      Start 35: render_gpu_resize
+34/73 Test #41: render_gpu_projection ..............   Passed    0.70 sec
+      Start 40: render_gpu_views
+35/73 Test #35: render_gpu_resize ..................   Passed    0.73 sec
+      Start 34: render_gpu_cut
+36/73 Test #40: render_gpu_views ...................   Passed    0.74 sec
+      Start 30: render_gpu_capacity
+37/73 Test #34: render_gpu_cut .....................   Passed    0.74 sec
+      Start 11: render_temporal_graph
+38/73 Test #30: render_gpu_capacity ................   Passed    0.76 sec
+      Start 29: render_gpu_empty
+39/73 Test #11: render_temporal_graph ..............   Passed    0.80 sec
+      Start 43: render_gpu_transparent
+40/73 Test #29: render_gpu_empty ...................   Passed    0.72 sec
+      Start 33: render_gpu_shadow
+41/73 Test #43: render_gpu_transparent .............   Passed    0.72 sec
+      Start 72: playable_2d
+42/73 Test #33: render_gpu_shadow ..................   Passed    0.63 sec
+      Start 51: process_and_cook
+43/73 Test #72: playable_2d ........................   Passed    0.41 sec
+      Start 65: editor_mcp_stdio
+44/73 Test #51: process_and_cook ...................   Passed    0.37 sec
+      Start  6: lua_safety_contracts
+45/73 Test #65: editor_mcp_stdio ...................   Passed    0.23 sec
+      Start 67: core
+46/73 Test #67: core ...............................   Passed    0.15 sec
+      Start  2: runtime_contracts
+47/73 Test  #6: lua_safety_contracts ...............   Passed    0.20 sec
+      Start 56: ui_widgets
+48/73 Test  #2: runtime_contracts ..................   Passed    0.12 sec
+      Start  3: assets_pipeline
+49/73 Test #56: ui_widgets .........................   Passed    0.13 sec
+      Start  5: lua_contracts
+50/73 Test  #3: assets_pipeline ....................   Passed    0.15 sec
+      Start 46: lua_cli_contracts
+51/73 Test  #5: lua_contracts ......................   Passed    0.13 sec
+      Start 50: build_cache
+52/73 Test #46: lua_cli_contracts ..................   Passed    0.16 sec
+      Start  4: assets_blender_bundle
+53/73 Test #50: build_cache ........................   Passed    0.16 sec
+      Start 71: tutorial_physics
+54/73 Test  #4: assets_blender_bundle ..............   Passed    0.08 sec
+      Start 22: render_gpu_shader_contract
+55/73 Test #71: tutorial_physics ...................   Passed    0.07 sec
+      Start  1: authoring
+56/73 Test  #1: authoring ..........................   Passed    0.05 sec
+      Start 10: render_lighting_policy
+57/73 Test #22: render_gpu_shader_contract .........   Passed    0.06 sec
+      Start 13: render_temporal_shader_contract
+58/73 Test #13: render_temporal_shader_contract ....   Passed    0.03 sec
+      Start 53: editor_plugins
+59/73 Test #10: render_lighting_policy .............   Passed    0.04 sec
+      Start 70: tutorial_spawning
+60/73 Test #70: tutorial_spawning ..................   Passed    0.02 sec
+      Start 68: tutorial_moving
+61/73 Test #53: editor_plugins .....................   Passed    0.03 sec
+      Start 49: build_diagnostics
+62/73 Test #68: tutorial_moving ....................   Passed    0.02 sec
+      Start 44: player_scene_contracts
+63/73 Test #44: player_scene_contracts .............   Passed    0.02 sec
+      Start 48: editor_mcp
+64/73 Test #49: build_diagnostics ..................   Passed    0.03 sec
+      Start 55: editor_autosave
+65/73 Test #48: editor_mcp .........................   Passed    0.01 sec
+      Start 69: tutorial_following
+66/73 Test #55: editor_autosave ....................   Passed    0.01 sec
+      Start 17: render_temporal_policy
+67/73 Test #69: tutorial_following .................   Passed    0.01 sec
+      Start 27: visibility_policy
+68/73 Test #17: render_temporal_policy .............   Passed    0.01 sec
+      Start 18: render_graph
+69/73 Test #27: visibility_policy ..................   Passed    0.00 sec
+      Start 14: render_temporal_reference
+70/73 Test #18: render_graph .......................   Passed    0.00 sec
+      Start 16: render_temporal_motion
+71/73 Test #14: render_temporal_reference ..........   Passed    0.00 sec
+      Start 24: render_window_lifecycle
+72/73 Test #16: render_temporal_motion .............   Passed    0.00 sec
+73/73 Test #24: render_window_lifecycle ............***Skipped   4.21 sec
+
+100% tests passed, 0 tests failed out of 73
+
+Label Time Summary:
+gpu       =  70.84 sec*proc (38 tests)
+p2        =  14.42 sec*proc (16 tests)
+p3        =  13.33 sec*proc (6 tests)
+window    =   9.09 sec*proc (2 tests)
+
+Total Test time (real) =  64.96 sec
+
+The following tests did not run:
+	 24 - render_window_lifecycle (Skipped)
