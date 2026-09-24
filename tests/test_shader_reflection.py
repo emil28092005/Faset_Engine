@@ -56,14 +56,34 @@ class ReflectionTests(unittest.TestCase):
                 (d["set"], d["binding"]): (d["type"], d.get("element_stride"))
                 for d in fragment["layout"]["descriptors"]
             }
-            self.assertEqual([lighting[1, i] for i in range(4)],
+            self.assertEqual([lighting[1, i] for i in range(5)],
                              [("storage_buffer", 80), ("storage_buffer", 80),
-                              ("storage_buffer", 112), ("sampled_image_2d", None)])
+                              ("storage_buffer", 112), ("sampled_image_2d", None),
+                              ("storage_buffer", 4)])
             graphics = {
                 (d["set"], d["binding"]): d["element_stride"]
                 for d in gpu_vertex["layout"]["descriptors"]
             }
             self.assertEqual([graphics[2, i] for i in range(3)], [288, 4, 208])
+
+    def test_light_tile_compute_reflection(self):
+        compiler = os.environ["FASET_TEST_SLANGC"]
+        with tempfile.TemporaryDirectory(prefix="faset-light-tiles-abi-") as directory:
+            process = subprocess.run(
+                [sys.executable, str(SCRIPT), "--compiler", compiler, "--source",
+                 str(SCRIPT.parents[1] / "shaders" / "light_tiles.slang"), "--entry",
+                 "lightTileMain", "--output", directory],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            layout = json.loads((Path(directory) / "lightTileMain.reflection.json").read_text())["layout"]
+            self.assertEqual(layout["stage"], "compute")
+            self.assertEqual(
+                [(item["set"], item["binding"], item["type"], item.get("element_stride"))
+                 for item in layout["descriptors"]],
+                [(0, 0, "storage_buffer", 80), (0, 1, "storage_buffer", 4)],
+            )
+            self.assertEqual(layout["push_constants"][0]["size"], 96)
 
     def test_gpu_vertex_paths_do_not_require_shader_draw_parameters(self):
         # SV_InstanceID makes Slang subtract BaseInstance and emit DrawParameters.

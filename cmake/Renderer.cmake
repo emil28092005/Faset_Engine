@@ -35,6 +35,14 @@ add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/gp
   BYPRODUCTS "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.slang-reflection.json"
   DEPENDS "${PROJECT_SOURCE_DIR}/shaders/gpu_scene.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
 list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/gpuTemporalVertexMain.reflection.json")
+set(FASET_SHADER_OUTPUT "${FASET_SHADER_DIRECTORY}/lightTileMain.spv")
+add_custom_command(OUTPUT "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/lightTileMain.reflection.json"
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py"
+          --compiler "${SLANGC_EXECUTABLE}" --source "${PROJECT_SOURCE_DIR}/shaders/light_tiles.slang"
+          --entry lightTileMain --output "${FASET_SHADER_DIRECTORY}"
+  BYPRODUCTS "${FASET_SHADER_DIRECTORY}/lightTileMain.slang-reflection.json"
+  DEPENDS "${PROJECT_SOURCE_DIR}/shaders/light_tiles.slang" "${PROJECT_SOURCE_DIR}/tools/compile_shader.py" VERBATIM)
+list(APPEND FASET_SHADER_OUTPUTS "${FASET_SHADER_OUTPUT}" "${FASET_SHADER_DIRECTORY}/lightTileMain.reflection.json")
 foreach(FASET_ENTRY gpuVertexMain gpuShadowMain gpuCullMain gpuHzbMain gpuPostCullMain)
   if(FASET_ENTRY STREQUAL "gpuVertexMain" OR FASET_ENTRY STREQUAL "gpuShadowMain")
     set(FASET_GPU_DEFINE FASET_GPU_GRAPHICS=1)
@@ -86,6 +94,8 @@ if(BUILD_TESTING)
   set_tests_properties(render_lighting_sun PROPERTIES LABELS "gpu;p3")
   add_test(NAME render_lighting_local COMMAND faset_render_lighting_gpu_tests --local)
   set_tests_properties(render_lighting_local PROPERTIES LABELS "gpu;p3")
+  add_test(NAME render_lighting_tiled COMMAND faset_render_lighting_gpu_tests --tiled)
+  set_tests_properties(render_lighting_tiled PROPERTIES LABELS "gpu;p3")
   add_executable(faset_render_lighting_policy_tests "${PROJECT_SOURCE_DIR}/tests/render_lighting_policy_tests.cpp")
   target_link_libraries(faset_render_lighting_policy_tests PRIVATE faset_render)
   add_test(NAME render_lighting_policy COMMAND faset_render_lighting_policy_tests)

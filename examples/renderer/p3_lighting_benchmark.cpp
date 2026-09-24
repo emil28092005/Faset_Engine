@@ -19,8 +19,10 @@ namespace fs = std::filesystem;
 namespace {
 struct Options {
     unsigned lights{}, width{1920}, height{1080}, warmup{10}, frames{30}, run_index{};
-    bool shadows{}, validation{};
+    bool shadows{}, validation{}, tile_diagnostics{};
     VisibilityMode visibility{VisibilityMode::Direct};
+    LightingMode lighting{LightingMode::Auto};
+    std::string light_layout{"dense"};
     std::string commit{"unknown"}, driver{"unknown"};
     fs::path csv, capture;
 };
@@ -48,6 +50,8 @@ Options parse(int argc, char** argv) {
                          "--shadows on|off --visibility direct|gpu-frustum|gpu-occlusion "
                          "--csv PATH [--width N --height N --warmup N --frames N "
                          "--run-index N --commit SHA --driver NAME --validation on|off "
+                         "--lighting auto|forward|tiled --light-layout dense|localized "
+                         "--tile-diagnostics on|off "
                          "--capture PATH]\n";
             std::exit(0);
         }
@@ -72,11 +76,24 @@ Options parse(int argc, char** argv) {
             if (value != "on" && value != "off")
                 throw std::invalid_argument("--validation must be on or off");
             options.validation = value == "on";
+        } else if (name == "--tile-diagnostics") {
+            if (value != "on" && value != "off")
+                throw std::invalid_argument("--tile-diagnostics must be on or off");
+            options.tile_diagnostics = value == "on";
         } else if (name == "--visibility") {
             if (value == "direct") options.visibility = VisibilityMode::Direct;
             else if (value == "gpu-frustum") options.visibility = VisibilityMode::GpuFrustum;
             else if (value == "gpu-occlusion") options.visibility = VisibilityMode::GpuOcclusion;
             else throw std::invalid_argument("Unknown visibility mode: " + value);
+        } else if (name == "--lighting") {
+            if (value == "auto") options.lighting = LightingMode::Auto;
+            else if (value == "forward") options.lighting = LightingMode::Forward;
+            else if (value == "tiled") options.lighting = LightingMode::Tiled;
+            else throw std::invalid_argument("Unknown lighting mode: " + value);
+        } else if (name == "--light-layout") {
+            if (value != "dense" && value != "localized")
+                throw std::invalid_argument("--light-layout must be dense or localized");
+            options.light_layout = value;
         } else throw std::invalid_argument("Unknown option: " + name);
     }
     constexpr std::array allowed_lights{0u, 4u, 16u, 32u, 64u, 128u};
@@ -146,7 +163,7 @@ Snapshot benchmark_scene(const Options& options) {
                        .6f + .4f * float(i % 3 == 1),
                        .6f + .4f * float(i % 3 == 2), 1};
         light.intensity = 5.f;
-        light.range = 8.f;
+        light.range = options.light_layout == "localized" ? 1.75f : 8.f;
         light.casts_shadow = options.shadows;
         scene.local_lights.push_back(std::move(light));
     }
@@ -160,6 +177,8 @@ void benchmark(const Options& options) {
     config.headless = true;
     config.validation = options.validation;
     config.visibility_mode = options.visibility;
+    config.lighting_mode = options.lighting;
+    config.visibility_diagnostics = options.tile_diagnostics;
     auto renderer = Renderer(config);
     const auto scene = benchmark_scene(options);
     for (unsigned i = 0; i < options.warmup; ++i)
@@ -169,14 +188,18 @@ void benchmark(const Options& options) {
     std::ofstream csv(faset::native_io_path(options.csv));
     if (!csv)
         throw std::runtime_error("Cannot open benchmark CSV: " + faset::path_to_utf8(options.csv));
-    csv << "light_count,shadows,visibility,effective_visibility,lighting_path,"
+    csv << "light_count,light_layout,shadows,visibility,effective_visibility,lighting_path,"
+           "requested_lighting,"
            "build_configuration,run_index,frame,"
            "device,driver,commit,width,height,validation_enabled,validation_errors,"
            "submitted_local_lights,omitted_local_lights,"
            "requested_local_shadow_faces,rendered_local_shadow_faces,dropped_shadow_faces,"
            "shadow_atlas_full_drops,shadow_tiles,draw_calls,gpu_bytes,"
            "gpu_main_raster_ms,gpu_post_raster_ms,gpu_post_visible,visibility_counters_valid,"
-           "gpu_sun_shadow_ms,gpu_local_shadow_ms,gpu_shadow_ms,gpu_ms,cpu_ms,readback_cpu_ms\n";
+           "gpu_sun_shadow_ms,gpu_local_shadow_ms,gpu_shadow_ms,gpu_light_tiles_ms,"
+           "gpu_build_plus_raster_ms,light_tile_count,light_tile_counts_valid,"
+           "light_tile_candidate_count,light_tile_overflow_count,"
+           "gpu_ms,cpu_ms,readback_cpu_ms\n";
     csv << std::fixed << std::setprecision(6);
     for (unsigned frame = 0; frame < options.frames; ++frame) {
         renderer.render(scene);
@@ -189,9 +212,13 @@ void benchmark(const Options& options) {
             throw std::runtime_error("Requested visibility path fell back during benchmark");
         if (stats.gpu_main_raster_ms <= 0 || stats.gpu_ms <= 0)
             throw std::runtime_error("GPU raster or frame timestamp was unavailable");
-        csv << options.lights << ',' << (options.shadows ? "on" : "off") << ','
+        csv << options.lights << ',' << options.light_layout << ','
+            << (options.shadows ? "on" : "off") << ','
             << mode_name(options.visibility) << ',' << mode_name(stats.effective_visibility_mode)
-            << ',' << stats.effective_lighting_path << ',' << FASET_BENCHMARK_CONFIGURATION << ','
+            << ',' << stats.effective_lighting_path << ','
+            << (options.lighting == LightingMode::Forward ? "forward" :
+                options.lighting == LightingMode::Tiled ? "tiled" : "auto") << ','
+            << FASET_BENCHMARK_CONFIGURATION << ','
             << options.run_index << ',' << frame << ',';
         csv_text(csv, stats.device);
         csv << ',';
@@ -208,7 +235,13 @@ void benchmark(const Options& options) {
             << stats.gpu_main_raster_ms << ',' << stats.gpu_post_raster_ms << ','
             << stats.gpu_post_visible << ',' << (stats.visibility_counters_valid ? 1 : 0)
             << ',' << stats.gpu_sun_shadow_ms << ',' << stats.gpu_local_shadow_ms << ','
-            << (stats.gpu_sun_shadow_ms + stats.gpu_local_shadow_ms) << ',' << stats.gpu_ms << ','
+            << (stats.gpu_sun_shadow_ms + stats.gpu_local_shadow_ms) << ','
+            << stats.gpu_light_tiles_ms << ','
+            << (stats.gpu_main_raster_ms + stats.gpu_post_raster_ms +
+                stats.gpu_light_tiles_ms) << ','
+            << stats.light_tile_count << ',' << (stats.light_tile_counts_valid ? 1 : 0)
+            << ',' << stats.light_tile_candidate_count << ','
+            << stats.light_tile_overflow_count << ',' << stats.gpu_ms << ','
             << stats.cpu_ms << ',' << stats.readback_cpu_ms << '\n';
     }
     if (!csv)

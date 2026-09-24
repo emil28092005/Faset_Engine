@@ -46,7 +46,7 @@ int main() {
     try {
         const auto bundle = temporary / "shaders";
         fs::create_directories(bundle);
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
                                   "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
                                   "temporalCompositeVertexMain", "temporalCompositeFragmentMain",
@@ -91,7 +91,7 @@ int main() {
         render::Renderer renderer(configuration);
         const auto baseline_only = temporary / "baseline-only";
         fs::create_directories(baseline_only);
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
                                   "temporalResolveMain", "temporalCompositeVertexMain",
                                   "temporalCompositeFragmentMain", "temporalVertexMain",
                                   "temporalFragmentMain", "gpuTemporalVertexMain"})
@@ -139,6 +139,40 @@ int main() {
                 "Temporal reload fixture has a completed color history");
         gpu_renderer.render(opaque_scene);
         const auto gpu_expected = gpu_renderer.pixels();
+        auto tiled_configuration = configuration;
+        tiled_configuration.lighting_mode = render::LightingMode::Tiled;
+        render::Renderer tiled_renderer(tiled_configuration);
+        auto lit_scene = opaque_scene;
+        render::LocalLight point;
+        point.stable_id = "reload-point";
+        point.position = {1, 1, 3};
+        point.intensity = 5;
+        point.range = 8;
+        point.casts_shadow = false;
+        lit_scene.local_lights.push_back(point);
+        tiled_renderer.render(lit_scene);
+        require(tiled_renderer.stats().effective_lighting_path == "tiled" &&
+                    tiled_renderer.stats().validation_errors == 0,
+                "Tiled lighting is active before shader reload");
+        const auto tiled_expected = tiled_renderer.pixels();
+        const auto original_tile_spirv = read_text(bundle / "lightTileMain.spv");
+        atomic_write(bundle / "lightTileMain.spv", "damaged tile bytecode");
+        std::string tile_error;
+        require(!tiled_renderer.reload_shaders(tile_error) && !tile_error.empty(),
+                "Rejected light tile shader preserves the working pipeline");
+        tiled_renderer.render(lit_scene);
+        require(tiled_renderer.stats().effective_lighting_path == "tiled" &&
+                    tiled_renderer.pixels() == tiled_expected &&
+                    tiled_renderer.stats().validation_errors == 0,
+                "Rejected light tile shader retains tiled lighting and pixels");
+        atomic_write(bundle / "lightTileMain.spv", original_tile_spirv);
+        require(tiled_renderer.reload_shaders(tile_error),
+                "Compatible light tile shader reloads successfully");
+        tiled_renderer.render(lit_scene);
+        require(tiled_renderer.stats().effective_lighting_path == "tiled" &&
+                    tiled_renderer.pixels() == tiled_expected &&
+                    tiled_renderer.stats().validation_errors == 0,
+                "Compatible light tile reload preserves tiled pixels");
         render::Snapshot scene;
         scene.ui_quads.push_back({0, 0, 32, 64, {1, .8f, .4f, 1}});
         scene.sprites.push_back({{.5f, 0, .5f}, {1, 2}, {.2f, 1, .4f, 1}});
@@ -152,7 +186,7 @@ int main() {
         require(deep_bundle.native().size() > 300,
                 "Shader file fixture must exceed the legacy Windows path limit");
         fs::create_directories(native_io_path(deep_bundle));
-        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain",
+        for (const auto* entry : {"vertexMain", "fragmentMain", "shadowMain", "lightTileMain",
                                   "gpuVertexMain", "gpuShadowMain", "gpuCullMain",
                                   "gpuHzbMain", "gpuPostCullMain", "temporalResolveMain",
                                   "temporalCompositeVertexMain", "temporalCompositeFragmentMain",

@@ -50,6 +50,9 @@ struct ShadowViewGpu {
 [[vk::binding(1,1)]] StructuredBuffer<LocalLightGpu> localLights;
 [[vk::binding(2,1)]] StructuredBuffer<ShadowViewGpu> shadowViews;
 [[vk::binding(3,1)]] Texture2D<float> localShadowAtlas;
+// 4-word header, then 66 words per 16x16 tile: count, overflow, 64 indices.
+// An overflowing tile evaluates the full submitted list instead of losing light.
+[[vk::binding(4,1)]] StructuredBuffer<uint> lightTileWords;
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput v) {
     VertexOutput o;
@@ -170,7 +173,20 @@ float4 shadeScene(VertexOutput v) {
         linear += directBRDF(base.rgb, rough, metal, n, view, l) *
                   lighting.sunColor.rgb * (lighting.sunDirectionIntensity.w * 3.0 * visibility);
     }
-    for (uint i=0; i<lighting.counts.x; ++i) {
+    uint candidateCount = lighting.counts.x;
+    uint tileBase = 0;
+    bool tileList = false;
+    if (lightTileWords[1] != 0 && lightTileWords[0] != 0 && lightTileWords[2] != 0) {
+        uint tileX = min(uint(v.position.x) / 16u, lightTileWords[0] - 1u);
+        uint tileY = min(uint(v.position.y) / 16u, lightTileWords[2] - 1u);
+        tileBase = 4u + (tileY * lightTileWords[0] + tileX) * 66u;
+        if (lightTileWords[tileBase + 1u] == 0) {
+            candidateCount = min(lightTileWords[tileBase], lighting.counts.x);
+            tileList = true;
+        }
+    }
+    for (uint candidate=0; candidate<candidateCount; ++candidate) {
+        uint i = tileList ? lightTileWords[tileBase + 2u + candidate] : candidate;
         LocalLightGpu light=localLights[i];
         float3 delta=light.positionRange.xyz-v.world;
         float distanceSquared=max(dot(delta,delta),1e-6);
