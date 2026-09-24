@@ -19,9 +19,11 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 namespace faset::editor {
 namespace fs = std::filesystem;
@@ -472,14 +474,21 @@ struct BuildService::Impl {
         const auto compiled = std::chrono::steady_clock::now();
         auto player = build_executable(native_directory, configuration, "faset_player");
         auto exporter = build_executable(native_directory, configuration, "faset_schema_exporter");
-        const auto package_key =
-            build_package_key(inputs, native_directory, configuration, player, exporter);
         const auto source_unchanged = [&] {
+            const auto snapshot_root = staged_scripts.parent_path();
+            if (fs::is_symlink(fs::symlink_status(snapshot_root)) ||
+                !fs::is_directory(staged_scripts) ||
+                gameplay_source_hash(snapshot_root, job.lua) != inputs.source_hash)
+                throw std::runtime_error(
+                    "Gameplay source snapshot changed during the build; build again");
             if (gameplay_source_hash(config.project_root,
                                      scripting::loadLuaProject(config.project_root)) !=
                 inputs.source_hash)
                 throw std::runtime_error("Gameplay sources changed during the build; build again");
         };
+        source_unchanged();
+        const auto package_key =
+            build_package_key(inputs, native_directory, configuration, player, exporter);
         const auto result_for = [&](const std::string& id, const std::string& fingerprint,
                                     bool reused) -> Json {
             const auto directory = config.cache_root / "builds" / id;
@@ -502,6 +511,7 @@ struct BuildService::Impl {
                       {"total", milliseconds(started, finished)}}}};
         };
         const auto pointer_file = config.cache_root / "last_build.json";
+        std::optional<std::pair<std::string, std::string>> cached_generation;
         if (fs::is_regular_file(pointer_file))
             try {
                 const auto pointer = read_json(pointer_file);
@@ -509,15 +519,19 @@ struct BuildService::Impl {
                 const auto candidate =
                     project_path(config.cache_root, fs::path("builds") / id);
                 if (validate_build_generation(candidate, package_key)) {
-                    source_unchanged();
-                    checkpoint(job, "Reusing verified build generation", .68);
                     const auto manifest = read_json(candidate / "manifest.json");
-                    log(job, "Verified schema/package cache hit: " + id + "\n");
-                    return result_for(id, manifest.at("fingerprint").get<std::string>(), true);
+                    cached_generation =
+                        {id, manifest.at("fingerprint").get<std::string>()};
                 }
             } catch (const std::exception&) {
                 // A bad pointer or old/corrupt generation is a cache miss.
             }
+        if (cached_generation) {
+            source_unchanged();
+            checkpoint(job, "Reusing verified build generation", .68);
+            log(job, "Verified schema/package cache hit: " + cached_generation->first + "\n");
+            return result_for(cached_generation->first, cached_generation->second, true);
+        }
         checkpoint(job, "Exporting gameplay schema", .58);
         const auto staging = config.cache_root / "builds" / (".staging-" + job.status.id);
         const auto generation = config.cache_root / "builds" / job.status.id;
