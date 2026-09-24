@@ -1,0 +1,200 @@
+{
+  "asset_generations": {},
+  "build_fingerprint": "4bc8e41c9aa69bfb064a5392248a553b8ed78472fb7f2cefa53977f7b8394901",
+  "configuration": "Release",
+  "executable": "faset_player.exe",
+  "files": [
+    {
+      "path": "faset_player.exe",
+      "sha256": "b172857f340973e91f4d257d5fe95efd9b0e0928e08d67aaf478efdc93e912d3",
+      "size": 4468736
+    },
+    {
+      "path": "Notices/box2d/LICENSE",
+      "sha256": "68a3e676d7e94093b102d5cba0d4e04af812040d6f230c3db67a6664574e43d2",
+      "size": 1067
+    },
+    {
+      "path": "Notices/box3d/LICENSE",
+      "sha256": "da5e31a26bf3cfd5ba5c96d6823e480128c81e76c107ef9d3ee5d94789184b90",
+      "size": 1067
+    },
+    {
+      "path": "Notices/dependencies.json",
+      "sha256": "a54639ad2d9ad13c2e5f1ec90d6775f5dfc493656789b78c7e44debe2a378fdc",
+      "size": 2206
+    },
+    {
+      "path": "Notices/entt/LICENSE",
+      "sha256": "0785027ce472d7c61f05fba664a1d3ba6639c1593ced351ad9e4bed868765d99",
+      "size": 1097
+    },
+    {
+      "path": "Notices/Faset-NOTICE.txt",
+      "sha256": "30c2e7e80f5153b31ab57675e07246aef9165965d64e36022b426a26449ece3f",
+      "size": 204
+    },
+    {
+      "path": "Notices/json/LICENSE.MIT",
+      "sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+      "size": 1076
+    },
+    {
+      "path": "Notices/sdl3/LICENSE.txt",
+      "sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+      "size": 884
+    },
+    {
+      "path": "Notices/stb/LICENSE",
+      "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63",
+      "size": 2510
+    },
+    {
+      "path": "README.txt",
+      "sha256": "fe27b3851e724087d90841a9878e41e972d74e1e414cb696b6c9ad53ff2c9038",
+      "size": 266
+    },
+    {
+      "path": "scene.fscene",
+      "sha256": "ec3d6fd94fddfb2de442417768a4e8bb77ee1ac5a85a745f1047f9f25845dfab",
+      "size": 343
+    },
+    {
+      "path": "shaders/fragmentMain.reflection.json",
+      "sha256": "ba43159da6ef0e8c305ba9a88414551ec273c487cdc7d324403998ba2d296f10",
+      "size": 2777
+    },
+    {
+      "path": "shaders/fragmentMain.spv",
+      "sha256": "f5c4f289917ecab5d00d543c053aac1d10e6cca311fd172daf06d315160a3505",
+      "size": 7436
+    },
+    {
+      "path": "shaders/gpuCullMain.reflection.json",
+      "sha256": "48fad2c47c9b85966106de9876bbbf253a1c6e52242dd9c20f6cc07573e431e4",
+      "size": 3753
+    },
+    {
+      "path": "shaders/gpuCullMain.spv",
+      "sha256": "7691360ec55f41d40d43652f506b051cef8b3a3ddcdcc7db61a7d4d97f9e87d8",
+      "size": 16180
+    },
+    {
+      "path": "shaders/gpuHzbMain.reflection.json",
+      "sha256": "98ec71e97494b42fc558acd2296e46ae7bcb5850d11aef8bfd00c4ea349ba7e1",
+      "size": 2144
+    },
+    {
+      "path": "shaders/gpuHzbMain.spv",
+      "sha256": "08682362ee2120ed19d260e613285071747c3e436bb09bb6238e46f9cedc2308",
+      "size": 4140
+    },
+    {
+      "path": "shaders/gpuPostCullMain.reflection.json",
+      "sha256": "d6f61f0d934e0427b2998a7f70ca066a17d3318ea8c3bd8ba70c7e59dee3d5b7",
+      "size": 3757
+    },
+    {
+      "path": "shaders/gpuPostCullMain.spv",
+      "sha256": "62cb72e356346e1511c6d640a3cecb4a6e5283795338299b357edae5f7f52be4",
+      "size": 12460
+    },
+    {
+      "path": "shaders/gpuShadowMain.reflection.json",
+      "sha256": "5f64e8b8518b702e4b191d69f7c8c87462d54f1306dd9f5d0ca472ddb18a0091",
+      "size": 2884
+    },
+    {
+      "path": "shaders/gpuShadowMain.spv",
+      "sha256": "ffcdb91e70c41ce9452094865546a009b9203140cf8eeb3ad1b4e5868d82b815",
+      "size": 2404
+    },
+    {
+      "path": "shaders/gpuVertexMain.reflection.json",
+      "sha256": "056e344d444123652db3cb23f831b47ea299101394007210b3438aa06baada5b",
+      "size": 3248
+    },
+    {
+      "path": "shaders/gpuVertexMain.spv",
+      "sha256": "4647ef4fe1a68ab623ee9c19dac56631907f825cba0becd30869c5221c2a0385",
+      "size": 4928
+    },
+    {
+      "path": "shaders/shadowMain.reflection.json",
+      "sha256": "3f785e549f40abad75115d5dfc16b409f81bbb0eced6281c6eda33c2eb439249",
+      "size": 2772
+    },
+    {
+      "path": "shaders/shadowMain.spv",
+      "sha256": "7643b4d688492b5ee923b9606f0b0e70343ca05fa67673838206119a6f86d8d8",
+      "size": 784
+    },
+    {
+      "path": "shaders/vertexMain.reflection.json",
+      "sha256": "4459cc3113377b7fbc41b880529cf5ad474ad07d299e033eb9169ac7849894cf",
+      "size": 2768
+    },
+    {
+      "path": "shaders/vertexMain.spv",
+      "sha256": "1ad2631c35d654f48166321ae43d4165043e1b919b14f1dc61caf97b1ada0898",
+      "size": 1224
+    },
+    {
+      "path": "Windows-Runtime.txt",
+      "sha256": "1c53b7b6890d4a10408acfa7a27760ca1b176bb43dba9c25f3e5d2ac2d7d15db",
+      "size": 227
+    }
+  ],
+  "format": "faset.export",
+  "generation": "9a19d08d-5b05-4c16-ad00-c1602ea089b3",
+  "lua_enabled": false,
+  "lua_fingerprint": "",
+  "platform": "windows",
+  "prerequisites": [
+    "Windows x64",
+    "Vulkan 1.3 driver",
+    "Microsoft Visual C++ x64 Redistributable (Visual Studio 2022 or newer)"
+  ],
+  "renderer_profile": {
+    "api": "Vulkan 1.3",
+    "materials": [
+      "base-color factor and texture",
+      "metallic and roughness factors"
+    ],
+    "required_features": [
+      "dynamicRendering",
+      "synchronization2"
+    ],
+    "shadow_map": {
+      "resolution": 1024,
+      "world_extent": 40
+    },
+    "texture_sampling": "linear clamp, one mip level",
+    "unsupported_material_features": [
+      "normal maps",
+      "metallic-roughness maps",
+      "emissive and occlusion maps",
+      "alpha mode selection",
+      "unlit mode",
+      "per-material face culling"
+    ]
+  },
+  "scene_hash": "fc21b47cc39355299fa024c684f9e5aed7860cc73a1ea005260b1c66a82c6eba",
+  "simulation": {
+    "fixed_delta": 0.016666666666666666,
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ],
+    "max_catch_up_ticks": 4,
+    "physics_substeps": 4
+  },
+  "units": {
+    "angle": "radian",
+    "coordinates": "right-handed Y-up",
+    "distance": "metre"
+  },
+  "validation_log": "{\"dimension\":2,\"validated\":true}\r\n",
+  "version": 1
+}

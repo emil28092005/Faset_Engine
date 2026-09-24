@@ -1,0 +1,1 @@
+{"device":"NVIDIA GeForce RTX 2080 Ti","dimension":2,"effective_visibility_mode":"direct","frames":973,"gpu_visibility_active":false,"ticks":1,"validation_errors":0,"visibility_mode":"direct"}

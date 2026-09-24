@@ -14,7 +14,8 @@ process; stopping it leaves the authoring scene unchanged.
 Launch `faset_editor` without arguments to open the project launcher.
 
 1. Choose **Create project**, enter a name and a new or empty project directory,
-   then select **2D** or **3D** for the initial scene.
+   then select **C++** or **Lua** and **2D** or **3D**. Each combination creates a
+   runnable start scene and a small behavior for that language.
 2. Choose **Create project** to create the project files and open the Editor.
 3. To return later, choose **Open project**, select its directory with **Browse**,
    and confirm **Open project**. The directory must contain `project.faset.json`.
@@ -33,6 +34,12 @@ was launched in MCP mode so the connection keeps a single project context.
 
 For a direct launch, use `faset_editor --project /path/to/MyGame` on Linux or
 `faset_editor.exe --project C:\Projects\MyGame` on Windows.
+For scripted project creation, pass `--new MyGame --dimension 2|3
+--language cpp|lua` with `--project` pointing to the new directory. Omitting
+`--language` retains the earlier C++ scaffold without a runnable start scene;
+select a language explicitly for a complete starter.
+The [C++ first behavior](../scripting/first-behavior.md) and
+[Lua gameplay](../scripting/lua.md) guides show the first editing steps.
 
 ## Create and save a scene
 

@@ -466,3 +466,54 @@ rendered 120 frames in Direct mode. The corresponding
 [native/manual CI run](https://github.com/emil28092005/Faset_Engine/actions/runs/35922643004)
 passed on Linux and Windows. Unsupported-HZB integration and physical Windows
 GPU coverage remain untested.
+
+## Post-MVP checkpoint — P1 gameplay iteration
+
+P1 adds a complete-input native build stamp and an immutable `Scripts` snapshot.
+The package key binds configuration, recipe, source, Lua declaration, toolchain,
+shader and runtime artifacts. A second unchanged build reuses a verified schema
+and package generation without invoking SchemaExporter; CMake/Ninja still verify
+the native graph. Malformed/corrupt generations, modified headers/tools and
+source races cannot publish a false hit. Failed jobs preserve the previous
+successful pointer, while Inspector metadata becomes stale.
+
+Compiler and Lua output now produce bounded structured Console diagnostics with
+raw logs retained. Source opening accepts only project `Scripts` files and passes
+literal file/line/column arguments to the configured external editor. A real
+compile failure revealed that compiler paths pointed to the immutable snapshot;
+`d7a7a7c` maps only the verified snapshot subtree back to project-relative
+source. The same correction retains a later actionable error after 250 unrelated
+warnings. Four runnable C++/Lua × 2D/3D starters are available in launcher and
+CLI; the existing scaffold default remains compatible. Named dirty scenes
+autosave after two idle seconds by default; unnamed scenes require Save As, and
+disk/revision conflicts retain the journal and never overwrite external edits.
+
+The [P1 dated dossier](validation/p1-iteration-2026-09-24/README.md) retains a
+clean-revision `6c2e8fa` Debug workflow with every raw command/profile. On the
+Ryzen 7 1700/RTX 2080 Ti Linux host, five unchanged builds had median 11.53 s,
+five changed-C++ builds 28.16 s, five changed-header builds 23.89 s, and five
+watched Lua reloads 0.502 s. All five unchanged builds reported a verified
+generation reuse. The 3,000-frame profile showed no growth in the explicit
+Vulkan allocation counter (15,787,008 bytes). A seeded 527-object synthetic
+scene reached 149.39 ms p95 wall time, dominated by CPU simulation/snapshot;
+this is a visible scalability issue, not a tiny-demo Release budget comparison.
+The historical exact-scene Release budgets were met in the earlier 2026-09-18
+record, but that evolving working-tree baseline does not certify the current
+revision. A quiet-host current Release rerun is pending.
+
+Linux focused cache, diagnostics, schema and workflow-math tests pass; a real
+failed-build replay now reports navigable `Scripts/Gameplay.cpp:73:2`. The
+[Lua-only Release result](validation/lua-release-2026-09-24/README.md) validated
+and rendered after source-hidden relocation on the physical Linux GPU. At
+`6c2e8fa`, [native/manual CI](https://github.com/emil28092005/Faset_Engine/actions/runs/35936310287)
+passed on Linux and Windows. Its Windows graphics job passed all 61 CTests on
+SwiftShader, then hit an invalid integration fixture under the engine checkout;
+`4ac02ee` moved the fixture to runner temporary storage. The subsequent
+[Windows graphics run](https://github.com/emil28092005/Faset_Engine/actions/runs/35937433040)
+passed all 61 CTests and the real export integration. Two C++ and one Lua-only
+Release package validated and rendered 120 frames each after relocation with
+source paths unavailable; the [raw Windows report](validation/p1-iteration-2026-09-24/windows-4ac02ee/playable-report.json)
+records hashes and software Vulkan device identity. The later `d7a7a7c`
+real-diagnostic-navigation assertion still awaits its Windows CI result.
+Windows had no active Khronos validation layer, and no physical Windows GPU
+performance result is claimed.

@@ -1,0 +1,8 @@
+{
+  "dimension": 3,
+  "format": "faset.project",
+  "id": "example-collect-3d-project",
+  "name": "Collect & Escape 3D",
+  "start_scene": "Scenes/main.scene.json",
+  "version": 1
+}

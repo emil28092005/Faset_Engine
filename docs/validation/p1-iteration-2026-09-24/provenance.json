@@ -1,0 +1,53 @@
+{
+  "format": "faset.workflow-provenance-supplement",
+  "version": 1,
+  "captured_at_utc": "2026-09-24T00:17:12.501486+00:00",
+  "measurement_revision": "6c2e8fa80036315a695f67f3c53524165fb4b10a",
+  "collector_revision": "abd8c21273ac886f6afe30e728a27a65b882f11f",
+  "report_sha256": "fd463c0cd12eed0a22143aa68bd732386804b0df4ecb2a3d9caa26f59dcfe6e2",
+  "measurement_script_sha256": "dc13c1b253b8093ac4a528b7194a1e54e0cb00fdfe0881021e6740de40717ee3",
+  "collector_script_sha256": "8fd8098c11e01ef6e0b2c0681f26d62b1dedf0e25840222642ec5d77df248868",
+  "archived_cmake_cache": "CMakeCache.txt.gz",
+  "binary_provenance": {
+    "cmake_cache_sha256": "d82a2b2ed39430f9ebba82b87b182a1a8822e2419a69778eb4dadcb074064c73",
+    "binaries": {
+      "cmake": {
+        "path": "/usr/bin/cmake",
+        "sha256": "6e1dccda39845415d68eabb934c598998949c99ec4668625d571aee1827b05c7",
+        "version": "cmake version 4.2.3"
+      },
+      "ninja": {
+        "path": "/usr/bin/ninja",
+        "sha256": "91e9548850cda2799facfdaa7abe33f9e978832f85e98212255708a7bbe437f2",
+        "version": "1.13.2"
+      },
+      "c": {
+        "path": "/usr/lib/llvm-21/bin/clang",
+        "sha256": "412bbe8c60571a1eb06f48fde89635033621caeb01a9b4ee76d46711bae8e932",
+        "version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      },
+      "cxx": {
+        "path": "/usr/lib/llvm-21/bin/clang",
+        "sha256": "412bbe8c60571a1eb06f48fde89635033621caeb01a9b4ee76d46711bae8e932",
+        "version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      },
+      "slang": {
+        "path": "/home/emil/Desktop/Faset_Engine/.cache/slang/bin/slangc",
+        "sha256": "ff47ad16a3110e43f96a45e90720e6f894371d27f5e47715b298159e395b75e8",
+        "version": "2026.18"
+      },
+      "editor": {
+        "path": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+        "sha256": "e0cd1a3e7dec54e6960723b1a9068602a17e84e14e490289ea6de6ebf3964657",
+        "version": null
+      },
+      "ui_latency_binary": {
+        "path": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor_ui_latency",
+        "sha256": "c1b7f68c0e68d5c38d458330d22cbaa7dd6ed2d2962df520fd99cf7eb71ea1ed",
+        "version": null
+      }
+    }
+  },
+  "note": "Captured after the completed run from its surviving disposable CMake cache and unchanged measured binaries; report.json is the unmodified original run output.",
+  "cmake_cache_archive_sha256": "da52ab111b3b1a14a73f322e4ad7594ac55e72512074ec92c1889f03ae98a38b"
+}

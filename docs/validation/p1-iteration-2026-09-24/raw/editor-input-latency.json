@@ -1,0 +1,513 @@
+{
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "format": "faset.editor-ui-latency",
+  "measured_frames": 100,
+  "method": "KeyDown gizmo toggle through EditorUI::frame and offscreen Vulkan render completion; no window present",
+  "presentation_mode": "offscreen",
+  "samples": [
+    {
+      "gizmo": "Rotate",
+      "iteration": 1,
+      "milliseconds": 15.302926
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 2,
+      "milliseconds": 15.305611
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 3,
+      "milliseconds": 14.80163
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 4,
+      "milliseconds": 13.830348
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 5,
+      "milliseconds": 13.96889
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 6,
+      "milliseconds": 14.219943
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 7,
+      "milliseconds": 14.201539
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 8,
+      "milliseconds": 13.780744
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 9,
+      "milliseconds": 14.035675
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 10,
+      "milliseconds": 13.506637
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 11,
+      "milliseconds": 13.779112
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 12,
+      "milliseconds": 14.123612
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 13,
+      "milliseconds": 13.869142
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 14,
+      "milliseconds": 13.82618
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 15,
+      "milliseconds": 13.551272
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 16,
+      "milliseconds": 13.897796
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 17,
+      "milliseconds": 13.94796
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 18,
+      "milliseconds": 13.723507
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 19,
+      "milliseconds": 13.808788
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 20,
+      "milliseconds": 13.88428
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 21,
+      "milliseconds": 13.673211
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 22,
+      "milliseconds": 14.288763
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 23,
+      "milliseconds": 13.996752
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 24,
+      "milliseconds": 13.973939
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 25,
+      "milliseconds": 13.734207
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 26,
+      "milliseconds": 13.740779
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 27,
+      "milliseconds": 13.848472
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 28,
+      "milliseconds": 13.858
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 29,
+      "milliseconds": 15.123558
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 30,
+      "milliseconds": 14.551038
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 31,
+      "milliseconds": 14.440279
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 32,
+      "milliseconds": 14.431663
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 33,
+      "milliseconds": 14.824213
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 34,
+      "milliseconds": 13.75192
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 35,
+      "milliseconds": 13.846358
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 36,
+      "milliseconds": 13.411037
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 37,
+      "milliseconds": 14.734714
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 38,
+      "milliseconds": 14.482628
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 39,
+      "milliseconds": 15.009132
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 40,
+      "milliseconds": 14.43537
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 41,
+      "milliseconds": 15.463719
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 42,
+      "milliseconds": 16.68906
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 43,
+      "milliseconds": 18.491421
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 44,
+      "milliseconds": 14.457832
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 45,
+      "milliseconds": 15.032806
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 46,
+      "milliseconds": 18.033447
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 47,
+      "milliseconds": 17.958836
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 48,
+      "milliseconds": 17.882281
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 49,
+      "milliseconds": 14.852426
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 50,
+      "milliseconds": 13.185903
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 51,
+      "milliseconds": 13.129006
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 52,
+      "milliseconds": 13.087026
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 53,
+      "milliseconds": 13.045167
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 54,
+      "milliseconds": 16.631802
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 55,
+      "milliseconds": 18.466073
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 56,
+      "milliseconds": 19.194777
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 57,
+      "milliseconds": 13.86886
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 58,
+      "milliseconds": 14.824093
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 59,
+      "milliseconds": 13.839786
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 60,
+      "milliseconds": 13.751499
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 61,
+      "milliseconds": 13.118786
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 62,
+      "milliseconds": 13.773692
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 63,
+      "milliseconds": 14.554163
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 64,
+      "milliseconds": 17.283983
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 65,
+      "milliseconds": 17.264296
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 66,
+      "milliseconds": 14.515491
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 67,
+      "milliseconds": 13.658153
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 68,
+      "milliseconds": 14.575905
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 69,
+      "milliseconds": 14.761344
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 70,
+      "milliseconds": 15.629161
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 71,
+      "milliseconds": 13.972697
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 72,
+      "milliseconds": 13.691957
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 73,
+      "milliseconds": 14.149099
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 74,
+      "milliseconds": 14.211577
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 75,
+      "milliseconds": 14.433196
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 76,
+      "milliseconds": 13.605013
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 77,
+      "milliseconds": 13.829056
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 78,
+      "milliseconds": 13.822674
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 79,
+      "milliseconds": 13.829537
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 80,
+      "milliseconds": 13.480508
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 81,
+      "milliseconds": 13.722324
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 82,
+      "milliseconds": 13.599974
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 83,
+      "milliseconds": 13.785924
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 84,
+      "milliseconds": 13.678202
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 85,
+      "milliseconds": 13.287915
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 86,
+      "milliseconds": 13.412911
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 87,
+      "milliseconds": 13.547034
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 88,
+      "milliseconds": 14.633944
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 89,
+      "milliseconds": 18.651182
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 90,
+      "milliseconds": 19.098846
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 91,
+      "milliseconds": 14.07486
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 92,
+      "milliseconds": 13.844745
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 93,
+      "milliseconds": 13.630912
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 94,
+      "milliseconds": 13.887917
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 95,
+      "milliseconds": 13.999718
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 96,
+      "milliseconds": 15.139478
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 97,
+      "milliseconds": 13.341235
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 98,
+      "milliseconds": 13.303424
+    },
+    {
+      "gizmo": "Rotate",
+      "iteration": 99,
+      "milliseconds": 13.759013
+    },
+    {
+      "gizmo": "Move",
+      "iteration": 100,
+      "milliseconds": 14.262944
+    }
+  ],
+  "validation_enabled": true,
+  "validation_errors": 0,
+  "version": 1,
+  "warmup_frames": 10
+}

@@ -1,0 +1,21 @@
+{
+  "seconds": 20.5125795470085,
+  "returncode": 0,
+  "build_configuration": "Debug",
+  "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+  "command": [
+    "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+    "--scene",
+    "/tmp/faset-p1-workflows-20260924-3/project/Scenes/main.scene.json",
+    "--assets",
+    "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+    "--headless",
+    "--frames",
+    "3000",
+    "--profile",
+    "/tmp/faset-p1-workflows-20260924-3/raw/cpp-3000-frame-lifecycle.json"
+  ],
+  "stdout": "raw/resource_lifecycle_process-01-stdout.txt",
+  "stderr": "raw/resource_lifecycle_process-01-stderr.txt",
+  "peak_rss_kib": 177984
+}

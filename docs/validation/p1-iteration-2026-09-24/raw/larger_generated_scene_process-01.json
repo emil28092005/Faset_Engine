@@ -1,0 +1,21 @@
+{
+  "seconds": 33.95408695601509,
+  "returncode": 0,
+  "build_configuration": "Debug",
+  "source_hash": "3fb9976da7d2b3b85f5a370d6728a86cb874d69172ae0bcd157a784d9dbf4eed",
+  "command": [
+    "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+    "--scene",
+    "/tmp/faset-p1-workflows-20260924-3/raw/generated-512.scene.json",
+    "--assets",
+    "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+    "--headless",
+    "--frames",
+    "240",
+    "--profile",
+    "/tmp/faset-p1-workflows-20260924-3/raw/generated-512-profile.json"
+  ],
+  "stdout": "raw/larger_generated_scene_process-01-stdout.txt",
+  "stderr": "raw/larger_generated_scene_process-01-stderr.txt",
+  "peak_rss_kib": 178920
+}

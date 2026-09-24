@@ -1,0 +1,1760 @@
+{
+  "format": "faset.workflow-measurements",
+  "version": 2,
+  "recorded_at_utc": "2026-09-24T00:11:52.154949+00:00",
+  "revision": "6c2e8fa80036315a695f67f3c53524165fb4b10a",
+  "working_tree_dirty": false,
+  "source_hashes": {
+    "project/Scripts/Gameplay.cpp#baseline": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+    "lua-project/Scripts/player.lua#baseline": "1c51810574a3413c46a7cbd0ea2e84a9b802da1206a2b72bb78f6cc951367a11",
+    "project/Scripts/Gameplay.cpp#cpp-edit-0": "a194792fbe9e31cf3d03ee2ddf29da77e3ac3d139eca2894e5a07d2548af11ae",
+    "project/Scripts/Gameplay.cpp#cpp-edit-1": "f94e26cbed75fee4b6f565adb64f525eb702221116ecb4fb3034b08bb2f5647a",
+    "project/Scripts/Gameplay.cpp#cpp-edit-2": "34bb0f6974f75e16bd13b79ea568c79b6d3baddb4387a461e7d4e4fc2d08e439",
+    "project/Scripts/Gameplay.cpp#cpp-edit-3": "3fe71ff715f01db9806ddf106732ba8feb0accba537dd67dc27e138e7779e1ce",
+    "project/Scripts/Gameplay.cpp#cpp-edit-4": "df24f88db381080b0a35932ec60ca4f8e4e8d60cc5de6390c131c3320895b25d",
+    "project/Scripts/Gameplay.cpp#cpp-edit-5": "7eff8ea8356f18111f2c7707d0cb68cc3c492462043c9bfae0911498ed567012",
+    "project/Scripts/Gameplay.hpp#header-edit-0": "49a1ac1ef782a714ddb9e44ad831e336f2b6ba0196e9a22ec04e86ca58ae366f",
+    "project/Scripts/Gameplay.hpp#header-edit-1": "84196f783326fe0af644e753ab6b34cc23ccbce5959d8b3ec822b5e60144f41a",
+    "project/Scripts/Gameplay.hpp#header-edit-2": "a02a44499754c3efe8249d1411ba9e7df0a7ce7cd8209b5280db9ef5b19dbf49",
+    "project/Scripts/Gameplay.hpp#header-edit-3": "2ce729db59e1897b43c04a6bb2de43016d296a7aa1df2e4db5c68e27f2525d84",
+    "project/Scripts/Gameplay.hpp#header-edit-4": "dd368d4b5f5b3e442274eab2fac3bcbf7b8f49fc95e638859d8751ee19566f0e",
+    "project/Scripts/Gameplay.hpp#header-edit-5": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+    "project/Scripts/Gameplay.hpp#intentional-failure": "9cf76ceab03f32fc0baf1eebf6db150fe386fe685ee3a9137271a806f97bdff9",
+    "project/Scripts/Gameplay.hpp#recovery": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+    "lua-project/Scripts/player.lua#reload-0": "74fd846c1d9da81ccecfa88af5517008112f08ab8c03140e20df5c4a290a69ce",
+    "lua-project/Scripts/player.lua#reload-1": "9d131daa84614f3f4ac55ae09146f3857388f01c258e8a5db9a219bc3c91dbf8",
+    "lua-project/Scripts/player.lua#reload-2": "a81d79adbe5cd415ad019b4c50cb0e431e408aa99fb5ede765db11828854cd95",
+    "lua-project/Scripts/player.lua#reload-3": "6f771d3395f48660d2806237086c6295ceab200f248fec0437a7fd61c4597f3f",
+    "lua-project/Scripts/player.lua#reload-4": "7176456898abfa2153eebf42de52327f2001a3da59070f64dade08dc32c62aea",
+    "lua-project/Scripts/player.lua#reload-5": "89bb60543b8aac8d4be28a9de6db2c5ecbf61796c5e348776634f884d4692cdf",
+    "faset-p1-workflows-20260924-3/raw/generated-512.scene.json#generated-512": "3fb9976da7d2b3b85f5a370d6728a86cb874d69172ae0bcd157a784d9dbf4eed"
+  },
+  "project_hashes_at_copy": {
+    ".gitignore": "53aa4d7124d4c8d93b8d7c4cb470b6c82b844e019a660d6243ffeadc50602de1",
+    "Assets/exit-arch/create.py": "9c7291124fb1498a3f992ef74afc39cd98f9cc3e2ff4687c633bece85d580905",
+    "Assets/exit-arch/manifest.json": "7a13347adc89761fb02ebeab3c58ba87f319cd62f53ec87a3bb61bcd066ffa55",
+    "Assets/exit-arch/manifest.json.faset-import.json": "ef4eef28a18a0cc40a40df75db34c97faa5d783b891265f862633f3aec514afc",
+    "Assets/exit-arch/payload/ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3.glb": "ee6c748a212905fc9c465cbe95c033e94b80be643624f4f240ad5353761205b3",
+    "Assets/exit-arch/source.blend": "ff2676bec97ab778e531e87a185ad716049ea3b05b4a4f0027a6345737735035",
+    "README.md": "2df5ca4df47ab5d3d05d41508201296d4ad5ec876245f19f061767ade6a30e8f",
+    "Scenes/main.scene.json": "61b65baf79e52f07ac386a7f98acf985a1b09e88770cdde37ef461dc94b9dcd7",
+    "Scripts/Extensions/Beacon.hpp": "c60d56161eead16f541835053ad32ac3333383d83015709c060b7d45e0af5a97",
+    "Scripts/Gameplay.cpp": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+    "Scripts/Gameplay.hpp": "4121587182ed4f74901b1c0757c53daadbf309af1d6bb5dd87fef142130ccbbe",
+    "project.faset.json": "43d273b1054ec9069369073f54cc1fc7efb3d6b699dcd342c552a2dc2ef852ef"
+  },
+  "build_configuration": "Debug",
+  "source_project": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/examples/projects/collect-3d",
+  "lua_source_project": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/examples/lua",
+  "editor": "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+  "host": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+    "cpu": "AMD Ryzen 7 1700 Eight-Core Processor",
+    "ram_kib": 32784216,
+    "logical_cpus": 16,
+    "python": "3.14.4"
+  },
+  "toolchain": {
+    "cmake": "cmake version 4.2.3",
+    "cxx": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+    "slang": null
+  },
+  "gpu": {
+    "player_device": "NVIDIA GeForce RTX 2080 Ti",
+    "ui_device": "NVIDIA GeForce RTX 2080 Ti",
+    "driver": "595.84"
+  },
+  "settings": {
+    "resolution": [
+      1280,
+      720
+    ],
+    "validation_enabled": true,
+    "readback_enabled": true,
+    "presentation_mode": "offscreen",
+    "source_scene_entities": 15,
+    "generated_scene_entities": 527
+  },
+  "samples": {
+    "headless_editor_command_startup": [
+      {
+        "seconds": 0.025940723018720746,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_project\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/headless_editor_command_startup-01-stdout.txt",
+        "stderr": "raw/headless_editor_command_startup-01-stderr.txt",
+        "peak_rss_kib": 8604
+      },
+      {
+        "seconds": 0.04091821500333026,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_project\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/headless_editor_command_startup-02-stdout.txt",
+        "stderr": "raw/headless_editor_command_startup-02-stderr.txt",
+        "peak_rss_kib": 8488
+      },
+      {
+        "seconds": 0.022082765004597604,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_project\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/headless_editor_command_startup-03-stdout.txt",
+        "stderr": "raw/headless_editor_command_startup-03-stderr.txt",
+        "peak_rss_kib": 8396
+      }
+    ],
+    "windowed_editor_two_frames": [
+      {
+        "seconds": 0.6512170849891845,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--frames",
+          "2"
+        ],
+        "stdout": "raw/windowed_editor_two_frames-01-stdout.txt",
+        "stderr": "raw/windowed_editor_two_frames-01-stderr.txt",
+        "peak_rss_kib": 205728
+      }
+    ],
+    "cold_asset_import": [
+      {
+        "seconds": 0.049359967990312725,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_import\", \"arguments\": {\"path\": \"Assets/exit-arch/manifest.json\"}}",
+          "--wait"
+        ],
+        "stdout": "raw/cold_asset_import-01-stdout.txt",
+        "stderr": "raw/cold_asset_import-01-stderr.txt",
+        "peak_rss_kib": 9248
+      }
+    ],
+    "cached_asset_import": [
+      {
+        "seconds": 0.05242176400497556,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_import\", \"arguments\": {\"path\": \"Assets/exit-arch/manifest.json\"}}",
+          "--wait"
+        ],
+        "stdout": "raw/cached_asset_import-01-stdout.txt",
+        "stderr": "raw/cached_asset_import-01-stderr.txt",
+        "peak_rss_kib": 9248
+      }
+    ],
+    "cold_configure_build": [
+      {
+        "seconds": 106.00909288399271,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/cold_configure_build-01-stdout.txt",
+        "stderr": "raw/cold_configure_build-01-stderr.txt",
+        "peak_rss_kib": 399412,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      }
+    ],
+    "warm_unchanged_build": [
+      {
+        "seconds": 10.919113234005636,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/warm_unchanged_build-01-stdout.txt",
+        "stderr": "raw/warm_unchanged_build-01-stderr.txt",
+        "peak_rss_kib": 34304,
+        "schema_cache_hit": true,
+        "generation_reused": true
+      },
+      {
+        "seconds": 11.532686943013687,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/warm_unchanged_build-02-stdout.txt",
+        "stderr": "raw/warm_unchanged_build-02-stderr.txt",
+        "peak_rss_kib": 34228,
+        "schema_cache_hit": true,
+        "generation_reused": true
+      },
+      {
+        "seconds": 11.354777691012714,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/warm_unchanged_build-03-stdout.txt",
+        "stderr": "raw/warm_unchanged_build-03-stderr.txt",
+        "peak_rss_kib": 34180,
+        "schema_cache_hit": true,
+        "generation_reused": true
+      },
+      {
+        "seconds": 12.922447588003706,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/warm_unchanged_build-04-stdout.txt",
+        "stderr": "raw/warm_unchanged_build-04-stderr.txt",
+        "peak_rss_kib": 34124,
+        "schema_cache_hit": true,
+        "generation_reused": true
+      },
+      {
+        "seconds": 13.117528178001521,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "5d419786a6861d7f14ed4eca54634694d8cd43be5dbbd60a2c6790db665c3a6a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/warm_unchanged_build-05-stdout.txt",
+        "stderr": "raw/warm_unchanged_build-05-stderr.txt",
+        "peak_rss_kib": 33696,
+        "schema_cache_hit": true,
+        "generation_reused": true
+      }
+    ],
+    "changed_cpp_build": [
+      {
+        "seconds": 29.83193460397888,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "f94e26cbed75fee4b6f565adb64f525eb702221116ecb4fb3034b08bb2f5647a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_cpp_build-01-stdout.txt",
+        "stderr": "raw/changed_cpp_build-01-stderr.txt",
+        "peak_rss_kib": 353052,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 30.331249505019514,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "34bb0f6974f75e16bd13b79ea568c79b6d3baddb4387a461e7d4e4fc2d08e439",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_cpp_build-02-stdout.txt",
+        "stderr": "raw/changed_cpp_build-02-stderr.txt",
+        "peak_rss_kib": 353088,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 28.16259147101664,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "3fe71ff715f01db9806ddf106732ba8feb0accba537dd67dc27e138e7779e1ce",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_cpp_build-03-stdout.txt",
+        "stderr": "raw/changed_cpp_build-03-stderr.txt",
+        "peak_rss_kib": 352196,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 23.87008932500612,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "df24f88db381080b0a35932ec60ca4f8e4e8d60cc5de6390c131c3320895b25d",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_cpp_build-04-stdout.txt",
+        "stderr": "raw/changed_cpp_build-04-stderr.txt",
+        "peak_rss_kib": 350492,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 23.2658868439903,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "7eff8ea8356f18111f2c7707d0cb68cc3c492462043c9bfae0911498ed567012",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_cpp_build-05-stdout.txt",
+        "stderr": "raw/changed_cpp_build-05-stderr.txt",
+        "peak_rss_kib": 350092,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      }
+    ],
+    "changed_header_build": [
+      {
+        "seconds": 25.510155372990994,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "84196f783326fe0af644e753ab6b34cc23ccbce5959d8b3ec822b5e60144f41a",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_header_build-01-stdout.txt",
+        "stderr": "raw/changed_header_build-01-stderr.txt",
+        "peak_rss_kib": 353760,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 24.47404430899769,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "a02a44499754c3efe8249d1411ba9e7df0a7ce7cd8209b5280db9ef5b19dbf49",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_header_build-02-stdout.txt",
+        "stderr": "raw/changed_header_build-02-stderr.txt",
+        "peak_rss_kib": 350316,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 23.558627322985558,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "2ce729db59e1897b43c04a6bb2de43016d296a7aa1df2e4db5c68e27f2525d84",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_header_build-03-stdout.txt",
+        "stderr": "raw/changed_header_build-03-stderr.txt",
+        "peak_rss_kib": 353336,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 23.88723594098701,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "dd368d4b5f5b3e442274eab2fac3bcbf7b8f49fc95e638859d8751ee19566f0e",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_header_build-04-stdout.txt",
+        "stderr": "raw/changed_header_build-04-stderr.txt",
+        "peak_rss_kib": 353788,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      },
+      {
+        "seconds": 23.52752869098913,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/changed_header_build-05-stdout.txt",
+        "stderr": "raw/changed_header_build-05-stderr.txt",
+        "peak_rss_kib": 353780,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      }
+    ],
+    "build_failure": [
+      {
+        "seconds": 9.99945926599321,
+        "returncode": 1,
+        "build_configuration": "Debug",
+        "source_hash": "9cf76ceab03f32fc0baf1eebf6db150fe386fe685ee3a9137271a806f97bdff9",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/build_failure-01-stdout.txt",
+        "stderr": "raw/build_failure-01-stderr.txt",
+        "peak_rss_kib": 303308
+      }
+    ],
+    "build_recovery": [
+      {
+        "seconds": 19.928895885997918,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/build_recovery-01-stdout.txt",
+        "stderr": "raw/build_recovery-01-stderr.txt",
+        "peak_rss_kib": 351984,
+        "schema_cache_hit": true,
+        "generation_reused": true
+      }
+    ],
+    "player_one_frame_process": [
+      {
+        "seconds": 0.40036001199041493,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+          "--scene",
+          "/tmp/faset-p1-workflows-20260924-3/project/Scenes/main.scene.json",
+          "--assets",
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+          "--headless",
+          "--frames",
+          "1",
+          "--profile",
+          "/tmp/faset-p1-workflows-20260924-3/raw/cpp-first-frame-01.json"
+        ],
+        "stdout": "raw/player_one_frame_process-01-stdout.txt",
+        "stderr": "raw/player_one_frame_process-01-stderr.txt",
+        "peak_rss_kib": 167972
+      },
+      {
+        "seconds": 0.3409036679950077,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+          "--scene",
+          "/tmp/faset-p1-workflows-20260924-3/project/Scenes/main.scene.json",
+          "--assets",
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+          "--headless",
+          "--frames",
+          "1",
+          "--profile",
+          "/tmp/faset-p1-workflows-20260924-3/raw/cpp-first-frame-02.json"
+        ],
+        "stdout": "raw/player_one_frame_process-02-stdout.txt",
+        "stderr": "raw/player_one_frame_process-02-stderr.txt",
+        "peak_rss_kib": 168024
+      },
+      {
+        "seconds": 0.347753299982287,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+          "--scene",
+          "/tmp/faset-p1-workflows-20260924-3/project/Scenes/main.scene.json",
+          "--assets",
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+          "--headless",
+          "--frames",
+          "1",
+          "--profile",
+          "/tmp/faset-p1-workflows-20260924-3/raw/cpp-first-frame-03.json"
+        ],
+        "stdout": "raw/player_one_frame_process-03-stdout.txt",
+        "stderr": "raw/player_one_frame_process-03-stderr.txt",
+        "peak_rss_kib": 168132
+      },
+      {
+        "seconds": 0.34541923698270693,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+          "--scene",
+          "/tmp/faset-p1-workflows-20260924-3/project/Scenes/main.scene.json",
+          "--assets",
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+          "--headless",
+          "--frames",
+          "1",
+          "--profile",
+          "/tmp/faset-p1-workflows-20260924-3/raw/cpp-first-frame-04.json"
+        ],
+        "stdout": "raw/player_one_frame_process-04-stdout.txt",
+        "stderr": "raw/player_one_frame_process-04-stderr.txt",
+        "peak_rss_kib": 167804
+      },
+      {
+        "seconds": 0.3532232770230621,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+          "--scene",
+          "/tmp/faset-p1-workflows-20260924-3/project/Scenes/main.scene.json",
+          "--assets",
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+          "--headless",
+          "--frames",
+          "1",
+          "--profile",
+          "/tmp/faset-p1-workflows-20260924-3/raw/cpp-first-frame-05.json"
+        ],
+        "stdout": "raw/player_one_frame_process-05-stdout.txt",
+        "stderr": "raw/player_one_frame_process-05-stderr.txt",
+        "peak_rss_kib": 168172
+      }
+    ],
+    "offscreen_first_rendered_frame": [
+      {
+        "seconds": 0.333160143,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "profile": "raw/cpp-first-frame-01.json"
+      },
+      {
+        "seconds": 0.27588315999999996,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "profile": "raw/cpp-first-frame-02.json"
+      },
+      {
+        "seconds": 0.28410913699999996,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "profile": "raw/cpp-first-frame-03.json"
+      },
+      {
+        "seconds": 0.28146119199999997,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "profile": "raw/cpp-first-frame-04.json"
+      },
+      {
+        "seconds": 0.287111981,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "profile": "raw/cpp-first-frame-05.json"
+      }
+    ],
+    "editor_ui_probe_process": [
+      {
+        "seconds": 2.011972838023212,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor_ui_latency",
+          "/tmp/faset-p1-workflows-20260924-3/raw/editor-input-latency.json"
+        ],
+        "stdout": "raw/editor_ui_probe_process-01-stdout.txt",
+        "stderr": "raw/editor_ui_probe_process-01-stderr.txt",
+        "peak_rss_kib": 201432
+      }
+    ],
+    "editor_input_visible_frame": [
+      {
+        "seconds": 0.015302926,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.015305611,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01480163,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013830348000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01396889,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014219943,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014201539000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013780744000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014035675,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013506637,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013779112,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014123611999999999,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013869142,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01382618,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013551272000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013897796,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01394796,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013723507,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013808788,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01388428,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013673211000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014288763,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013996752000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013973939,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013734207,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013740779,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013848471999999999,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013858,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.015123557999999999,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014551038,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014440279,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014431663,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014824213000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01375192,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013846358,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013411037,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014734714,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014482628,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.015009132,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014435370000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.015463718999999999,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.016689060000000002,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.018491420999999997,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014457832,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.015032806000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.018033446999999998,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.017958836000000002,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.017882281,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014852426,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013185903,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013129006,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013087026,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013045167,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.016631802,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.018466073000000003,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.019194777,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01386886,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014824093,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013839786,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013751499,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013118786,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013773692,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014554163,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.017283983,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.017264296000000002,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014515491,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013658153000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014575905,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014761344,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.015629161,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013972697000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013691957000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014149099,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014211577,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014433196,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013605013,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013829056,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013822674,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013829537,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013480508,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013722324000000001,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013599973999999999,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013785924,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013678202,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013287914999999999,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013412911,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013547034,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014633944,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.018651182,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.019098846000000003,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.01407486,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013844745,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013630912,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013887917,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013999718,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.015139478,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013341235,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013303424,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.013759012999999999,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Rotate",
+        "profile": "raw/editor-input-latency.json"
+      },
+      {
+        "seconds": 0.014262944,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "presentation_mode": "offscreen",
+        "input": "Move",
+        "profile": "raw/editor-input-latency.json"
+      }
+    ],
+    "lua_initial_build": [
+      {
+        "seconds": 112.234292070003,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "1c51810574a3413c46a7cbd0ea2e84a9b802da1206a2b72bb78f6cc951367a11",
+        "command": [
+          "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+          "--project",
+          "/tmp/faset-p1-workflows-20260924-3/lua-project",
+          "--command",
+          "{\"name\": \"faset_build\", \"arguments\": {}}",
+          "--wait"
+        ],
+        "stdout": "raw/lua_initial_build-01-stdout.txt",
+        "stderr": "raw/lua_initial_build-01-stderr.txt",
+        "peak_rss_kib": 399232,
+        "schema_cache_hit": false,
+        "generation_reused": false
+      }
+    ],
+    "changed_lua_reload": [
+      {
+        "seconds": 0.5036404599959496,
+        "build_configuration": "Debug",
+        "source_hash": "9d131daa84614f3f4ac55ae09146f3857388f01c258e8a5db9a219bc3c91dbf8",
+        "presentation_mode": "offscreen",
+        "player_log": "raw/lua-reload-stderr.txt"
+      },
+      {
+        "seconds": 0.49866430400288664,
+        "build_configuration": "Debug",
+        "source_hash": "a81d79adbe5cd415ad019b4c50cb0e431e408aa99fb5ede765db11828854cd95",
+        "presentation_mode": "offscreen",
+        "player_log": "raw/lua-reload-stderr.txt"
+      },
+      {
+        "seconds": 0.5010807320068125,
+        "build_configuration": "Debug",
+        "source_hash": "6f771d3395f48660d2806237086c6295ceab200f248fec0437a7fd61c4597f3f",
+        "presentation_mode": "offscreen",
+        "player_log": "raw/lua-reload-stderr.txt"
+      },
+      {
+        "seconds": 0.5015947509964462,
+        "build_configuration": "Debug",
+        "source_hash": "7176456898abfa2153eebf42de52327f2001a3da59070f64dade08dc32c62aea",
+        "presentation_mode": "offscreen",
+        "player_log": "raw/lua-reload-stderr.txt"
+      },
+      {
+        "seconds": 0.5015020470018499,
+        "build_configuration": "Debug",
+        "source_hash": "89bb60543b8aac8d4be28a9de6db2c5ecbf61796c5e348776634f884d4692cdf",
+        "presentation_mode": "offscreen",
+        "player_log": "raw/lua-reload-stderr.txt"
+      }
+    ],
+    "resource_lifecycle_process": [
+      {
+        "seconds": 20.5125795470085,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+        "command": [
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+          "--scene",
+          "/tmp/faset-p1-workflows-20260924-3/project/Scenes/main.scene.json",
+          "--assets",
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+          "--headless",
+          "--frames",
+          "3000",
+          "--profile",
+          "/tmp/faset-p1-workflows-20260924-3/raw/cpp-3000-frame-lifecycle.json"
+        ],
+        "stdout": "raw/resource_lifecycle_process-01-stdout.txt",
+        "stderr": "raw/resource_lifecycle_process-01-stderr.txt",
+        "peak_rss_kib": 177984
+      }
+    ],
+    "larger_generated_scene_process": [
+      {
+        "seconds": 33.95408695601509,
+        "returncode": 0,
+        "build_configuration": "Debug",
+        "source_hash": "3fb9976da7d2b3b85f5a370d6728a86cb874d69172ae0bcd157a784d9dbf4eed",
+        "command": [
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache/builds/87b1c9a0-2493-4aa5-84ff-1b078f010980/faset_player",
+          "--scene",
+          "/tmp/faset-p1-workflows-20260924-3/raw/generated-512.scene.json",
+          "--assets",
+          "/tmp/faset-p1-workflows-20260924-3/project/.faset/cache",
+          "--headless",
+          "--frames",
+          "240",
+          "--profile",
+          "/tmp/faset-p1-workflows-20260924-3/raw/generated-512-profile.json"
+        ],
+        "stdout": "raw/larger_generated_scene_process-01-stdout.txt",
+        "stderr": "raw/larger_generated_scene_process-01-stderr.txt",
+        "peak_rss_kib": 178920
+      }
+    ]
+  },
+  "summary_seconds": {
+    "headless_editor_command_startup": {
+      "median": 0.025940723018720746,
+      "p95": 0.04091821500333026
+    },
+    "windowed_editor_two_frames": {
+      "median": 0.6512170849891845,
+      "p95": 0.6512170849891845
+    },
+    "cold_asset_import": {
+      "median": 0.049359967990312725,
+      "p95": 0.049359967990312725
+    },
+    "cached_asset_import": {
+      "median": 0.05242176400497556,
+      "p95": 0.05242176400497556
+    },
+    "cold_configure_build": {
+      "median": 106.00909288399271,
+      "p95": 106.00909288399271
+    },
+    "warm_unchanged_build": {
+      "median": 11.532686943013687,
+      "p95": 13.117528178001521
+    },
+    "changed_cpp_build": {
+      "median": 28.16259147101664,
+      "p95": 30.331249505019514
+    },
+    "changed_header_build": {
+      "median": 23.88723594098701,
+      "p95": 25.510155372990994
+    },
+    "build_failure": {
+      "median": 9.99945926599321,
+      "p95": 9.99945926599321
+    },
+    "build_recovery": {
+      "median": 19.928895885997918,
+      "p95": 19.928895885997918
+    },
+    "player_one_frame_process": {
+      "median": 0.347753299982287,
+      "p95": 0.40036001199041493
+    },
+    "offscreen_first_rendered_frame": {
+      "median": 0.28410913699999996,
+      "p95": 0.333160143
+    },
+    "editor_ui_probe_process": {
+      "median": 2.011972838023212,
+      "p95": 2.011972838023212
+    },
+    "editor_input_visible_frame": {
+      "median": 0.0139707935,
+      "p95": 0.018033446999999998
+    },
+    "lua_initial_build": {
+      "median": 112.234292070003,
+      "p95": 112.234292070003
+    },
+    "changed_lua_reload": {
+      "median": 0.5015020470018499,
+      "p95": 0.5036404599959496
+    },
+    "resource_lifecycle_process": {
+      "median": 20.5125795470085,
+      "p95": 20.5125795470085
+    },
+    "larger_generated_scene_process": {
+      "median": 33.95408695601509,
+      "p95": 33.95408695601509
+    }
+  },
+  "resource_lifecycle": {
+    "reference_frames": [
+      101,
+      200
+    ],
+    "end_frames": [
+      2901,
+      3000
+    ],
+    "explicit_gpu_bytes_reference_max": 15787008,
+    "explicit_gpu_bytes_end_max": 15787008,
+    "explicit_gpu_bytes_growth": 0,
+    "texture_count_reference_max": 1,
+    "texture_count_end_max": 1
+  },
+  "large_scene_summary_ms": {
+    "gpu": {
+      "max": 0.935264,
+      "min": 0.875968,
+      "p50": 0.886272,
+      "p95": 0.911264,
+      "samples": 240
+    },
+    "render_call": {
+      "max": 60.889035,
+      "min": 28.691691,
+      "p50": 30.686253,
+      "p95": 36.514678,
+      "samples": 240
+    },
+    "renderer_cpu": {
+      "max": 60.83318,
+      "min": 28.668106,
+      "p50": 30.643683,
+      "p95": 36.487466,
+      "samples": 240
+    },
+    "renderer_readback_cpu": {
+      "max": 2.64515,
+      "min": 0.364207,
+      "p50": 0.456721,
+      "p95": 0.593951,
+      "samples": 240
+    },
+    "simulation": {
+      "max": 60.782885,
+      "min": 37.535473,
+      "p50": 39.507203,
+      "p95": 48.192376,
+      "samples": 240
+    },
+    "snapshot": {
+      "max": 92.819015,
+      "min": 53.529994,
+      "p50": 57.758641,
+      "p95": 68.119504,
+      "samples": 240
+    },
+    "wall": {
+      "max": 195.585274,
+      "min": 120.185477,
+      "p50": 129.103849,
+      "p95": 149.386929,
+      "samples": 240
+    }
+  },
+  "coverage": {
+    "windowed_first_presented_frame": "unmeasured; only offscreen rendered frames were sampled",
+    "reference_release_budgets": "not compared with this Debug development workflow"
+  },
+  "method": [
+    "Fresh disposable C++ and Lua project copies; checked-in sources never modified.",
+    "Cold build means empty project .faset caches, not cold OS cache or dependency download.",
+    "Warm/changed C++ and header builds have one warm-up then five measured repetitions.",
+    "Lua edit-to-reload uses a persistent watched Player, one warm-up and five edits; wall time includes up to 500 ms watcher polling and stderr notification.",
+    "First frame is Player main-to-first-completed offscreen frame; OS loader excluded.",
+    "UI latency uses 10 warm-up and 100 keyboard-input to offscreen-render frames; there is no window presentation timing claim.",
+    "The 3,000-frame lifecycle compares maximum explicit Vulkan allocation and texture counts in frames 101-200 and 2901-3000; it is not a whole-process leak proof.",
+    "Times are observations under ambient host load, not CI pass/fail thresholds."
+  ]
+}

@@ -56,14 +56,26 @@ The example scene is a complete, loadable document:
 
 The sprite is visible because it has `faset.sprite`. It moves because it also has `tutorial.move_x`. The configuration field is `speed`; the type string must match the registration exactly. `rotation` uses radians, and the default coordinate system is Y-up.
 
-After **Build C++** succeeds in the Editor, choose **Add component** in the Inspector
+After **Build** succeeds in the Editor, choose **Add component** in the Inspector
 and select the registered type. Its schema supplies editable fields, defaults and
 constraints. The direct Player command above is useful for testing the same behavior
 independently of an editor session.
 
 ## Make a change and verify it
 
-Change the scene's `speed` to `-2`: the object moves left. Change the C++ callback or schema: stop the Player, rebuild, regenerate the schema, then launch a new session. There is no automatic C++ hot reload.
+Change the scene's `speed` to `-2`: the object moves left. Change the C++ callback
+or schema: stop the Player, choose **Build**, then launch a new Play session. The
+Build job regenerates metadata when its inputs changed; an unchanged second build
+can reuse the verified schema/package generation. It still asks CMake/Ninja to check
+the native dependency graph. There is no automatic C++ hot reload.
+
+To try compiler navigation in a project opened by the Editor, add
+`#error Check navigation` to its `Scripts/Gameplay.cpp`, choose **Build**, and
+select the resulting Console diagnostic. **Open source** passes the file and
+one-based location to the configured external editor. Remove the line and build
+again; the failed attempt keeps the previous valid generation. See
+[Developer diagnostics](../editor/diagnostics.md) for editor command setup and
+[Build, Play, and export](../editor/export.md) for the full iteration loop.
 
 The `tutorial_moving` CTest checks that both 30 Hz and 60 Hz frame sequences move the object two metres in one second. It checks the resulting pose, rather than only checking that the program starts.
 

@@ -210,14 +210,18 @@ The Editor command palette exposes:
 | `faset_lua_refresh` | Build if needed, extract schemas, refresh Inspector metadata |
 | `faset_lua_reload` | Request a Lua reload in a development Player |
 | `faset_lua_setup` | Install Faset LuaLS declarations/configuration |
-| `faset_script_open` | Open a script in an external editor |
+| `faset_source_open` | Open a C++, header or Lua source at a one-based line/column |
+| `faset_script_open` | Lua-only compatibility alias for source opening |
 
 The external-editor default is `zed`. Set `editor.script_editor` in
-`project.faset.json` to an argument array such as `["code", "--goto", "{file}"]`,
-or pass an `editor` argument array to `faset_script_open`. Exact `{file}` and
-`{project}` arguments are substituted; a missing file argument is appended. The
-command launches the executable directly, without a shell. The Assets panel lists
-Lua sources under `Scripts` and provides **Open Script**.
+`project.faset.json` to an argument array such as
+`["zed", "{file}:{line}:{column}"]`, or pass an `editor` argument array to
+`faset_source_open`. `{file}`, `{line}`, `{column}` and `{project}` are substituted
+inside arguments; a missing file argument is appended. The command launches the
+executable directly, without a shell. Only regular source files under this
+project's `Scripts` can be opened. The Assets panel lists those files and the
+Console's structured Lua error can open its source location. A missing external
+editor is an actionable navigation error, not a failed gameplay build.
 
 Development Play watches Lua changes. The Player's `--watch-lua` option enables this
 for direct development runs. A candidate source generation is loaded and validated
@@ -225,6 +229,18 @@ before replacement; an invalid candidate leaves the preceding generation running
 Successful reload **restarts the scene**, invalidates old handles, and resets all
 script state. This is not state-preserving hot swapping. C++ source changes still
 require a rebuild and a new Player process.
+
+For a short iteration, change `speed` in `Scripts/main.lua`, save it, and watch the
+Console for **Lua reloaded**. The running development Player picks up a valid
+snapshot without native recompilation. Change a field declaration or TypeId, then
+choose **Refresh Lua** to validate metadata and update Inspector choices. If the
+candidate has a syntax/schema error, the previous running generation remains in
+place; use the structured diagnostic to return to the source, correct it and retry.
+Lua module declaration, gameplay source, compiler/toolchain or shader changes can
+invalidate a later build's verified schema/package cache. The **Jobs** result
+distinguishes `schema_cache_hit` and `generation_reused`; those flags do not imply
+that the native build graph was skipped. See the [build loop](../editor/export.md)
+and [profiling guide](../editor/profiling.md).
 
 Export captures the declared entry list and Lua modules with the game. The exported
 Player runs without the Editor or a separate Lua installation; development watching

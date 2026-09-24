@@ -179,9 +179,22 @@ Lua, C++ hot reload, Blender live link, встроенное изображен�
 
 Начальные бюджеты отслеживания для конкретных демо и Linux reference host: frame p95 ≤ 4 мс, GPU/readback p95 ≤ 1 мс, simulation/snapshot p95 ≤ 0,5 мс, явные Vulkan allocations ≤ 20 MiB, startup от `main()` ≤ 500 мс. [Методика и исходные измерения](docs/validation/linux-release-2026-09-18/README.md) ограничивают область этих чисел; для других сцен/ОС нужны отдельные baselines. Это бюджеты P1, а не обещание такой производительности любой игры.
 
-Lua runtime/editor пакет реализован как необязательный модуль поверх публичного API, проверяемых handles и схем. Доступны Inspector, диагностика и явный lifecycle development reload; сохранение состояния при reload проектируется отдельно. [Проверка Lua-модуля](docs/validation/lua-module.md) подтверждает Linux CPU-контракты и отключение модуля для C++-only проекта; Windows и независимый graphical/release профиль модуля остаются отдельными проверками. Таким образом, Lua-часть P1 появилась после MVP, но это не закрывает весь этап скорости итераций.
-
-Улучшать schema/build cache, сообщения компилятора, шаблоны проектов, переход к коду, autosave и измеренное время «изменение → результат». Dynamic gameplay loading рассматривать при подтверждённой проблеме линковки.
+Реализованы необязательный Lua runtime/editor модуль, development reload без
+сохранения runtime-состояния, проверяемые schema/package cache и snapshots C++
+исходников, структурированная диагностика, переход к исходнику, четыре C++/Lua
+2D/3D starter-проекта и безопасный autosave именованных сцен. [Датированный
+отчёт P1](docs/validation/p1-iteration-2026-09-24/README.md) содержит raw
+повторные измерения Debug-итераций, 3000 кадров без роста явных GPU allocations,
+синтетическую расширенную сцену и реальные найденные ограничения. [Lua Release
+пакет](docs/validation/lua-release-2026-09-24/README.md) на Linux проверен после
+переноса и скрытия исходного проекта. Windows native/manual, 61 SwiftShader
+CTest и перенос всех трёх Release-игр, включая Lua-only, прошли на
+[чистой ревизии `4ac02ee`](https://github.com/emil28092005/Faset_Engine/actions/runs/35937433040).
+Это функциональная проверка software Vulkan без активного validation layer.
+Исторический Release benchmark точных демо нельзя
+подменять новым Debug workflow; свежий Release reference и физический Windows GPU
+остаются отдельным покрытием. Dynamic gameplay loading рассматривать при
+подтверждённой проблеме линковки, без обещания C++ hot reload в P1.
 
 ### P2. GPU-driven visibility и LOD
 

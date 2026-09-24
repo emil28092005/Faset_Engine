@@ -1,0 +1,17 @@
+{
+  "seconds": 23.52752869098913,
+  "returncode": 0,
+  "build_configuration": "Debug",
+  "source_hash": "801fb7ba8f67c774ab1d7ec6350c8f099bf37aa6cd34afc952f7e81954df971e",
+  "command": [
+    "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+    "--project",
+    "/tmp/faset-p1-workflows-20260924-3/project",
+    "--command",
+    "{\"name\": \"faset_build\", \"arguments\": {}}",
+    "--wait"
+  ],
+  "stdout": "raw/changed_header_build-05-stdout.txt",
+  "stderr": "raw/changed_header_build-05-stderr.txt",
+  "peak_rss_kib": 353780
+}

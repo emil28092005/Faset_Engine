@@ -1,0 +1,13 @@
+Lua player ready: A/D move, Space jump, E reset
+Lua player ready: A/D move, Space jump, E reset
+Lua reloaded: scene restarted; runtime state reset
+Lua player ready: A/D move, Space jump, E reset
+Lua reloaded: scene restarted; runtime state reset
+Lua player ready: A/D move, Space jump, E reset
+Lua reloaded: scene restarted; runtime state reset
+Lua player ready: A/D move, Space jump, E reset
+Lua reloaded: scene restarted; runtime state reset
+Lua player ready: A/D move, Space jump, E reset
+Lua reloaded: scene restarted; runtime state reset
+Lua player ready: A/D move, Space jump, E reset
+Lua reloaded: scene restarted; runtime state reset

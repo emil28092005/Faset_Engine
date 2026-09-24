@@ -1,0 +1,17 @@
+{
+  "seconds": 0.03173431000323035,
+  "returncode": 0,
+  "build_configuration": "Debug",
+  "source_hash": "f94e26cbed75fee4b6f565adb64f525eb702221116ecb4fb3034b08bb2f5647a",
+  "command": [
+    "/home/emil/Desktop/.worktrees/Faset_Engine-p1-p3/build/linux-debug/faset_editor",
+    "--project",
+    "/tmp/faset-p1-workflows-20260924-3/project",
+    "--command",
+    "{\"name\": \"faset_schema_status\", \"arguments\": {}}",
+    "--wait"
+  ],
+  "stdout": "raw/schema_stale_check-02-stdout.txt",
+  "stderr": "raw/schema_stale_check-02-stderr.txt",
+  "peak_rss_kib": 8628
+}
