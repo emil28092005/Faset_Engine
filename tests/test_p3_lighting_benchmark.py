@@ -98,6 +98,26 @@ with path.open("w", newline="", encoding="utf-8") as stream:
 
 
 class LightingBenchmarkTests(unittest.TestCase):
+    def test_native_shader_bundle_manifest_tracks_loaded_spirv_and_reflection(self):
+        from benchmark_p3_lighting import _shader_bundle_manifest
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / "faset_p3_lighting_benchmark"
+            binary.write_bytes(b"native fixture")
+            shaders = root / "shaders"
+            shaders.mkdir()
+            with self.assertRaisesRegex(ValueError, "shader bundle"):
+                _shader_bundle_manifest(binary)
+            for name in ("vertexMain.spv", "fragmentMain.spv",
+                         "fragmentMain.reflection.json", "tileBuild.spv"):
+                (shaders / name).write_bytes(name.encode())
+            before = _shader_bundle_manifest(binary)
+            self.assertEqual(set(before), {"vertexMain.spv", "fragmentMain.spv",
+                                           "fragmentMain.reflection.json", "tileBuild.spv"})
+            (shaders / "tileBuild.spv").write_bytes(b"modified tile shader")
+            self.assertNotEqual(_shader_bundle_manifest(binary), before)
+
     def test_list_runs_has_three_independent_repeats_for_each_shadow_setting(self):
         process = subprocess.run([sys.executable, SCRIPT, "--list-runs"],
                                  text=True, capture_output=True, check=True)
@@ -215,6 +235,7 @@ class LightingBenchmarkTests(unittest.TestCase):
             self.assertEqual(report["rows"], 54 * 30)
             self.assertTrue(report["forward_plus_gate"]["triggered"])
             self.assertEqual(report["benchmark_sha256"], hashlib.sha256(fake.read_bytes()).hexdigest())
+            self.assertIsNone(report["shader_bundle"])
             self.assertEqual(report["source_revision"], revision)
             self.assertFalse(report["source_dirty"])
             one = json.loads(next((output / "raw").glob("*.args.json")).read_text())
